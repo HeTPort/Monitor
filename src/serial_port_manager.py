@@ -246,16 +246,30 @@ class MockPCSerialScanner(PCSerialScanner):
         self._available = True
 
     def list_ports(self) -> List[PCSerialPort]:
-        """Return mock port list."""
+        """List all available serial ports using pyserial."""
+        if not PYSERIAL_AVAILABLE:
+            logger.warning("pyserial not installed, cannot list PC ports")
+            return []
+
         ports = []
-        for i, port_name in enumerate(self._mock_ports):
+        for port_info in serial.tools.list_ports.comports():
+            desc = port_info.description or ""
+            
+            # 过滤掉已知的无用虚拟接口，避免占用资源和干扰
+            if "Modem" in desc or "Bluetooth" in desc or "Management Technology" in desc or "PCUI" in desc:
+                logger.debug(f"Skipping useless port: {port_info.device} ({desc})")
+                continue
+
             port = PCSerialPort(
-                port=port_name,
-                description=f"Mock Serial Port {i+1}",
-                hwid=f"MOCK-HWID-{i}",
-                available=self._available,
+                port=port_info.device,
+                description=desc,
+                hwid=port_info.hwid or "",
+                available=True,
             )
             ports.append(port)
+            logger.info(f"Found valid PC port: {port.port} - {port.description}")
+
+        self._cached_ports = ports
         return ports
 
     def is_port_available(self, port_name: str) -> bool:
@@ -382,6 +396,10 @@ class RealDeviceSerialScanner(DeviceSerialScanner):
             base_dev_name = device_path.replace('/dev/', '')
             port.is_console = base_dev_name in consoles
 
+            if 'HwGS' in device_path:
+                logger.info(f"Skipping USB Gadget port: {device_path}")
+                continue
+            
             ports.append(port)
             # Log at INFO level so user can see why each port is selected or skipped
             status = "✓" if port.writable else "✗"
@@ -842,7 +860,7 @@ class PCSerialPortMonitor:
         """Main monitoring loop - runs in separate thread."""
         try:
             with serial.Serial(self.port_name, self.baudrate, timeout=0.1) as ser:
-                logger.debug(f"Monitor {self.port_name}: Serial port opened")
+                logger.info(f"Monitor {self.port_name}: Serial port opened")
 
                 while self._running and not self._stop_event.is_set():
                     try:
@@ -854,17 +872,17 @@ class PCSerialPortMonitor:
                                 # Log data at DEBUG level
                                 data_str = data.decode('utf-8', errors='replace').strip()
                                 if data_str:
-                                    logger.debug(f"Monitor {self.port_name}: RX: {repr(data_str[:100])}")
+                                    logger.info(f"Monitor {self.port_name}: RX: {repr(data_str[:100])}")
 
                         # Small sleep to avoid busy loop
                         time.sleep(0.01)
 
                     except serial.SerialException as e:
-                        logger.debug(f"Monitor {self.port_name}: Serial error: {e}")
+                        logger.warning(f"Monitor {self.port_name}: Serial error: {e}")
                         break
 
         except serial.SerialException as e:
-            logger.debug(f"Monitor {self.port_name}: Failed to open port: {e}")
+            logger.warning(f"Monitor {self.port_name}: Failed to open port: {e}")
             self._running = False
         except Exception as e:
             logger.warning(f"Monitor {self.port_name}: Unexpected error: {e}")
@@ -1035,11 +1053,30 @@ class OptimizedSerialPairingEngine(SerialPairingEngine):
             logger.warning(result.error)
             return result
 
-        logger.info(f"Started {monitors_started}/{len(pc_ports)} PC port monitors")
+        logger.info(f"Started {monitors_started}/{len(pc_ports)} PC port monitors threads")
 
         # Give monitors time to open and be ready
-        time.sleep(0.5)
+        time.sleep(1.0)
 
+        active_monitors = {}
+        failed_to_open = []
+        for port, mon in self._monitors.items():
+            if mon.is_running():
+                active_monitors[port] = mon
+            else:
+                failed_to_open.append(port)
+        
+        self._monitors = active_monitors
+        
+        if failed_to_open:
+            logger.warning(f"Failed to open PC ports (may be occupied or invalid): {failed_to_open}")
+            
+        if not self._monitors:
+            result.error = "Failed to open ANY PC serial ports. Please close other serial tools (like SecureCRT) and try again."
+            logger.error(result.error)
+            return result
+            
+        logger.info(f"Successfully opened {len(self._monitors)} PC ports for monitoring: {list(self._monitors.keys())}")
         # Step 3: Test each device port
         candidates = []
         test_attempt = 0
