@@ -96,7 +96,7 @@ class DeviceChannel(ABC):
         pass
 
     @abstractmethod
-    def invoke(self, cmd: str, timeout: int = 30) -> Tuple[int, str, str]:
+    def invoke(self, cmd: str, timeout: int = 30,background:bool = False) -> Tuple[int, str, str]:
         """
         Execute command on device.
 
@@ -276,7 +276,7 @@ class HDCChannel(DeviceChannel):
             self._connected = False
             logger.info("HDC connection closed")
 
-    def invoke(self, cmd: str, timeout: int = None) -> Tuple[int, str, str]:
+    def invoke(self, cmd: str, timeout: int = None,background: bool = False) -> Tuple[int, str, str]:
         """
         Execute command via HDC shell.
 
@@ -301,7 +301,10 @@ class HDCChannel(DeviceChannel):
             return (result.returncode, result.stdout, result.stderr)
 
         except subprocess.TimeoutExpired:
-            logger.error(f"HDC invoke timeout: {cmd[:50]}...")
+            if background:
+                logger.debug(f"HDC background command timeout (expected) :{cmd[:50]}...")
+            else:
+                logger.error(f"HDC invoke timeout: {cmd[:50]}...")
             return (-1, "", f"Command timeout after {timeout}s")
         except Exception as e:
             logger.error(f"HDC invoke error: {e}")
@@ -505,7 +508,7 @@ class ADBChannel(DeviceChannel):
             self._connected = False
             logger.info("ADB connection closed")
 
-    def invoke(self, cmd: str, timeout: int = None) -> Tuple[int, str, str]:
+    def invoke(self, cmd: str, timeout: int = None,background: bool = False) -> Tuple[int, str, str]:
         """
         Execute command via ADB shell.
 
@@ -530,7 +533,10 @@ class ADBChannel(DeviceChannel):
             return (result.returncode, result.stdout, result.stderr)
 
         except subprocess.TimeoutExpired:
-            logger.error(f"ADB invoke timeout: {cmd[:50]}...")
+            if background:
+                logger.debug(f"ADB background command timeout (expected): {cmd[:50]}...")
+            else:
+                logger.error(f"ADB invoke timeout: {cmd[:50]}...")
             return (-1, "", f"Command timeout after {timeout}s")
         except Exception as e:
             logger.error(f"ADB invoke error: {e}")
@@ -801,7 +807,8 @@ class ChannelManager:
         self,
         cmd: str,
         timeout: int = 30,
-        retry_on_failure: bool = True
+        retry_on_failure: bool = True,
+        background:bool = False
     ) -> InvokeResult:
         """
         Execute command via current channel.
@@ -830,11 +837,17 @@ class ChannelManager:
 
         for attempt in range(attempts):
             try:
-                return_code, stdout, stderr = self._current_channel.invoke(cmd, timeout)
+                return_code, stdout, stderr = self._current_channel.invoke(cmd, timeout,background=background)
 
                 # FIX: Only retry/switch if the channel itself failed (return_code == -1 indicates subprocess/timeout error).
                 # If return_code is anything else (including non-zero business logic codes like 1 or 2),
                 # it means the channel is healthy and the command executed successfully, so we return immediately.
+                if background and return_code == -1:
+                    return InvokeResult(
+                        return_code=return_code, stdout=stdout, stderr=stderr,
+                        duration_sec=time.time() - start_time,
+                        channel_used=self._current_channel.get_type()
+                    )
                 if return_code != -1 or attempt == attempts - 1:
                     return InvokeResult(
                         return_code=return_code,
