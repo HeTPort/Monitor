@@ -95,7 +95,8 @@ class MonitorController:
         self,
         config_path: str = None,
         heartbeat_timeout: float = 45.0,
-        overall_timeout: float = 300.0
+        overall_timeout: float = 300.0,
+        baudrate:int = 115200
     ):
         """
         Initialize MonitorController.
@@ -109,7 +110,7 @@ class MonitorController:
         self._started = False
         self._start_time: Optional[float] = None
         self._stop_time: Optional[float] = None
-
+        self._baudrate = baudrate
         # Initialize components
         self._log_parser = LogParser()
 
@@ -348,20 +349,24 @@ class WorkloadController:
             controller.stop(handle)
     """
 
-    def __init__(self, channel_manager):
+    def __init__(self, channel_manager, profile_registry=None):
         """
         Initialize with channel manager.
 
         Args:
             channel_manager: ChannelManager for device communication
+            profile_registry: Optional pre-loaded profile registry
         """
         self._channel = channel_manager
 
         # Try to import workload components
         try:
-            from workload_profiles import WorkloadProfileRegistry
             from workload_builder import WorkloadCommandBuilder
-            self._registry = WorkloadProfileRegistry()
+            
+            self._registry = profile_registry
+            if self._registry is None:
+                from workload_profiles import WorkloadProfileRegistry
+                self._registry = WorkloadProfileRegistry()
             self._builder = WorkloadCommandBuilder(self._registry)
         except ImportError:
             logger.warning("Workload components not available, using basic mode")
@@ -381,7 +386,8 @@ class WorkloadController:
         self,
         profile_name: str,
         args: List[str] = None,
-        serial_device: str = None
+        serial_device: str = None,
+        background:bool = False
     ) -> str:
         """
         Build workload command from profile.
@@ -401,7 +407,7 @@ class WorkloadController:
         if self._builder is None:
             raise RuntimeError("Workload components not available")
 
-        return self._builder.build(profile_name, args, serial_device)
+        return self._builder.build(profile_name, args, serial_device,background=background)
 
     def list_profiles(self, include_pending: bool = False) -> List[str]:
         """
@@ -434,9 +440,12 @@ class WorkloadController:
         Returns:
             ExecutionHandle: Handle to control the execution
         """
+        logger.info(f"WorkloadController launching command: {command}")
         # Invoke command via channel
         return_code, stdout, stderr = self._channel.invoke(command, timeout or 300)
-
+        logger.info(f"Invoke result - code: {return_code}, stdout: {stdout}, stderr: {stderr}")
+        if return_code != 0:
+            logger.error(f"Workload launch failed on device! stderr: {stderr}")
         # Create handle (sync execution for now)
         with self._lock:
             handle_id = f"handle_{self._next_handle_id}"
@@ -444,7 +453,7 @@ class WorkloadController:
 
         handle = ExecutionHandle(
             pid=-1,  # Sync execution, no separate PID
-            channel_type=self._channel.get_type(),
+            channel_type=self._channel.get_current_channel_type(),
             command=command,
             start_time=time.time(),
             handle_id=handle_id
@@ -456,7 +465,9 @@ class WorkloadController:
         self,
         profile_name: str,
         args: List[str] = None,
-        timeout: int = None
+        timeout: int = None,
+        background:bool = True,
+        serial_device: str = None
     ) -> ExecutionHandle:
         """
         Launch a workload by profile name.
@@ -471,7 +482,7 @@ class WorkloadController:
         Returns:
             ExecutionHandle: Handle to control the execution
         """
-        command = self.build_command(profile_name, args)
+        command = self.build_command(profile_name, args,serial_device=serial_device,background=background)
         return self.launch(command, timeout)
 
     def stop(self, handle: ExecutionHandle) -> None:
@@ -560,7 +571,8 @@ class SchedulerFacade:
         serial_port: str = None,
         config: str = None,
         heartbeat_timeout: float = 45.0,
-        overall_timeout: float = 300.0
+        overall_timeout: float = 300.0,
+        baudrate:int = 115200
     ):
         """
         Prepare all components.
@@ -579,11 +591,12 @@ class SchedulerFacade:
         self._monitor = MonitorController(
             config_path=config,
             heartbeat_timeout=heartbeat_timeout,
-            overall_timeout=overall_timeout
+            overall_timeout=overall_timeout,
+            baudrate = baudrate
         )
 
         # Create WorkloadController
-        self._workload = WorkloadController(channel_manager)
+        self._workload = WorkloadController(channel_manager, profile_registry)
 
         # Store serial port for later use
         self._serial_port = serial_port
@@ -601,6 +614,12 @@ class SchedulerFacade:
             raise RuntimeError("SchedulerFacade not prepared, call prepare() first")
 
         self._monitor.start()
+
+    def process_line(self, line: str):
+        """Feed a single log line to monitor."""
+        if not self._monitor:
+            raise RuntimeError("MonitorController not initialized")
+        self._monitor.process_line(line)
 
     def process_lines(self, lines: List[str]):
         """Feed log lines to monitor."""
@@ -697,12 +716,13 @@ class SchedulerFacade:
         self,
         profile: str,
         args: List[str] = None,
-        timeout: int = None
+        timeout: int = None,
+        serial_device: str = None
     ) -> ExecutionHandle:
         """Launch workload by profile."""
         if not self._workload:
             raise RuntimeError("WorkloadController not initialized")
-        return self._workload.launch_profile(profile, args, timeout)
+        return self._workload.launch_profile(profile, args, timeout, serial_device=serial_device)
 
     def stop_workload(self, handle: ExecutionHandle):
         """Stop running workload."""
