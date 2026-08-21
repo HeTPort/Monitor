@@ -298,29 +298,29 @@ class PatternProcessor:
         Returns:
             Rule object if parsing succeeded, None otherwise.
         """
-        parts = [p.strip() for p in raw_line.split('|')]
-
-        if len(parts) == 1:
-            # Simple pattern: just contains
-            match_type = MatchType.CONTAINS
-            pattern = parts[0]
-            threshold = 1
+        parts = raw_line.split('|')
+        type_str = parts[0].strip()
+        
+        threshold = 1
+        pattern = ""
+        
+        if len(parts) >= 3 and parts[-1].strip().startswith('threshold='):
+           
+            try:
+                threshold = int(parts[-1].strip().split('=')[1])
+            except (ValueError, IndexError):
+                logger.warning(f"Invalid threshold in section {section}, line {line_number}")
+           
+            pattern = '|'.join(parts[1:-1]).strip()
+        elif len(parts) >= 2:
+            
+            pattern = '|'.join(parts[1:]).strip()
         else:
-            # Parse type|pattern|threshold=N
-            type_str = parts[0]
-            pattern = parts[1]
-            threshold = 1
-
-            # Parse additional parameters
-            for ext in parts[2:]:
-                if ext.startswith('threshold='):
-                    try:
-                        threshold = int(ext.split('=')[1])
-                    except (ValueError, IndexError):
-                        logger.warning(f"Invalid threshold in section {section}, line {line_number}")
-
-            # Convert type string to MatchType
-            match_type = MatchType.from_string(type_str)
+            
+            type_str = 'contains'
+            pattern = parts[0].strip()
+            
+        match_type = MatchType.from_string(type_str)
 
         # Extract name from pattern (for display)
         name = pattern[:50] + "..." if len(pattern) > 50 else pattern
