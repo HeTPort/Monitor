@@ -1,0 +1,121 @@
+platform:
+  name: kirin9020
+  soc: Kirin9020
+device:
+  transport: adb
+  serial: null
+  adb_bin: adb
+  hdc_bin: hdc
+  require_root: true
+  auto_reboot: false
+transport:
+  adb:
+    bin: adb
+    serial_option: -s
+    default_timeout_s: 30
+  hdc:
+    bin: hdc
+    serial_option: -t
+    default_timeout_s: 30
+gpu:
+  driver_family: hvgr
+  kernel_module: hvgr_kmd_v350
+  hvgr_node: /sys/devices/platform/e2ec0000.hvgr
+  devfreq_node: /sys/class/devfreq/gpufreq
+  devfreq_node_real: /sys/devices/platform/gpufreq/devfreq/gpufreq
+  power_policy: /sys/devices/platform/e2ec0000.hvgr/power_policy
+  gpu_utilisation: /sys/devices/platform/e2ec0000.hvgr/gpu_utilisation
+  gpuinfo: /sys/devices/platform/e2ec0000.hvgr/gpuinfo
+  hang_count: /sys/module/hvgr_kmd_v350/parameters/gpu_hang_count
+  throttle: /sys/kernel/debug/hvgr0/pm/gpu_throttle
+thermal:
+  gpu_zone_type: /sys/class/thermal/thermal_zone5/type
+  gpu_zone_temp: /sys/class/thermal/thermal_zone5/temp
+freqdump:
+  bin: freqdump
+  gpu_cmd: freqdump -G -p -n 1
+output:
+  base_dir: output
+tools:
+  workload:
+    local: tools/gpu-avs-workload
+    remote: /data/local/tmp/gpu-avs-workload
+    executable: true
+    required: true
+    version_cmd: /data/local/tmp/gpu-avs-workload --version
+    expected_version: gpu-avs-workload version 0.5.0
+  judge:
+    local: tools/gpu_case_judge_arm64
+    remote: /data/local/tmp/gpu_case_judge_arm64
+    executable: true
+    required: true
+  rule_file:
+    local: configs/gpu_case_rules_v2.conf
+    remote: /data/local/tmp/gpu_case_rules_v2.conf
+    executable: false
+    required: true
+  shaders:
+    local: tools/shaders/vulkan
+    remote: /data/local/tmp/shaders
+    executable: false
+    required: true
+workload:
+  profile: game_light
+  api: vulkan
+  width: 1080
+  height: 720
+  duration_s: 30
+  warmup_s: 5
+  verify_mode: none
+  output_format: jsonl
+  output_path: /data/local/tmp/workload_output.jsonl
+  shader_dir: /data/local/tmp/shaders
+
+judge:
+  timeout_sec: 30
+  rule_path: /data/local/tmp/gpu_case_rules_v2.conf
+  mode: prod
+  reload_interval_ms: 5000
+  grace_period_sec: 2
+  log_dir: /data/local/tmp/judge_logs
+  channel_mask: dmesg,hilog,logcat
+  fail_on_test_exit_non_zero: 1
+  rotate_size_mb: 10
+  rotate_count: 3
+
+voltage_search:
+  mode: coarse_then_fine
+  coarse_step_mv: 5
+  fine_step_mv: 1
+  stop_on_first_fail: true
+  retest_last_pass: 2
+  retest_first_fail: 1
+  max_consecutive_fail: 2
+  inter_opp_recovery_s: 5
+
+verdict:
+  temp_limit_c: 85.0
+  max_consecutive_fail_before_skip: 1
+  retest_on_first_fail: true
+
+features:
+  opencl_enabled: false
+  null_api_for_self_test_only: true
+  auto_reboot: false
+report:
+  formats:
+  - json
+  - csv
+  - markdown
+opp:
+  dt_path: /sys/firmware/devicetree/base/gpu_opp_table
+  index_range:
+  - 0
+  - 14
+  highest_opp_index: 14
+voltage:
+  domain: gpu
+  cluster_volt_path: /sys/kernel/debug/lpmcu_debug/cluster_volt
+  min_mv: 400
+  allow_above_nominal: false
+  readback_tolerance_mv: 5
