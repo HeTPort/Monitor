@@ -1,0 +1,11 @@
+# GPU/CPU Vmin Judge Tool - Python Dependencies
+# PC-side tool requirements
+
+# Serial port communication
+pyserial>=3.5
+
+# Optional: Enhanced CLI output
+# colorama>=0.4.6  # Cross-platform colored terminal output
+
+# Optional: JSON configuration
+# pyyaml>=6.0      # For parsing yaml config files if needed
