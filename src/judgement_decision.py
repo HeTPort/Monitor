@@ -297,6 +297,11 @@ class JudgmentDecision:
             content = line.content if hasattr(line, 'content') else str(line)
             timestamp = line.timestamp if hasattr(line, 'timestamp') else time.time()
 
+            result_type = self._check_result_pattern(content)
+            if result_type:
+                self._handle_result(result_type, content)
+                return
+
             # Check for heartbeat first (before pattern matching)
             if self._is_heartbeat_line(content):
                 self._handle_heartbeat(content, timestamp)
@@ -349,17 +354,17 @@ class JudgmentDecision:
                 self.state.dmesg_warn_count += 1
                 logger.debug(f"Dmesg warning: {match_result.content[:100]}")
 
-            elif pattern_type == 'result':
-                # Check if content indicates PASS or FAIL
-                content_upper = match_result.content.upper()
-                if 'FAIL' in content_upper:
-                    self.state.workload_result = 'FAIL'
-                    self.state.verdict_reason = match_result.content
-                    logger.info(f"Workload result: FAIL - {match_result.content[:100]}")
-                elif 'PASS' in content_upper:
-                    self.state.workload_result = 'PASS'
-                    self.state.verdict_reason = match_result.content
-                    logger.info(f"Workload result: PASS - {match_result.content[:100]}")
+        #    elif pattern_type == 'result':
+        #        # Check if content indicates PASS or FAIL
+        #        content_upper = match_result.content.upper()
+        #        if 'FAIL' in content_upper:
+        #            self.state.workload_result = 'FAIL'
+        #            self.state.verdict_reason = match_result.content
+        #            logger.info(f"Workload result: FAIL - {match_result.content[:100]}")
+        #        elif 'PASS' in content_upper:
+        #            self.state.workload_result = 'PASS'
+        #            self.state.verdict_reason = match_result.content
+        #            logger.info(f"Workload result: PASS - {match_result.content[:100]}")
 
     # =========================================================================
     # Verdict Methods
@@ -503,21 +508,26 @@ class JudgmentDecision:
 
     def _is_heartbeat_line(self, content: str) -> bool:
         """Check if line contains a heartbeat pattern."""
-        content_upper = content.upper()
-        for pattern in self._heartbeat_patterns:
-            if pattern.upper() in content_upper:
-                return True
+        content_lower = content.lower()
+        if '"type":"heartbeat"' in content_lower:
+            return True
+        if 'heartbeat' in content_lower and 'iteration' in content_lower:
+            return True
+        if 'keepalive' in content_lower:
+            return True
         return False
 
     def _check_result_pattern(self, content: str) -> Optional[str]:
         """Check if line contains a result pattern."""
-        content_upper = content.upper()
 
-        if 'RESULT:' in content_upper:
-            if 'PASS' in content_upper:
+        content_lower = content.lower()
+        
+        if '"type":"summary"' in content_lower:
+            if '"result":"pass"' in content_lower:
                 return 'PASS'
-            if 'FAIL' in content_upper:
+            if '"result":"fail"' in content_lower:
                 return 'FAIL'
+
 
         return None
 
@@ -532,7 +542,12 @@ class JudgmentDecision:
         """Handle a result line."""
         self.state.workload_result = result
         self.state.verdict_reason = content
-        logger.info(f"Workload result: {result} - {content[:100]}")
+        idx = content.lower().find('"type":"summary"')
+        if idx != -1:
+            clean_summary = content[idx:idx+150] 
+            logger.info(f"Workload result: {result} - {clean_summary}")
+        else:
+            logger.info(f"Workload result: {result} - {content[:100]}")
 
     def _on_heartbeat_timeout(self, elapsed: float):
         """Callback for heartbeat timeout."""
