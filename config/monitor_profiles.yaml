@@ -1,0 +1,27 @@
+gpu_hvgr:
+  serial_port: "/dev/ttyAMA0"  # 设备端串口节点
+  poll_interval_sec: 1
+  monitors:
+    freq:
+      prefix: "[MON_FREQ]"
+      command: "cat /sys/kernel/debug/hvgr0/freq"
+      # 设备端脚本提取出的文本格式
+    throttle:
+      prefix: "[MON_THRO]"
+      command: "cat /sys/kernel/debug/hvgr0/pm/gpu_throttle"
+    kernel:
+      prefix: "[MON_KERN]"
+      source: "dmesg -w"
+      filter_regex: "hvgr|gpu hang|reset|fault"
+
+cpu_arm:
+  serial_port: "/dev/ttyAMA0"
+  poll_interval_sec: 2
+  monitors:
+    freq:
+      prefix: "[MON_FREQ]"
+      command: "cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq"
+    kernel:
+      prefix: "[MON_KERN]"
+      source: "dmesg -w"
+      filter_regex: "panic|oops|watchdog|hung_task"
