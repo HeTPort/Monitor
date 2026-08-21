@@ -872,7 +872,7 @@ class PCSerialPortMonitor:
                                 # Log data at DEBUG level
                                 data_str = data.decode('utf-8', errors='replace').strip()
                                 if data_str:
-                                    logger.info(f"Monitor {self.port_name}: RX: {repr(data_str[:100])}")
+                                    logger.debug(f"Monitor {self.port_name}: RX: {repr(data_str[:100])}")
 
                         # Small sleep to avoid busy loop
                         time.sleep(0.01)
