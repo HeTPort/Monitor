@@ -1,0 +1,114 @@
+schema_version: 1
+name: kirin9020
+soc: Kirin9020
+framework_variants: [single, dual]
+
+transport:
+  preference: [hdc, adb]
+  require_root: true
+  adb_bin: adb
+  hdc_bin: hdc
+
+serial:
+  uart_candidates: [/dev/ttyAMA0]
+  baudrate: 115200
+
+cpu:
+  topology_glob: /sys/devices/system/cpu/cpu[0-9]*
+  interfaces:
+    frequency:
+      candidates: [/sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq]
+      unit: kHz
+      required: true
+    minimum_frequency:
+      candidates: [/sys/devices/system/cpu/cpu*/cpufreq/scaling_min_freq]
+      unit: kHz
+      required: true
+    maximum_frequency:
+      candidates: [/sys/devices/system/cpu/cpu*/cpufreq/scaling_max_freq]
+      unit: kHz
+      required: true
+    governor:
+      candidates: [/sys/devices/system/cpu/cpu*/cpufreq/scaling_governor]
+      required: true
+    online:
+      candidates: [/sys/devices/system/cpu/cpu*/online]
+      required: true
+      cpu0_implicit_online: true
+    utilization:
+      candidates: [/proc/stat]
+      derivation: delta_busy_over_delta_total
+      unit: percent
+      required: true
+    idle_residency:
+      candidates: [/sys/devices/system/cpu/cpu*/cpuidle/state*/time]
+      unit: us
+      required: false
+    throttle:
+      candidates:
+        - /sys/devices/system/cpu/cpu*/thermal_throttle/core_throttle_count
+        - /sys/devices/system/cpu/cpu*/thermal_throttle/package_throttle_count
+      unit: count
+      required: false
+    voltage:
+      candidates: [/sys/kernel/debug/lpmcu_debug/cluster_volt]
+      unit: platform_text
+      required: false
+
+gpu:
+  driver_family: hvgr
+  kernel_module: hvgr_kmd_v350
+  device_node: /sys/devices/platform/e2ec0000.hvgr
+  interfaces:
+    governor:
+      candidates:
+        - /sys/class/devfreq/gpufreq/governor
+        - /sys/devices/platform/gpufreq/devfreq/gpufreq/governor
+      required: true
+    frequency:
+      candidates:
+        - /sys/class/devfreq/gpufreq/cur_freq
+        - /sys/devices/platform/gpufreq/devfreq/gpufreq/cur_freq
+        - /sys/kernel/debug/hvgr0/freq
+      unit: Hz
+      required: true
+    minimum_frequency:
+      candidates:
+        - /sys/class/devfreq/gpufreq/min_freq
+        - /sys/devices/platform/gpufreq/devfreq/gpufreq/min_freq
+      unit: Hz
+      required: true
+    maximum_frequency:
+      candidates:
+        - /sys/class/devfreq/gpufreq/max_freq
+        - /sys/devices/platform/gpufreq/devfreq/gpufreq/max_freq
+      unit: Hz
+      required: true
+    utilization:
+      candidates: [/sys/devices/platform/e2ec0000.hvgr/gpu_utilisation]
+      unit: percent
+      required: true
+    power_policy:
+      candidates: [/sys/devices/platform/e2ec0000.hvgr/power_policy]
+      required: true
+    throttle:
+      candidates: [/sys/kernel/debug/hvgr0/pm/gpu_throttle]
+      unit: platform_text
+      required: false
+    hang_count:
+      candidates: [/sys/module/hvgr_kmd_v350/parameters/gpu_hang_count]
+      unit: count
+      required: true
+    voltage:
+      candidates: [/sys/kernel/debug/lpmcu_debug/cluster_volt]
+      unit: platform_text
+      required: false
+
+thermal:
+  zone_glob: /sys/class/thermal/thermal_zone*
+  match_by_type: true
+  temperature_unit: millidegree_celsius
+  cpu_type_patterns: [cpu, soc, cluster]
+  gpu_type_patterns: [gpu]
+  legacy_gpu_type: /sys/class/thermal/thermal_zone5/type
+  legacy_gpu_temp: /sys/class/thermal/thermal_zone5/temp

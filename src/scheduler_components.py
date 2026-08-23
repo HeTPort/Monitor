@@ -26,11 +26,11 @@ from threading import RLock
 logger = logging.getLogger(__name__)
 
 # Import from existing modules
-from log_parser import LogParser, ParsedLine
-from pattern_processor import PatternProcessor
-from heartbeat_watchdog import HeartbeatWatchdog
-from judgment_decision import JudgmentDecision, TestState
-from result_formatter import FormattedResult
+from .log_parser import LogParser, ParsedLine
+from .pattern_processor import PatternProcessor
+from .heartbeat_watchdog import HeartbeatWatchdog
+from .judgment_decision import JudgmentDecision, TestState
+from .result_formatter import FormattedResult
 
 # Verdict constants
 VERDICT_RUNNING = "RUNNING"

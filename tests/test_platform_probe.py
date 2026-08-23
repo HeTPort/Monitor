@@ -1,0 +1,86 @@
+from __future__ import annotations
+
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+from src.config_loader import PlatformConfig
+from src.platform_probe import MappingProbeBackend, PlatformProbe, ProbeError
+
+
+class PlatformProbeTests(unittest.TestCase):
+    def platform(self, root: Path) -> PlatformConfig:
+        path = root / "platform.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "name": "test-soc",
+                    "transport": {},
+                    "serial": {},
+                    "cpu": {
+                        "topology_glob": "/sys/devices/system/cpu/cpu[0-9]*",
+                        "interfaces": {
+                            "frequency": {
+                                "candidates": ["/sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq"],
+                                "unit": "kHz",
+                                "required": True,
+                            },
+                            "online": {
+                                "candidates": ["/sys/devices/system/cpu/cpu*/online"],
+                                "required": True,
+                            },
+                        },
+                    },
+                    "gpu": {
+                        "interfaces": {
+                            "frequency": {
+                                "candidates": ["/sys/class/devfreq/gpu/cur_freq"],
+                                "unit": "Hz",
+                                "required": True,
+                            }
+                        }
+                    },
+                    "thermal": {
+                        "zone_glob": "/sys/class/thermal/thermal_zone*",
+                        "cpu_type_patterns": ["cpu"],
+                        "gpu_type_patterns": ["gpu"],
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        return PlatformConfig.from_file(path)
+
+    def test_discovers_every_core_and_thermal_by_type(self) -> None:
+        files = {
+            "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq": "2100000\n",
+            "/sys/devices/system/cpu/cpu1/cpufreq/scaling_cur_freq": "2200000\n",
+            "/sys/devices/system/cpu/cpu1/online": "1\n",
+            "/sys/class/devfreq/gpu/cur_freq": "700000000\n",
+            "/sys/class/thermal/thermal_zone2/type": "cpu-cluster\n",
+            "/sys/class/thermal/thermal_zone2/temp": "45000\n",
+            "/sys/class/thermal/thermal_zone8/type": "gpu\n",
+            "/sys/class/thermal/thermal_zone8/temp": "47000\n",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            probe = PlatformProbe(self.platform(Path(tmp)), MappingProbeBackend(files))
+            result = probe.probe(full=True)
+        self.assertTrue(result["supported"])
+        self.assertEqual(result["cpu_topology"]["core_count"], 2)
+        self.assertEqual(len(result["capabilities"]["cpu.frequency"]["paths"]), 2)
+        self.assertEqual(result["capabilities"]["cpu.temperature"]["values"]["/sys/class/thermal/thermal_zone2/temp"], 45.0)
+        self.assertEqual(result["capabilities"]["gpu.temperature"]["values"]["/sys/class/thermal/thermal_zone8/temp"], 47.0)
+
+    def test_required_missing_is_unsupported(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            probe = PlatformProbe(self.platform(Path(tmp)), MappingProbeBackend({}))
+            result = probe.probe()
+            self.assertFalse(result["supported"])
+            with self.assertRaisesRegex(ProbeError, "gpu.frequency"):
+                probe.require(result, ["gpu.frequency"])
+
+
+if __name__ == "__main__":
+    unittest.main()

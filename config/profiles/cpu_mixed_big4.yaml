@@ -1,0 +1,22 @@
+schema_version: 1
+name: cpu_mixed_big4
+target: cpu
+platform: kirin9020
+workload:
+  binary: ../../tools/cpu-avs-workload
+  remote_binary: bin/cpu-avs-workload
+  config: ../workloads/cpu_mixed_big4.json
+  argv: [--config, config/workloads/cpu_mixed_big4.json]
+environment:
+  affinity: "4-7"
+  governor: performance
+  frequency_khz: platform_max
+  online_cores: [4, 5, 6, 7]
+  temperature_c: {min: 35.0, max: 60.0}
+baseline: null
+telemetry:
+  interval_ms: 1000
+  required: [cpu.frequency, cpu.online, cpu.temperature, cpu.utilization]
+  optional: [cpu.idle_residency, cpu.throttle, cpu.voltage]
+kernel_monitor: critical
+kernel_options: {dedupe_window_ms: 1000, max_events_per_second: 10}

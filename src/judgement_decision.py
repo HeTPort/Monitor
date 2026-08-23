@@ -38,12 +38,12 @@ if _src_path not in sys.path:
     sys.path.insert(0, _src_path)
 
 # Import L3 components
-from pattern_processor import PatternProcessor, MatchResult
-from heartbeat_watchdog import HeartbeatWatchdog
-from log_parser import ParsedLine
+from .pattern_processor import PatternProcessor, MatchResult
+from .heartbeat_watchdog import HeartbeatWatchdog
+from .log_parser import ParsedLine
 
 # Import centralized constants
-from verdict_constants import (
+from .verdict_constants import (
     Verdict,
     ExitCode,
     LogSource,

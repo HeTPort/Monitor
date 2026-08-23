@@ -38,7 +38,7 @@ if _src_path not in sys.path:
     sys.path.insert(0, _src_path)
 
 # Import centralized constants
-from verdict_constants import (
+from .verdict_constants import (
     Verdict,
     ExitCode,
     get_exit_code_description,

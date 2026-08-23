@@ -1,0 +1,55 @@
+from __future__ import annotations
+
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+from src.config_loader import ConfigError, ProfileConfig, document_sha256, load_document
+
+
+def valid_profile() -> dict:
+    return {
+        "schema_version": 1,
+        "name": "cpu_test",
+        "target": "cpu",
+        "platform": "kirin9020",
+        "workload": {"binary": "bin/cpu", "argv": ["--profile", "mixed"]},
+        "environment": {},
+        "baseline": None,
+        "telemetry": {"required": ["cpu.frequency"]},
+        "kernel_monitor": "critical",
+    }
+
+
+class ConfigLoaderTests(unittest.TestCase):
+    def test_json_load_and_profile_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "profile.json"
+            path.write_text(json.dumps(valid_profile()), encoding="utf-8")
+            profile = ProfileConfig.from_file(path)
+            self.assertEqual(profile.target, "cpu")
+            self.assertEqual(profile.fingerprint, document_sha256(valid_profile()))
+
+    def test_rejects_unsupported_schema(self) -> None:
+        data = valid_profile()
+        data["schema_version"] = 2
+        with self.assertRaisesRegex(ConfigError, "unsupported major version"):
+            ProfileConfig.from_mapping(data, source_path=Path("profile.json"))
+
+    def test_rejects_shell_string_argv(self) -> None:
+        data = valid_profile()
+        data["workload"]["argv"] = "--profile mixed"
+        with self.assertRaisesRegex(ConfigError, "list of strings"):
+            ProfileConfig.from_mapping(data, source_path=Path("profile.json"))
+
+    def test_rejects_unknown_document_extension(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "profile.conf"
+            path.write_text("schema_version=1", encoding="utf-8")
+            with self.assertRaisesRegex(ConfigError, "unsupported configuration extension"):
+                load_document(path)
+
+
+if __name__ == "__main__":
+    unittest.main()

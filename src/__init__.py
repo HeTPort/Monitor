@@ -12,7 +12,7 @@ Testing Strategy:
 - See docs/TESTING_STRATEGY.md for details
 """
 
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 __author__ = "Vmin Judge Tool Development"
 
 from .channel_manager import (
@@ -87,6 +87,17 @@ from .test_orchestrator import (
     LogChannel,
     create_test_orchestrator
 )
+from .artifact_store import ArtifactStore
+from .baselines import Baseline, BaselineRegistry
+from .config_loader import PlatformConfig, ProfileConfig
+from .deployment import AssetSpec, DeploymentManager
+from .events import EventDecoder, EventEnvelope
+from .path_resolver import PathResolver
+from .platform_probe import PlatformProbe
+from .policy_engine import PolicyEngine, PolicyLimits, RunExitCode
+from .qualification import CalibrationService, GoldenService
+from .run_orchestrator import RunManifestBuilder, RunOrchestrator
+from .transport import ADBTransport, HDCTransport, TransportManager
 # Note: TestOrchestrator class does not exist in test_orchestrator.py
 # Only TestOrchestratorConfig, TestSession, etc. are available
 
@@ -147,4 +158,26 @@ __all__ = [
     "RunMode",
     "LogChannel",
     "create_test_orchestrator",
+    # V2 target contracts
+    "PathResolver",
+    "PlatformConfig",
+    "ProfileConfig",
+    "EventEnvelope",
+    "EventDecoder",
+    "PolicyEngine",
+    "PolicyLimits",
+    "RunExitCode",
+    "ArtifactStore",
+    "Baseline",
+    "BaselineRegistry",
+    "GoldenService",
+    "CalibrationService",
+    "PlatformProbe",
+    "AssetSpec",
+    "DeploymentManager",
+    "ADBTransport",
+    "HDCTransport",
+    "TransportManager",
+    "RunManifestBuilder",
+    "RunOrchestrator",
 ]

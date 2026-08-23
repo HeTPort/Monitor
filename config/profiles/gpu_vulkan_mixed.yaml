@@ -1,0 +1,23 @@
+schema_version: 1
+name: gpu_vulkan_mixed
+target: gpu
+platform: kirin9020
+workload:
+  binary: ../../tools/gpu-avs-workload
+  remote_binary: bin/gpu-avs-workload
+  config: ../workloads/gpu_vulkan_mixed.json
+  argv: [--config, config/workloads/gpu_vulkan_mixed.json]
+  assets:
+    - {local: ../../tools/shaders/vulkan/fullscreen.vert.spv, remote: shaders/vulkan/fullscreen.vert.spv, kind: shader}
+    - {local: ../../tools/shaders/vulkan/workload.frag.spv, remote: shaders/vulkan/workload.frag.spv, kind: shader}
+environment:
+  governor: performance
+  frequency_hz: platform_max
+  temperature_c: {min: 35.0, max: 60.0}
+baseline: null
+telemetry:
+  interval_ms: 1000
+  required: [gpu.frequency, gpu.utilization, gpu.temperature, gpu.hang_count, gpu.power_policy]
+  optional: [gpu.throttle, gpu.voltage]
+kernel_monitor: critical
+kernel_options: {dedupe_window_ms: 1000, max_events_per_second: 10}

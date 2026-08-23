@@ -1,0 +1,19 @@
+schema_version: 1
+name: default-production-calibration
+minimum_boards: 2
+minimum_accepted_samples: 20
+runs_per_board: 30
+rejection:
+  require_environment_compliance: true
+  reject_telemetry_gaps: true
+  reject_throttled_samples: true
+limits:
+  throughput:
+    method: observed_min_with_margin
+    margin_percent: 5.0
+  latency:
+    method: observed_max_with_margin
+    margin_percent: 10.0
+  variation:
+    method: maximum_cv
+    maximum_percent: 10.0

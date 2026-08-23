@@ -18,7 +18,10 @@ from __future__ import annotations
 
 import os
 import logging
-import yaml
+try:
+    import yaml
+except ImportError:  # Hardware-free help and JSON tooling remain usable.
+    yaml = None
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any
 
@@ -161,6 +164,9 @@ class WorkloadProfileLoader:
         """
         if self._loaded:
             return self._profiles
+
+        if yaml is None:
+            raise RuntimeError("PyYAML is required to load workload profiles; install requirements.txt")
 
         if not os.path.exists(self._config_path):
             logger.warning(f"Profile config not found: {self._config_path}")

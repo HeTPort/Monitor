@@ -1,0 +1,210 @@
+"""Structured configuration loading and lightweight schema validation."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Mapping, Sequence
+
+
+SUPPORTED_SCHEMA_VERSION = 1
+VALID_TARGETS = {"cpu", "gpu"}
+
+
+class ConfigError(ValueError):
+    """Raised for missing dependencies, malformed data, or schema violations."""
+
+
+def load_document(path: Path) -> dict[str, Any]:
+    """Load a JSON or YAML mapping with a clear dependency error for YAML."""
+    resolved = path.expanduser().resolve(strict=True)
+    text = resolved.read_text(encoding="utf-8")
+    suffix = resolved.suffix.lower()
+    if suffix == ".json":
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ConfigError(f"invalid JSON in {resolved}: {exc}") from exc
+    elif suffix in {".yaml", ".yml"}:
+        try:
+            import yaml
+        except ImportError as exc:
+            raise ConfigError("PyYAML is required to load YAML; install requirements.txt") from exc
+        try:
+            data = yaml.safe_load(text)
+        except yaml.YAMLError as exc:
+            raise ConfigError(f"invalid YAML in {resolved}: {exc}") from exc
+    else:
+        raise ConfigError(f"unsupported configuration extension: {resolved.suffix}")
+    if not isinstance(data, dict):
+        raise ConfigError(f"configuration root must be a mapping: {resolved}")
+    return data
+
+
+def canonical_json(data: Mapping[str, Any]) -> str:
+    return json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+def document_sha256(data: Mapping[str, Any]) -> str:
+    return hashlib.sha256(canonical_json(data).encode("utf-8")).hexdigest()
+
+
+def _require(mapping: Mapping[str, Any], key: str, expected: type, context: str) -> Any:
+    if key not in mapping:
+        raise ConfigError(f"{context}: missing required field '{key}'")
+    value = mapping[key]
+    if not isinstance(value, expected):
+        raise ConfigError(f"{context}.{key}: expected {expected.__name__}, got {type(value).__name__}")
+    return value
+
+
+def require_schema_version(data: Mapping[str, Any], context: str) -> int:
+    version = _require(data, "schema_version", int, context)
+    if version != SUPPORTED_SCHEMA_VERSION:
+        raise ConfigError(
+            f"{context}.schema_version: unsupported major version {version}; "
+            f"supported={SUPPORTED_SCHEMA_VERSION}"
+        )
+    return version
+
+
+@dataclass(frozen=True)
+class ProfileConfig:
+    schema_version: int
+    name: str
+    target: str
+    platform: str
+    workload: dict[str, Any]
+    environment: dict[str, Any]
+    baseline: str | None
+    telemetry: dict[str, Any]
+    kernel_monitor: str
+    kernel_options: dict[str, Any]
+    source_path: Path
+    raw: dict[str, Any] = field(repr=False)
+
+    @classmethod
+    def from_file(cls, path: Path) -> "ProfileConfig":
+        data = load_document(path)
+        return cls.from_mapping(data, source_path=path.expanduser().resolve())
+
+    @classmethod
+    def from_mapping(cls, data: Mapping[str, Any], *, source_path: Path) -> "ProfileConfig":
+        context = f"profile {source_path}"
+        version = require_schema_version(data, context)
+        name = _require(data, "name", str, context).strip()
+        target = _require(data, "target", str, context).lower()
+        if target not in VALID_TARGETS:
+            raise ConfigError(f"{context}.target: expected one of {sorted(VALID_TARGETS)}")
+        platform = _require(data, "platform", str, context).strip()
+        workload = dict(_require(data, "workload", dict, context))
+        binary = _require(workload, "binary", str, f"{context}.workload")
+        if not binary.strip():
+            raise ConfigError(f"{context}.workload.binary: must not be empty")
+        argv = workload.get("argv", [])
+        if not isinstance(argv, list) or not all(isinstance(item, str) for item in argv):
+            raise ConfigError(f"{context}.workload.argv: expected a list of strings")
+        assets = workload.get("assets", [])
+        if not isinstance(assets, list):
+            raise ConfigError(f"{context}.workload.assets: expected a list")
+        for index, asset in enumerate(assets):
+            asset_context = f"{context}.workload.assets[{index}]"
+            if not isinstance(asset, dict):
+                raise ConfigError(f"{asset_context}: expected a mapping")
+            for field_name in ("local", "remote"):
+                if not isinstance(asset.get(field_name), str) or not asset[field_name]:
+                    raise ConfigError(f"{asset_context}.{field_name}: expected a non-empty string")
+            for field_name in ("required", "executable"):
+                if field_name in asset and not isinstance(asset[field_name], bool):
+                    raise ConfigError(f"{asset_context}.{field_name}: expected a boolean")
+        environment = data.get("environment") or {}
+        telemetry = data.get("telemetry") or {}
+        if not isinstance(environment, dict) or not isinstance(telemetry, dict):
+            raise ConfigError(f"{context}: environment and telemetry must be mappings")
+        required = telemetry.get("required", [])
+        if not isinstance(required, list) or not all(isinstance(item, str) for item in required):
+            raise ConfigError(f"{context}.telemetry.required: expected a list of strings")
+        baseline = data.get("baseline")
+        if baseline is not None and not isinstance(baseline, str):
+            raise ConfigError(f"{context}.baseline: expected string or null")
+        kernel_monitor = data.get("kernel_monitor", "critical")
+        if kernel_monitor not in {"off", "critical", "full-local"}:
+            raise ConfigError(f"{context}.kernel_monitor: expected off, critical, or full-local")
+        kernel_options = data.get("kernel_options", {})
+        if not isinstance(kernel_options, dict):
+            raise ConfigError(f"{context}.kernel_options: expected a mapping")
+        if "dedupe_window_ms" in kernel_options and (
+            not isinstance(kernel_options["dedupe_window_ms"], int)
+            or isinstance(kernel_options["dedupe_window_ms"], bool)
+            or kernel_options["dedupe_window_ms"] < 0
+        ):
+            raise ConfigError(f"{context}.kernel_options.dedupe_window_ms: expected a non-negative integer")
+        if "max_events_per_second" in kernel_options and (
+            not isinstance(kernel_options["max_events_per_second"], int)
+            or isinstance(kernel_options["max_events_per_second"], bool)
+            or kernel_options["max_events_per_second"] < 1
+        ):
+            raise ConfigError(f"{context}.kernel_options.max_events_per_second: expected a positive integer")
+        return cls(
+            schema_version=version,
+            name=name,
+            target=target,
+            platform=platform,
+            workload=workload,
+            environment=dict(environment),
+            baseline=baseline,
+            telemetry=dict(telemetry),
+            kernel_monitor=kernel_monitor,
+            kernel_options=dict(kernel_options),
+            source_path=source_path,
+            raw=dict(data),
+        )
+
+    @property
+    def fingerprint(self) -> str:
+        return document_sha256(self.raw)
+
+
+@dataclass(frozen=True)
+class PlatformConfig:
+    schema_version: int
+    name: str
+    transport: dict[str, Any]
+    serial: dict[str, Any]
+    cpu: dict[str, Any]
+    gpu: dict[str, Any]
+    thermal: dict[str, Any]
+    source_path: Path
+    raw: dict[str, Any] = field(repr=False)
+
+    @classmethod
+    def from_file(cls, path: Path) -> "PlatformConfig":
+        data = load_document(path)
+        context = f"platform {path}"
+        version = require_schema_version(data, context)
+        name = _require(data, "name", str, context)
+        sections: dict[str, dict[str, Any]] = {}
+        for section in ("transport", "serial", "cpu", "gpu", "thermal"):
+            value = data.get(section) or {}
+            if not isinstance(value, dict):
+                raise ConfigError(f"{context}.{section}: expected mapping")
+            sections[section] = dict(value)
+        return cls(
+            schema_version=version,
+            name=name,
+            source_path=path.expanduser().resolve(),
+            raw=dict(data),
+            **sections,
+        )
+
+    @property
+    def fingerprint(self) -> str:
+        return document_sha256(self.raw)
+
+
+def validate_required_strings(values: Sequence[Any], context: str) -> list[str]:
+    if not isinstance(values, (list, tuple)) or not all(isinstance(item, str) and item for item in values):
+        raise ConfigError(f"{context}: expected non-empty strings")
+    return list(values)

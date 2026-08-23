@@ -11,11 +11,10 @@ Usage:
 
     # After packaging with PyInstaller
     vmin_judge.exe --help
-    vmin_judge.exe monitor --config config/cpu_judge.conf
-    vmin_judge.exe execute --profile gpu_vulkan_game_light
+    vmin_judge.exe probe --platform kirin9020
+    vmin_judge.exe run --profile gpu_vulkan_mixed --baseline auto
 
-Author: Vmin Judge Tool Development
-Version: 1.1 (Optimized Pairing v2.0, Pairing Persistence)
+Version: 2.0
 """
 
 import sys
@@ -29,7 +28,10 @@ import threading
 import queue
 import re
 import logging.handlers
-import serial as pyserial
+try:
+    import serial as pyserial
+except ImportError:
+    pyserial = None
 from typing import Optional, List
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
@@ -47,6 +49,7 @@ from src.heartbeat_watchdog import HeartbeatWatchdog
 from src.judgment_decision import JudgmentDecision
 from src.result_formatter import ResultFormatter, FormattedResult
 from src.scheduler_components import SchedulerFacade, MonitorController
+from src.path_resolver import PathResolver
 
 # Import verdict constants
 from src.verdict_constants import (
@@ -69,17 +72,10 @@ console_handler.setFormatter(logging.Formatter(
     datefmt='%Y-%m-%d %H:%M:%S'
 ))
 
-file_handler = logging.FileHandler('vmin_judge.log', encoding='utf-8')
-file_handler.setLevel(logging.INFO)
-file_handler.setFormatter(logging.Formatter(
-    '%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-))
-
 root_logger.addHandler(console_handler)
-root_logger.addHandler(file_handler)
 
 logger = logging.getLogger('vmin_judge')
+runtime_paths = PathResolver.create(entrypoint=__file__)
 
 
 # =============================================================================
@@ -91,10 +87,7 @@ logger = logging.getLogger('vmin_judge')
 
 def _get_pairing_config_path() -> str:
     """Get the path to the pairing configuration file."""
-    # Use user's home directory for persistence
-    home_dir = os.path.expanduser('~')
-    config_dir = os.path.join(home_dir, '.vmin_judge')
-    return os.path.join(config_dir, 'pairing.conf')
+    return str(runtime_paths.resolve_state('pairing.conf'))
 
 def _ensure_config_dir() -> str:
     """Ensure the config directory exists, return the path."""
@@ -197,20 +190,18 @@ Examples:
   # Auto-pair PC and device serial ports
   vmin_judge pair --channel hdc
 
-  # Monitor serial port in real-time
-  vmin_judge monitor --config config/cpu_judge.conf --serial COM4
-
-  # Execute a workload profile
-  vmin_judge execute --profile gpu_vulkan_game_light --config config/cpu_judge.conf
+  # Probe the target and execute an approved baseline
+  vmin_judge --transport hdc --device DEVICE_ID probe --platform kirin9020
+  vmin_judge --pc-serial COM4 run --profile gpu_vulkan_mixed --baseline auto
 
   # List available profiles
   vmin_judge list-profiles
 
-  # Simulate from log file
-  vmin_judge simulate --log-file test_output.log --config config/cpu_judge.conf
+  # Simulate from a framed serial capture
+  vmin_judge simulate --raw-serial serial.raw
 
-  # Dry run (validate config)
-  vmin_judge validate --config config/cpu_judge.conf
+  # Validate all bundled profiles and package resources
+  vmin_judge validate --all --package --offline
         """
     )
 
@@ -225,10 +216,23 @@ Examples:
         action='store_true',
         help='Suppress non-essential output'
     )
+    parser.add_argument('--config-dir', help='External configuration override root')
+    parser.add_argument('--output-dir', help='Writable qualification/run artifact root')
+    parser.add_argument('--state-dir', help='Persistent pairing and baseline registry root')
+    parser.add_argument('--transport', choices=['auto', 'adb', 'hdc'], default='auto')
+    parser.add_argument('--device', help='ADB/HDC target serial')
+    parser.add_argument('--adb-bin', help='Explicit ADB executable')
+    parser.add_argument('--hdc-bin', help='Explicit HDC executable')
+    parser.add_argument('--device-root', default='/data/local/tmp/avs')
+    parser.add_argument('--pc-serial', help='PC-side UART port')
+    parser.add_argument('--device-uart', default='/dev/ttyAMA0')
+    parser.add_argument('--baudrate', dest='global_baudrate', type=int, default=115200)
+    parser.add_argument('--log-level', choices=['debug', 'info', 'warning', 'error'], default='info')
+    parser.add_argument('--json', dest='json_output', action='store_true', help='Print machine-readable command output')
     parser.add_argument(
         '--version',
         action='version',
-        version='vmin_judge v1.0'
+        version='vmin_judge 2.0.0 (config=1 event=1 manifest=1 baseline=1 result=1)'
     )
 
     # Create subparsers
@@ -257,6 +261,10 @@ Examples:
         description='Start monitoring a serial port for test output'
     )
     _add_monitor_options(monitor_parser)
+    monitor_parser.add_argument('--save-raw', action='store_true')
+    monitor_parser.add_argument('--expected-run-id')
+    monitor_parser.add_argument('--schema-version', type=int, default=1)
+    monitor_parser.add_argument('--timeout', type=float, default=60.0)
 
     # ─────────────────────────────────────────────────────────────────
     # execute command
@@ -268,6 +276,11 @@ Examples:
     )
     _add_monitor_options(execute_parser)
     _add_execute_options(execute_parser)
+    execute_parser.add_argument('--baseline', default='auto')
+    execute_parser.add_argument('--repeat', type=int, default=1)
+    execute_parser.add_argument('--run-id')
+    execute_parser.add_argument('--no-deploy', action='store_true')
+    execute_parser.add_argument('--kernel-monitor', choices=['critical', 'off', 'full-local'], default='critical')
 
     # ─────────────────────────────────────────────────────────────────
     # simulate command
@@ -280,9 +293,14 @@ Examples:
     _add_monitor_options(simulate_parser)
     simulate_parser.add_argument(
         '--log-file',
-        required=True,
+        required=False,
         help='Path to log file to simulate'
     )
+    simulate_parser.add_argument('--events', help='Framed events.jsonl to replay')
+    simulate_parser.add_argument('--raw-serial', help='Raw serial capture to decode')
+    simulate_parser.add_argument('--profile', help='Profile policy context')
+    simulate_parser.add_argument('--baseline', help='Approved baseline ID')
+    simulate_parser.add_argument('--realtime', action='store_true')
 
     # ─────────────────────────────────────────────────────────────────
     # list-profiles command
@@ -297,6 +315,8 @@ Examples:
         action='store_true',
         help='Include pending (not implemented) profiles'
     )
+    list_parser.add_argument('--target', choices=['cpu', 'gpu'])
+    list_parser.add_argument('--status', choices=['implemented', 'pending', 'deprecated', 'unsupported'])
 
     # ─────────────────────────────────────────────────────────────────
     # validate command
@@ -312,11 +332,96 @@ Examples:
         default='config/cpu_judge.conf',
         help='Path to rule configuration file (default: config/cpu_judge.conf)'
     )
+    validate_parser.add_argument('--all', action='store_true')
+    validate_parser.add_argument('--profile')
+    validate_parser.add_argument('--baseline')
+    validate_parser.add_argument('--package', action='store_true')
+    validate_parser.add_argument('--offline', action='store_true')
     validate_parser.add_argument(
         '--profiles',
         default='config/workload_profiles.yaml',
         help='Path to workload profiles file (default: config/workload_profiles.yaml)'
     )
+
+    probe_parser = subparsers.add_parser('probe', help='Discover normalized device capabilities')
+    probe_parser.add_argument('--platform', default='kirin9020')
+    probe_parser.add_argument('--full', action='store_true')
+    probe_parser.add_argument('--refresh', action='store_true')
+    probe_parser.add_argument('--require', action='append', default=[])
+
+    deploy_parser = subparsers.add_parser('deploy', help='Hash-verified device asset deployment')
+    deploy_parser.add_argument('--target', choices=['cpu', 'gpu', 'all'], default='all')
+    deploy_parser.add_argument('--profile')
+    deploy_parser.add_argument('--baseline')
+    deploy_parser.add_argument('--force', action='store_true')
+    deploy_parser.add_argument('--verify-hashes', action=argparse.BooleanOptionalAction, default=True)
+    deploy_parser.add_argument('--clean-stale', action='store_true')
+
+    golden_parser = subparsers.add_parser('golden', help='Create CPU/GPU golden artifacts from qualified runs')
+    golden_subparsers = golden_parser.add_subparsers(dest='golden_target', required=True)
+    for target in ('cpu', 'gpu'):
+        target_parser = golden_subparsers.add_parser(target)
+        target_parser.add_argument('--profile', required=True)
+        target_parser.add_argument('--runs', type=int, default=10)
+        target_parser.add_argument('--board-id', required=True)
+        target_parser.add_argument('--known-good', action='store_true')
+        target_parser.add_argument('--run-dir', action='append', default=[])
+        target_parser.add_argument('--qualification-id')
+        target_parser.add_argument('--accept-checksum')
+        target_parser.add_argument('--readback-name', default='gpu-golden.rgba')
+
+    calibrate_parser = subparsers.add_parser('calibrate', help='Propose CPU/GPU limits from qualified runs')
+    calibrate_subparsers = calibrate_parser.add_subparsers(dest='calibration_target', required=True)
+    for target in ('cpu', 'gpu'):
+        target_parser = calibrate_subparsers.add_parser(target)
+        target_parser.add_argument('--profile', required=True)
+        target_parser.add_argument('--runs', type=int, default=30)
+        target_parser.add_argument('--board-id', required=True)
+        target_parser.add_argument('--temperature-range', default='35:60')
+        target_parser.add_argument('--min-accepted', type=int)
+        target_parser.add_argument('--policy', default='config/policies/calibration.yaml')
+        target_parser.add_argument('--golden', required=True)
+        target_parser.add_argument('--run-dir', action='append', default=[])
+        target_parser.add_argument('--baseline-id')
+
+    baseline_parser = subparsers.add_parser('baseline', help='Manage immutable approved baselines')
+    baseline_subparsers = baseline_parser.add_subparsers(dest='baseline_action', required=True)
+    baseline_list = baseline_subparsers.add_parser('list')
+    baseline_list.add_argument('--status', choices=['draft', 'approved', 'deprecated', 'invalid'])
+    baseline_list.add_argument('--profile')
+    baseline_show = baseline_subparsers.add_parser('show')
+    baseline_show.add_argument('baseline_id')
+    baseline_approve = baseline_subparsers.add_parser('approve')
+    baseline_approve.add_argument('baseline_id')
+    baseline_approve.add_argument('--approver', required=True)
+    baseline_deprecate = baseline_subparsers.add_parser('deprecate')
+    baseline_deprecate.add_argument('baseline_id')
+    baseline_deprecate.add_argument('--reason', required=True)
+    baseline_export = baseline_subparsers.add_parser('export')
+    baseline_export.add_argument('baseline_id')
+    baseline_export.add_argument('--output')
+    baseline_import = baseline_subparsers.add_parser('import')
+    baseline_import.add_argument('bundle')
+
+    run_parser = subparsers.add_parser('run', help='Execute an approved profile with integrated monitoring')
+    run_parser.add_argument('--profile', required=True)
+    run_parser.add_argument('--baseline', default='auto')
+    run_parser.add_argument('--repeat', type=int, default=1)
+    run_parser.add_argument('--run-id')
+    run_parser.add_argument('--no-deploy', action='store_true')
+    run_parser.add_argument('--kernel-monitor', choices=['critical', 'off', 'full-local'], default='critical')
+    run_parser.add_argument('--overall-timeout', type=float, default=300.0)
+    run_parser.add_argument('--heartbeat-timeout', type=float, default=45.0)
+
+    collect_parser = subparsers.add_parser('collect', help='Pull device-spooled run artifacts')
+    collect_parser.add_argument('--run-id', required=True)
+    collect_parser.add_argument('--remote-run-dir')
+    collect_parser.add_argument('--verify-hashes', action='store_true')
+    collect_parser.add_argument('--keep-remote', action='store_true')
+
+    report_parser = subparsers.add_parser('report', help='Regenerate reports from stored run artifacts')
+    report_parser.add_argument('--run-dir', required=True)
+    report_parser.add_argument('--format', default='markdown,json')
 
     return parser
 
@@ -466,9 +571,9 @@ def cmd_list_profiles(args) -> int:
                 print(f"      Path: {profile.workload_path}")
 
         return 0
-    except ImportError as e:
+    except (ImportError, RuntimeError) as e:
         logger.error(f"Failed to load profiles: {e}")
-        return 1
+        return 4
 
 
 def _normalize_path(path: str) -> str:
@@ -500,15 +605,7 @@ def _get_tool_dir() -> str:
     Returns:
         Absolute path to the tool's directory.
     """
-    # Get the directory of the main script or executable
-    if getattr(sys, 'frozen', False):
-        # Running as PyInstaller executable
-        tool_path = sys.executable
-    else:
-        # Running as Python script
-        tool_path = os.path.abspath(__file__)
-
-    return os.path.dirname(tool_path)
+    return str(runtime_paths.exe_root)
 
 
 def _resolve_config_path(path: str) -> str:
@@ -527,7 +624,12 @@ def _resolve_config_path(path: str) -> str:
     Returns:
         Resolved path that exists, or original path if nothing found.
     """
-    # Normalize path (remove ./ and .\\ prefixes)
+    try:
+        return str(runtime_paths.resolve_input(path))
+    except ValueError:
+        pass
+
+    # Legacy fallback retains the original missing-path diagnostic.
     normalized = _normalize_path(path)
 
     # 1. Try normalized exact path first (relative to CWD)
@@ -843,6 +945,8 @@ def _build_dmesg_monitor_cmd(channel, device_port: str) -> str:
         可在设备上执行的 shell 命令字符串
     """
   
+    raise RuntimeError("legacy dmesg-to-UART monitor is disabled; use the v2 device agent")
+
     _, help_text, _ = channel.invoke("dmesg --help 2>&1; echo '---'; dmesg -h 2>&1", timeout=5)
     help_lower = (help_text or "").lower()
 
@@ -879,12 +983,12 @@ def _build_dmesg_monitor_cmd(channel, device_port: str) -> str:
         
         if need_grep:
             dmesg_cmd = (
-                f"while true; do dmesg -c 2>/dev/null | "
+                f"while true; do dmesg 2>/dev/null | "
                 f"grep -iE '{LEVEL_PATTERN}'; sleep 0.5; done"
             )
         else:
             dmesg_cmd = (
-                f"while true; do dmesg -c {level_filter} 2>/dev/null; "
+                f"while true; do dmesg {level_filter} 2>/dev/null; "
                 f"sleep 0.5; done"
             )
 
@@ -897,11 +1001,17 @@ def _build_dmesg_monitor_cmd(channel, device_port: str) -> str:
     return redirect_cmd
 
 def cmd_execute(args) -> int:
-    """Handle execute command."""
+    """Compatibility alias for the integrated v2 run transaction."""
+    from src.cli_commands import cmd_run
+
+    args.profile = getattr(args, 'profile', None) or getattr(args, 'profile_alt', None)
+    return cmd_run(args)
+
+    # Unreachable legacy implementation retained temporarily for source-level
+    # migration reference. It must never be re-enabled because it independently
+    # streamed/cleared dmesg and allowed multiple UART writers.
     # Handle --profile alternative argument
     args.config = _resolve_config_path(args.config)
-    tool_dir = _get_tool_dir()
-    os.chdir(tool_dir)
     profile = args.profile or args.profile_alt
     profiles_path = _resolve_profiles_path(args.config, 'config/workload_profiles.yaml')
     if os.path.exists(profiles_path):
@@ -961,7 +1071,15 @@ def cmd_execute(args) -> int:
     monitor_port = serial_port
     monitor_baud = baudrate if 'baudrate' in locals() else 115200
 
-    
+    if pyserial is None:
+        logger.error("pyserial is required for execute; install requirements.txt")
+        channel.disconnect()
+        return 3
+    if not monitor_port:
+        logger.error("A PC serial port is required; use --serial-port or run pair first")
+        channel.disconnect()
+        return 3
+
     serial = pyserial.Serial(port=monitor_port, baudrate=monitor_baud, timeout=0)
 
     try:
@@ -977,8 +1095,8 @@ def cmd_execute(args) -> int:
             channel.invoke("killall -9 gpu-avs-workload dmesg 2>/dev/null", timeout=2)
             time.sleep(0.5)
            
-            logger.info("Clearing dmesg buffer...")
-            channel.invoke("dmesg -c", timeout=5)
+            logger.info("Legacy kernel-buffer clearing is disabled")
+            channel.invoke(("true",), timeout=5)
             time.sleep(0.5)
             
            
@@ -1365,27 +1483,76 @@ def _print_result(args, verdict: str, exit_code: int, stats, duration: float, li
 
 def main():
     """Main entry point."""
+    global runtime_paths
     parser = setup_argparser()
     args = parser.parse_args()
 
+    runtime_paths = PathResolver.create(
+        config_dir=args.config_dir,
+        state_dir=args.state_dir,
+        output_dir=args.output_dir,
+        device_root=args.device_root,
+        entrypoint=__file__,
+    )
+
+    # Normalize global/compatibility aliases without changing the caller CWD.
+    args.baudrate = getattr(args, 'baudrate', None) or args.global_baudrate
+    if getattr(args, 'pc_serial', None) is None and getattr(args, 'serial_port', None):
+        args.pc_serial = args.serial_port
+    if getattr(args, 'serial_port', None) is None and getattr(args, 'pc_serial', None):
+        args.serial_port = args.pc_serial
+    if getattr(args, 'transport', 'auto') == 'auto' and getattr(args, 'channel', 'auto') in {'adb', 'hdc'}:
+        args.transport = args.channel
+    elif getattr(args, 'channel', 'auto') == 'auto' and args.transport in {'adb', 'hdc'}:
+        args.channel = args.transport
+    if args.command == 'execute':
+        args.profile = args.profile or args.profile_alt
+
     # Set logging level
-    if args.verbose:
+    if args.verbose or args.log_level == 'debug':
         console_handler.setLevel(logging.DEBUG)
-    elif args.quiet:
+    elif args.quiet or args.log_level == 'error':
         console_handler.setLevel(logging.ERROR)
+    elif args.log_level == 'info':
+        console_handler.setLevel(logging.INFO)
+    else:
+        console_handler.setLevel(logging.WARNING)
 
     # Default command if none specified
     if not args.command:
         parser.print_help()
         return 0
 
-    # Dispatch to command handler
+    from src.cli_commands import (
+        cmd_baseline as cmd_baseline_v2,
+        cmd_calibrate as cmd_calibrate_v2,
+        cmd_collect as cmd_collect_v2,
+        cmd_deploy as cmd_deploy_v2,
+        cmd_golden as cmd_golden_v2,
+        cmd_list_profiles_v2,
+        cmd_monitor_events,
+        cmd_probe as cmd_probe_v2,
+        cmd_report as cmd_report_v2,
+        cmd_run as cmd_run_v2,
+        cmd_simulate as cmd_simulate_v2,
+        cmd_validate_v2,
+    )
+
+    # Dispatch to target services; pair and diagnostic monitor retain legacy adapters.
     command_handlers = {
-        'list-profiles': cmd_list_profiles,
-        'validate': cmd_validate,
-        'simulate': cmd_simulate,
-        'monitor': cmd_monitor,
-        'execute': cmd_execute,
+        'probe': cmd_probe_v2,
+        'deploy': cmd_deploy_v2,
+        'golden': cmd_golden_v2,
+        'calibrate': cmd_calibrate_v2,
+        'baseline': cmd_baseline_v2,
+        'run': cmd_run_v2,
+        'collect': cmd_collect_v2,
+        'report': cmd_report_v2,
+        'list-profiles': cmd_list_profiles_v2,
+        'validate': cmd_validate_v2,
+        'simulate': cmd_simulate_v2,
+        'monitor': cmd_monitor_events,
+        'execute': cmd_run_v2,
         'pair': cmd_pair,
     }
 

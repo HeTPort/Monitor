@@ -1,1 +1,76 @@
-profiles: []
+version: "2.0"
+description: Legacy registry backed by the versioned profiles under config/profiles.
+
+common:
+  serial:
+    device: /dev/ttyAMA0
+    baudrate: 115200
+  test:
+    heartbeat_timeout_sec: 45
+    grace_period_sec: 2
+
+cpu:
+  mixed_big4:
+    display_name: CPU mixed workload, four big cores
+    description: Deterministic mixed CPU qualification/batch workload.
+    workload_path: /data/local/tmp/avs/bin/cpu-avs-workload
+    default_args:
+      - --profile
+      - mixed
+      - --duration
+      - "60"
+      - --warmup
+      - "5"
+      - --iterations
+      - "100000"
+      - --threads
+      - "4"
+      - --verify-mode
+      - checksum
+      - --heartbeat-interval
+      - "1"
+      - --output-format
+      - jsonl
+    expected_duration_sec: 70
+    status: implemented
+
+gpu:
+  vulkan_mixed:
+    display_name: GPU Vulkan mixed offscreen workload
+    description: Deterministic Vulkan RGBA8 mixed-shader qualification/batch workload.
+    workload_path: /data/local/tmp/avs/bin/gpu-avs-workload
+    default_args:
+      - --profile
+      - mixed
+      - --api
+      - vulkan
+      - --mode
+      - offscreen
+      - --width
+      - "1280"
+      - --height
+      - "720"
+      - --rt-format
+      - RGBA8
+      - --shader
+      - mixed
+      - --iterations
+      - "192"
+      - --texture-count
+      - "4"
+      - --texture-size
+      - 1024x1024
+      - --duration
+      - "60"
+      - --warmup
+      - "5"
+      - --verify-mode
+      - golden-image
+      - --golden-file
+      - /data/local/tmp/avs/golden/gpu_vulkan_mixed.rgba
+      - --heartbeat-interval
+      - "1"
+      - --output-format
+      - jsonl
+    expected_duration_sec: 70
+    status: implemented

@@ -1,0 +1,23 @@
+{
+  "profile": "mixed",
+  "api": "vulkan",
+  "mode": "offscreen",
+  "width": 1280,
+  "height": 720,
+  "rt_format": "RGBA8",
+  "duration": 60,
+  "warmup": 5,
+  "timeout": 90,
+  "shader": "mixed",
+  "shader_dir": "/data/local/tmp/avs/shaders/vulkan",
+  "iterations": 192,
+  "texture_count": 4,
+  "texture_size": "1024x1024",
+  "verify_mode": "golden-image",
+  "golden_file": "/data/local/tmp/avs/golden/gpu_vulkan_mixed.rgba",
+  "checksum_interval": 1,
+  "gpu_timestamp": true,
+  "gpu_timeout_ms": 5000,
+  "heartbeat_interval": 1,
+  "output_format": "jsonl"
+}
