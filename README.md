@@ -6,6 +6,7 @@ Start with:
 
 - [Development and design](docs/DEVELOPMENT_AND_DESIGN.md)
 - [User guide and API reference](docs/USER_GUIDE.md)
+- [Packaged release and device acceptance test plan](docs/PACKAGE_AND_DEVICE_TEST_PLAN.md)
 
 Run the offline regression suite:
 
