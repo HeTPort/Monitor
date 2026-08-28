@@ -1,0 +1,412 @@
+{
+  "capabilities": {
+    "cpu.frequency": {
+      "available": false,
+      "candidate_paths": [
+        "/sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq"
+      ],
+      "derivation": null,
+      "name": "cpu.frequency",
+      "paths": [],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": false,
+      "required": true,
+      "unit": "kHz",
+      "unreadable_paths": [],
+      "values": {}
+    },
+    "cpu.governor": {
+      "available": false,
+      "candidate_paths": [
+        "/sys/devices/system/cpu/cpu*/cpufreq/scaling_governor"
+      ],
+      "derivation": null,
+      "name": "cpu.governor",
+      "paths": [],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": false,
+      "required": true,
+      "unit": null,
+      "unreadable_paths": [],
+      "values": {}
+    },
+    "cpu.idle_residency": {
+      "available": false,
+      "candidate_paths": [
+        "/sys/devices/system/cpu/cpu*/cpuidle/state*/time"
+      ],
+      "derivation": null,
+      "name": "cpu.idle_residency",
+      "paths": [],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": false,
+      "required": false,
+      "unit": "us",
+      "unreadable_paths": [],
+      "values": {}
+    },
+    "cpu.maximum_frequency": {
+      "available": false,
+      "candidate_paths": [
+        "/sys/devices/system/cpu/cpu*/cpufreq/scaling_max_freq"
+      ],
+      "derivation": null,
+      "name": "cpu.maximum_frequency",
+      "paths": [],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": false,
+      "required": true,
+      "unit": "kHz",
+      "unreadable_paths": [],
+      "values": {}
+    },
+    "cpu.minimum_frequency": {
+      "available": false,
+      "candidate_paths": [
+        "/sys/devices/system/cpu/cpu*/cpufreq/scaling_min_freq"
+      ],
+      "derivation": null,
+      "name": "cpu.minimum_frequency",
+      "paths": [],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": false,
+      "required": true,
+      "unit": "kHz",
+      "unreadable_paths": [],
+      "values": {}
+    },
+    "cpu.online": {
+      "available": false,
+      "candidate_paths": [
+        "/sys/devices/system/cpu/cpu*/online"
+      ],
+      "derivation": null,
+      "name": "cpu.online",
+      "paths": [],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": false,
+      "required": true,
+      "unit": null,
+      "unreadable_paths": [],
+      "values": {}
+    },
+    "cpu.throttle": {
+      "available": false,
+      "candidate_paths": [
+        "/sys/devices/system/cpu/cpu*/thermal_throttle/core_throttle_count",
+        "/sys/devices/system/cpu/cpu*/thermal_throttle/package_throttle_count"
+      ],
+      "derivation": null,
+      "name": "cpu.throttle",
+      "paths": [],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": false,
+      "required": false,
+      "unit": "count",
+      "unreadable_paths": [],
+      "values": {}
+    },
+    "cpu.utilization": {
+      "available": true,
+      "candidate_paths": [
+        "/proc/stat"
+      ],
+      "derivation": "delta_busy_over_delta_total",
+      "name": "cpu.utilization",
+      "paths": [
+        "/proc/stat"
+      ],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": true,
+      "required": true,
+      "unit": "percent",
+      "unreadable_paths": [],
+      "values": {
+        "/proc/stat": "cpu  15162567 22286 29332805 1205415709 141642 1423613 0 0 0 0\ncpu0 5773706 5227 10967879 71931899 47955 666096 0 0 0 0\ncpu1 6431669 6982 11664328 71169615 53113 67054 0 0 0 0\ncpu2 410004 854 2135767 86168371 2687 675078 0 0 0 0\ncpu3 632931 2321 1240461 87508515 5375 3158 0 0 0 0\ncpu4 509257 1799 944624 87930206 4265 2610 0 0 0 0\ncpu5 429480 1392 776149 88177442 6027 2271 0 0 0 0\ncpu6 268596 1243 415432 88697906 7966 1618 0 0 0 0\ncpu7 243656 939 370552 88772027 4170 1418 0 0 0 0\ncpu8 215109 813 324939 88846215 3811 1875 0 0 0 0\ncpu9 218113 702 324621 88843543 4203 1580 0 0 0 0\ncpu10 11317 13 26593 89352535 1937 366 0 0 0 0\ncpu11 8683 7 19565 89364103 53 351 0 0 0 0\ncpu12 8978 1 119547 89264079 75 81 0 0 0 0\ncpu13 1074 1 2353 89389258 10 64 0 0 0 0\nintr 1178188478\nctxt 26323661584\nbtime 0\nprocesses 223401\nprocs_running 1\nprocs_blocked 157\nsoftirq 0 0 0 0 0 0 0 0 0 0 0"
+      }
+    },
+    "cpu.voltage": {
+      "available": true,
+      "candidate_paths": [
+        "/sys/kernel/debug/lpmcu_debug/cluster_volt"
+      ],
+      "derivation": null,
+      "name": "cpu.voltage",
+      "paths": [
+        "/sys/kernel/debug/lpmcu_debug/cluster_volt"
+      ],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": true,
+      "required": false,
+      "unit": "platform_text",
+      "unreadable_paths": [],
+      "values": {
+        "/sys/kernel/debug/lpmcu_debug/cluster_volt": ""
+      }
+    },
+    "device.dmesg": {
+      "available": true,
+      "provenance": "runtime-command",
+      "required": false,
+      "version": "usage: dmesg [-Cc] [-r|-t|-T] [-n LEVEL] [-s SIZE] [-w|-W]"
+    },
+    "device.python3": {
+      "available": true,
+      "provenance": "runtime-command",
+      "required": true,
+      "version": "/bin/sh: python3: inaccessible or not found"
+    },
+    "device.sha256sum": {
+      "available": true,
+      "provenance": "runtime-command",
+      "required": true,
+      "version": "usage: ???sum [-bcs] [FILE]..."
+    },
+    "device.taskset": {
+      "available": true,
+      "provenance": "runtime-command",
+      "required": false,
+      "version": "usage: taskset [-ap] [mask] [PID | cmd [args...]]"
+    },
+    "gpu.frequency": {
+      "available": true,
+      "candidate_paths": [
+        "/sys/class/devfreq/gpufreq/cur_freq",
+        "/sys/devices/platform/gpufreq/devfreq/gpufreq/cur_freq",
+        "/sys/kernel/debug/hvgr0/freq"
+      ],
+      "derivation": null,
+      "name": "gpu.frequency",
+      "paths": [
+        "/sys/class/devfreq/gpufreq/cur_freq",
+        "/sys/devices/platform/gpufreq/devfreq/gpufreq/cur_freq",
+        "/sys/kernel/debug/hvgr0/freq"
+      ],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": true,
+      "required": true,
+      "unit": "Hz",
+      "unreadable_paths": [],
+      "values": {
+        "/sys/class/devfreq/gpufreq/cur_freq": 750000000,
+        "/sys/devices/platform/gpufreq/devfreq/gpufreq/cur_freq": 750000000,
+        "/sys/kernel/debug/hvgr0/freq": "/bin/sh: cat: /sys/kernel/debug/hvgr0/freq: No such file or directory"
+      }
+    },
+    "gpu.governor": {
+      "available": true,
+      "candidate_paths": [
+        "/sys/class/devfreq/gpufreq/governor",
+        "/sys/devices/platform/gpufreq/devfreq/gpufreq/governor"
+      ],
+      "derivation": null,
+      "name": "gpu.governor",
+      "paths": [
+        "/sys/class/devfreq/gpufreq/governor",
+        "/sys/devices/platform/gpufreq/devfreq/gpufreq/governor"
+      ],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": true,
+      "required": true,
+      "unit": null,
+      "unreadable_paths": [],
+      "values": {
+        "/sys/class/devfreq/gpufreq/governor": "gpu_scene_aware",
+        "/sys/devices/platform/gpufreq/devfreq/gpufreq/governor": "gpu_scene_aware"
+      }
+    },
+    "gpu.hang_count": {
+      "available": true,
+      "candidate_paths": [
+        "/sys/module/hvgr_kmd_v350/parameters/gpu_hang_count"
+      ],
+      "derivation": null,
+      "name": "gpu.hang_count",
+      "paths": [
+        "/sys/module/hvgr_kmd_v350/parameters/gpu_hang_count"
+      ],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": true,
+      "required": true,
+      "unit": "count",
+      "unreadable_paths": [],
+      "values": {
+        "/sys/module/hvgr_kmd_v350/parameters/gpu_hang_count": "/bin/sh: cat: /sys/module/hvgr_kmd_v350/parameters/gpu_hang_count: No such file or directory"
+      }
+    },
+    "gpu.maximum_frequency": {
+      "available": true,
+      "candidate_paths": [
+        "/sys/class/devfreq/gpufreq/max_freq",
+        "/sys/devices/platform/gpufreq/devfreq/gpufreq/max_freq"
+      ],
+      "derivation": null,
+      "name": "gpu.maximum_frequency",
+      "paths": [
+        "/sys/class/devfreq/gpufreq/max_freq",
+        "/sys/devices/platform/gpufreq/devfreq/gpufreq/max_freq"
+      ],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": true,
+      "required": true,
+      "unit": "Hz",
+      "unreadable_paths": [],
+      "values": {
+        "/sys/class/devfreq/gpufreq/max_freq": 750000000,
+        "/sys/devices/platform/gpufreq/devfreq/gpufreq/max_freq": 750000000
+      }
+    },
+    "gpu.minimum_frequency": {
+      "available": true,
+      "candidate_paths": [
+        "/sys/class/devfreq/gpufreq/min_freq",
+        "/sys/devices/platform/gpufreq/devfreq/gpufreq/min_freq"
+      ],
+      "derivation": null,
+      "name": "gpu.minimum_frequency",
+      "paths": [
+        "/sys/class/devfreq/gpufreq/min_freq",
+        "/sys/devices/platform/gpufreq/devfreq/gpufreq/min_freq"
+      ],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": true,
+      "required": true,
+      "unit": "Hz",
+      "unreadable_paths": [],
+      "values": {
+        "/sys/class/devfreq/gpufreq/min_freq": 750000000,
+        "/sys/devices/platform/gpufreq/devfreq/gpufreq/min_freq": 750000000
+      }
+    },
+    "gpu.power_policy": {
+      "available": true,
+      "candidate_paths": [
+        "/sys/devices/platform/e2ec0000.hvgr/power_policy"
+      ],
+      "derivation": null,
+      "name": "gpu.power_policy",
+      "paths": [
+        "/sys/devices/platform/e2ec0000.hvgr/power_policy"
+      ],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": true,
+      "required": true,
+      "unit": null,
+      "unreadable_paths": [],
+      "values": {
+        "/sys/devices/platform/e2ec0000.hvgr/power_policy": "[always_on] job_demand"
+      }
+    },
+    "gpu.throttle": {
+      "available": true,
+      "candidate_paths": [
+        "/sys/kernel/debug/hvgr0/pm/gpu_throttle"
+      ],
+      "derivation": null,
+      "name": "gpu.throttle",
+      "paths": [
+        "/sys/kernel/debug/hvgr0/pm/gpu_throttle"
+      ],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": true,
+      "required": false,
+      "unit": "platform_text",
+      "unreadable_paths": [],
+      "values": {
+        "/sys/kernel/debug/hvgr0/pm/gpu_throttle": "Status: enable\nCur thro freq: 0\nPre thro freq: 0"
+      }
+    },
+    "gpu.utilization": {
+      "available": true,
+      "candidate_paths": [
+        "/sys/devices/platform/e2ec0000.hvgr/gpu_utilisation"
+      ],
+      "derivation": null,
+      "name": "gpu.utilization",
+      "paths": [
+        "/sys/devices/platform/e2ec0000.hvgr/gpu_utilisation"
+      ],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": true,
+      "required": true,
+      "unit": "percent",
+      "unreadable_paths": [],
+      "values": {
+        "/sys/devices/platform/e2ec0000.hvgr/gpu_utilisation": "Gpu utilisation : 0"
+      }
+    },
+    "gpu.voltage": {
+      "available": true,
+      "candidate_paths": [
+        "/sys/kernel/debug/lpmcu_debug/cluster_volt"
+      ],
+      "derivation": null,
+      "name": "gpu.voltage",
+      "paths": [
+        "/sys/kernel/debug/lpmcu_debug/cluster_volt"
+      ],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": true,
+      "required": false,
+      "unit": "platform_text",
+      "unreadable_paths": [],
+      "values": {
+        "/sys/kernel/debug/lpmcu_debug/cluster_volt": ""
+      }
+    }
+  },
+  "cpu_topology": {
+    "core_count": 0,
+    "cores": [],
+    "source_glob": "/sys/devices/system/cpu/cpu[0-9]*"
+  },
+  "device": {
+    "properties": {},
+    "serial": "0123456789ABCDEF",
+    "state": "device",
+    "transport": "hdc"
+  },
+  "platform": "kirin9020",
+  "platform_fingerprint": "ca725c8171e649fec3917e90ab82af9f4fcc64f9609dd1aee637e5fa5b21708e",
+  "producer": {
+    "component": "PlatformProbe",
+    "name": "vmin_judge"
+  },
+  "required_missing": [
+    "cpu.frequency",
+    "cpu.governor",
+    "cpu.maximum_frequency",
+    "cpu.minimum_frequency",
+    "cpu.online"
+  ],
+  "schema_version": 1,
+  "supported": false,
+  "thermal_zones": {
+    "cpu": {
+      "available": false,
+      "name": "cpu.temperature",
+      "paths": [],
+      "provenance": "thermal-zone-type-probe",
+      "readable": true,
+      "required": true,
+      "unit": "celsius",
+      "values": {}
+    },
+    "gpu": {
+      "available": false,
+      "name": "gpu.temperature",
+      "paths": [],
+      "provenance": "thermal-zone-type-probe",
+      "readable": true,
+      "required": true,
+      "unit": "celsius",
+      "values": {}
+    },
+    "source_glob": "/sys/class/thermal/thermal_zone*",
+    "zones": {
+      "cpu": [],
+      "gpu": [],
+      "other": []
+    }
+  }
+}
