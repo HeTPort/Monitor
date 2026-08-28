@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import tempfile
 import unittest
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from src.baselines import Baseline
+from src.cli_commands import _shell_agent_argv
 from src.config_loader import ProfileConfig
 from src.events import build_event, encode_event
 from src.path_resolver import PathResolver
@@ -91,6 +92,13 @@ class RunManifestTests(unittest.TestCase):
             self.assertEqual(len(manifest["telemetry"]["samplers"]), 3)
             self.assertEqual(len(manifest["kernel"]["rules"]), 2)
             self.assertFalse(manifest["kernel"]["raw_local"])
+            self.assertFalse(manifest["event_crc"])
+            agent_argv = _shell_agent_argv(PurePosixPath("/data/local/tmp/avs/bin/avs-device-agent"), manifest, 9600)
+            self.assertEqual(agent_argv[:2], ["sh", "/data/local/tmp/avs/bin/avs-device-agent"])
+            self.assertIn("--kernel-rule", agent_argv)
+            self.assertEqual(agent_argv[agent_argv.index("--telemetry-interval") + 1], "5")
+            self.assertEqual(agent_argv[agent_argv.index("--baudrate") + 1], "9600")
+            self.assertIn("--", agent_argv)
 
             qualification = RunManifestBuilder(paths).build_qualification(
                 profile=current_profile,

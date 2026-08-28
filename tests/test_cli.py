@@ -5,9 +5,12 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from argparse import Namespace
 from pathlib import Path
 
+from src.cli_commands import _apply_saved_pairing
 from src.events import build_event, encode_event
+from src.path_resolver import PathResolver
 
 
 ROOT = Path(__file__).parents[1]
@@ -41,6 +44,28 @@ class CLITests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             payload = json.loads(result.stdout)
             self.assertEqual(payload["count"], 0)
+
+    def test_saved_pairing_fills_missing_baud_without_overwriting_explicit_pc_port(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = root / "state"
+            state.mkdir()
+            (state / "pairing.conf").write_text(
+                json.dumps({"pc_port": "COM5", "device_port": "/dev/ttyHW0", "baudrate": 9600}),
+                encoding="utf-8",
+            )
+            paths = PathResolver(
+                bundle_root=root,
+                exe_root=root,
+                state_root=state,
+                output_root=root / "output",
+                cwd=root,
+            )
+            args = Namespace(pc_serial="COM9", device_uart="/dev/ttyAMA0", baudrate=None)
+            _apply_saved_pairing(args, paths)
+            self.assertEqual(args.pc_serial, "COM9")
+            self.assertEqual(args.device_uart, "/dev/ttyHW0")
+            self.assertEqual(args.baudrate, 9600)
 
     def test_legacy_execute_rejects_unsafe_ignored_modes(self) -> None:
         result = self.run_cli("execute", "--no-launch")

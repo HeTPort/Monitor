@@ -4,7 +4,7 @@ description: Legacy registry backed by the versioned profiles under config/profi
 common:
   serial:
     device: /dev/ttyAMA0
-    baudrate: 115200
+    baudrate: 9600
   test:
     heartbeat_timeout_sec: 45
     grace_period_sec: 2

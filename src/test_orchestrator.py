@@ -82,7 +82,7 @@ class TestOrchestratorConfig:
     auto_discover_ports: bool = True
     explicit_device_port: Optional[str] = None
     explicit_pc_port: Optional[str] = None
-    serial_baudrate: int = 115200
+    serial_baudrate: int = 9600
 
     # Test settings
     timeout_sec: int = 60

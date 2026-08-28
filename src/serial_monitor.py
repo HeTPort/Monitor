@@ -78,7 +78,7 @@ class SerialStopbits:
 class SerialConfig:
     """Serial port configuration."""
     port: str = "/dev/ttyUSB0"
-    baudrate: int = 115200
+    baudrate: int = 9600
     bytesize: int = SerialBytesize.EIGHTBITS
     parity: str = SerialParity.NONE
     stopbits: float = SerialStopbits.ONE
@@ -102,7 +102,7 @@ class SerialMonitor:
     Handles incomplete lines by buffering them between reads.
 
     Usage:
-        monitor = SerialMonitor("/dev/ttyUSB0", 115200)
+        monitor = SerialMonitor("/dev/ttyUSB0", 9600)
         with monitor:
             while True:
                 lines = monitor.read_lines()
@@ -113,7 +113,7 @@ class SerialMonitor:
     def __init__(
         self,
         port: str,
-        baudrate: int = 115200,
+        baudrate: int = 9600,
         config: Optional[SerialConfig] = None,
         on_error: Optional[Callable[[Exception], None]] = None
     ):
@@ -122,7 +122,7 @@ class SerialMonitor:
 
         Args:
             port: Serial port path (e.g., "COM3" or "/dev/ttyUSB0")
-            baudrate: Baud rate (default 115200)
+            baudrate: Baud rate (default 9600)
             config: SerialConfig object for detailed configuration
             on_error: Optional callback for error handling
         """
@@ -392,7 +392,7 @@ class MockSerialMonitor(SerialMonitor):
     def __init__(
         self,
         port: str = "/dev/mock",
-        baudrate: int = 115200,
+        baudrate: int = 9600,
         config: Optional[SerialConfig] = None
     ):
         super().__init__(port, baudrate, config)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import shlex
 import subprocess
 import time
 from abc import ABC, abstractmethod
@@ -220,6 +221,7 @@ class ADBTransport(SubprocessTransport):
 
 class HDCTransport(SubprocessTransport):
     name = "hdc"
+    _REMOTE_RC_MARKER = "__VMIN_REMOTE_RC__="
 
     def _host_prefix(self) -> list[str]:
         prefix = [str(self.tool)]
@@ -229,6 +231,43 @@ class HDCTransport(SubprocessTransport):
 
     def _shell_command(self, argv: Sequence[str]) -> list[str]:
         return [*self._host_prefix(), "shell", *argv]
+
+    def invoke(self, argv: Sequence[str], timeout_s: float = 30.0) -> CommandResult:
+        """Execute through the device shell and return the remote command status.
+
+        HDC can return host status zero even when `/bin/sh` reports a missing
+        command or path.  Add a shell-owned status marker and remove it from
+        captured output so probes and deployment do not treat shell errors as
+        successful device operations.
+        """
+        remote_argv = self._validate_argv(argv)
+        remote_command = shlex.join(remote_argv)
+        script = (
+            f"{remote_command}; __vmin_rc=$?; "
+            f"echo {self._REMOTE_RC_MARKER}$__vmin_rc"
+        )
+        host_result = self._run([*self._host_prefix(), "shell", script], timeout_s)
+        if host_result.timed_out or host_result.return_code != 0:
+            return host_result
+        marker_index = host_result.stdout.rfind(self._REMOTE_RC_MARKER)
+        if marker_index < 0:
+            detail = "HDC shell did not return a remote exit status"
+            stderr = f"{host_result.stderr.rstrip()}\n{detail}".strip()
+            return CommandResult(tuple(remote_argv), -1, host_result.stdout, stderr, host_result.duration_s)
+        status_text = host_result.stdout[marker_index + len(self._REMOTE_RC_MARKER):].strip().splitlines()[0]
+        try:
+            remote_status = int(status_text)
+        except ValueError:
+            detail = f"invalid HDC remote exit status: {status_text!r}"
+            stderr = f"{host_result.stderr.rstrip()}\n{detail}".strip()
+            return CommandResult(tuple(remote_argv), -1, host_result.stdout[:marker_index], stderr, host_result.duration_s)
+        return CommandResult(
+            tuple(remote_argv),
+            remote_status,
+            host_result.stdout[:marker_index],
+            host_result.stderr,
+            host_result.duration_s,
+        )
 
     def _push_command(self, local: Path, remote: PurePosixPath) -> list[str]:
         return [*self._host_prefix(), "file", "send", str(local), str(remote)]

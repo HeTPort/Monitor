@@ -96,7 +96,7 @@ class MonitorController:
         config_path: str = None,
         heartbeat_timeout: float = 45.0,
         overall_timeout: float = 300.0,
-        baudrate:int = 115200
+        baudrate:int = 9600
     ):
         """
         Initialize MonitorController.
@@ -572,7 +572,7 @@ class SchedulerFacade:
         config: str = None,
         heartbeat_timeout: float = 45.0,
         overall_timeout: float = 300.0,
-        baudrate:int = 115200
+        baudrate:int = 9600
     ):
         """
         Prepare all components.

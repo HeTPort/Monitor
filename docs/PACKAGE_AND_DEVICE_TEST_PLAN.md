@@ -36,14 +36,14 @@ Monitor 进程退出码：
 | 优先级 | 测试域 | 必须验证的功能 |
 |---|---|---|
 | P0 | 发布包 | 独立 EXE、版本/schema、资源完整、非源码目录运行、只读安装目录、稳定退出码。 |
-| P0 | 设备探测 | HDC/ADB、CPU/GPU/sysfs/debugfs/thermal、Python 3、SHA-256、`dmesg`、`taskset`。 |
+| P0 | 设备探测 | HDC/ADB、CPU/GPU/sysfs/debugfs/thermal、POSIX Shell、SHA-256、`dmesg`、`taskset`。 |
 | P0 | 部署 | 推送、权限、远端 SHA-256、重复部署幂等、受控清理。 |
 | P0 | 串口协议 | 单写者、JSONL、run ID、连续序号、CRC、heartbeat、summary、`agent_final`。 |
 | P0 | CPU/GPU | golden、校准、基线审批、批量 PASS、原生失败结果保留。 |
 | P0 | 状态安全 | PASS、FAIL、超时、中止和控制链路异常后的 governor/frequency/online 状态恢复。 |
 | P1 | 故障注入 | checksum/golden mismatch、超时、遥测违规、关键内核事件、串口损坏。 |
 | P1 | 产物 | 本地/设备 spool 收集、哈希校验、报告重建、离线回放。 |
-| P1 | 长稳与带宽 | 115200 波特率下无丢帧/乱序/CRC 错误，原始 `dmesg` 不进入 UART。 |
+| P1 | 长稳与带宽 | 9600 波特率下无丢帧/乱序，原始 `dmesg` 不进入 UART。 |
 
 ## 3. 测试环境与变量
 
@@ -52,7 +52,7 @@ Monitor 进程退出码：
 - Windows 测试 PC，能够访问 HDC 或 ADB，并有可用的 PC UART（例如 `COM8`）。
 - 至少一块单框架设备、一块双框架设备；生产基线校准至少覆盖两块代表性已知良品板。
 - 设备镜像允许读取必需 sysfs，并允许设置 governor/frequency/online 状态。
-- 当前设备代理要求板端有 `python3`。如果生产镜像不提供 Python，应先替换为原生代理，不能跳过该检查。
+- 设备代理使用固定 POSIX Shell 实现，不要求板端安装 Python；设备必须提供 `/bin/sh`，建议提供 `mkfifo`、`awk`、`sed` 和 `sha256sum`/`toybox sha256sum`。
 - 已构建的 HarmonyOS CPU/GPU workload 和 Vulkan SPIR-V：
   - `tools/cpu-avs-workload`
   - `tools/gpu-avs-workload`
@@ -70,6 +70,7 @@ $Device = 'DEVICE_ID'
 $BoardId = 'BOARD_001'
 $Framework = 'single'       # single 或 dual
 $PcSerial = 'COM8'
+$DeviceUart = '/dev/ttyHW0' # 以板端确认的业务 UART 为准，不要使用 /dev/tty0
 $Out = "D:\MonitorTest\$PackageId\$Framework\$BoardId\output"
 $State = "D:\MonitorTest\$PackageId\$Framework\$BoardId\state"
 $Evidence = "D:\MonitorTest\$PackageId\$Framework\$BoardId\evidence"
@@ -87,7 +88,7 @@ python -m unittest discover -s tests -v *> "$Evidence\REL-01-unittest.txt"
 $LASTEXITCODE
 ```
 
-通过标准：50 个测试全部通过，退出码为 0。当前仓库已在 2026-08-27 验证为 50/50 通过；发布前仍需在实际构建环境重跑。
+通过标准：全部测试通过，退出码为 0。当前仓库离线测试已包含 9600 显式配对、HDC 远端退出码和 Shell agent 回归；发布前仍需在实际构建环境重跑。
 
 覆盖内容包括路径、schema、协议碎片/粘包/CRC/乱序、策略优先级、基线不可变性、校准、设备代理单写者与恢复、部署幂等、CLI、产物哈希和离线回放。
 
@@ -173,14 +174,13 @@ $LASTEXITCODE
 | `report` | 从已有 `result.json` 重建报告 | `report.md/json/csv` |
 | `simulate` | 从 `events.jsonl` 或 `serial.raw` 离线重放 | 新的回放 run 目录和 `result.json` |
 
-设备代理接口：
+设备代理由 PC 端根据已解析 manifest 以安全参数启动；设备端无需解析 JSON。直接健康检查接口为：
 
 ```text
-avs-device-agent --manifest RUN_MANIFEST --uart /dev/ttyAMA0 \
-  --baudrate 115200 [--spool-dir DIR] [--dry-run]
+avs-device-agent --version
 ```
 
-事件接口为每行一个 UTF-8 JSON，关键字段是 `schema_version`、`run_id`、`seq`、`timestamp_ms`、`source`、`type`、`payload`、`crc32`。正常顺序至少应能看到 `agent_start`、环境/能力事件、`start`、多个 `heartbeat`/`telemetry`、`summary` 和最后的 `agent_final`。
+事件接口为每行一个 UTF-8 JSON，关键字段是 `schema_version`、`run_id`、`seq`、`timestamp_ms`、`source`、`type`、`payload`；Shell backend 不发送 CRC，但 PC 仍严格校验 run ID 和连续序号。正常顺序至少应能看到 `agent_start`、`start`、多个 `heartbeat`/`telemetry`、`summary` 和最后的 `agent_final`。
 
 ## 6. 设备基础与接口探测
 
@@ -190,7 +190,8 @@ avs-device-agent --manifest RUN_MANIFEST --uart /dev/ttyAMA0 \
 
 ```powershell
 hdc -t $Device list targets
-hdc -t $Device shell python3 --version
+hdc -t $Device shell sh -c 'echo shell-ok'
+hdc -t $Device shell mkfifo --help
 hdc -t $Device shell sha256sum --help
 hdc -t $Device shell dmesg --help
 hdc -t $Device shell taskset --help
@@ -215,7 +216,7 @@ Copy-Item "$Out\probes\$Device\capabilities.json" `
 
 - CPU：每核 frequency/min/max/governor/online、`/proc/stat` utilization、按 thermal `type` 匹配的温度。
 - GPU：frequency/min/max/governor/utilization/power policy/hang count、按 thermal `type` 匹配的温度。
-- 工具：`device.python3`、`device.sha256sum` 可用；CPU profile 运行时 `device.taskset` 必需；kernel monitor 开启时 `device.dmesg` 必需。
+- 工具：`device.shell`、`device.sha256sum` 可用；CPU profile 运行时 `device.taskset` 必需；kernel monitor 开启时 `device.dmesg` 必需。
 - 每个 metric 都有实际路径、单位、值和 provenance，不允许只有“可用”布尔值。
 - 单/双框架可以使用不同真实路径，但语义、单位和必需能力必须等价。把两个 `capabilities.json` 做字段级 diff，并注明所有差异。
 
@@ -226,8 +227,8 @@ Copy-Item "$Out\probes\$Device\capabilities.json" `
 配对时只连接一块目标设备，避免旧 `pair` 接口选择歧义：
 
 ```powershell
-& $Exe --state-dir $State pair --channel hdc --device-port /dev/ttyAMA0 `
-  --pc-port $PcSerial --baudrate 115200 --timeout 3 --verify `
+& $Exe --device $Device --state-dir $State pair --channel hdc --device-port $DeviceUart `
+  --pc-port $PcSerial --baudrate 9600 --timeout 5 --verify `
   *> "$Evidence\DEV-03-pair.txt"
 $PairExit = $LASTEXITCODE
 ```
@@ -235,11 +236,13 @@ $PairExit = $LASTEXITCODE
 随后进行外部启动/串口 bring-up 时可使用：
 
 ```powershell
-& $Exe --pc-serial $PcSerial --baudrate 115200 --output-dir $Out --state-dir $State `
+& $Exe --pc-serial $PcSerial --baudrate 9600 --output-dir $Out --state-dir $State `
   monitor --save-raw --timeout 60
 ```
 
 通过标准：pair 退出码 0；monitor 能识别连续事件。`monitor` 是诊断命令，结果必须是 `NOT_EVALUATED`，不能输出 DUT PASS。
+
+Pair 只在 PC 端打开串口时设置 9600。设备 UART 应由 BSP/console 预先配置，程序不会自动执行 `stty` 修改设备端波特率；这样可以避免破坏控制台。若失败，只采集 `stty -a < $DeviceUart` 作为诊断，并与 BSP 配置核对。正常 marker、扫描列表和串口内容不打印到控制台，只保存在 UART/测试产物中；控制台仅保留成功摘要或关键错误。
 
 ### DEV-04：部署与幂等
 
@@ -461,7 +464,7 @@ GPU 错误 golden 应以新文件名部署，例如 `gpu_vulkan_mixed.bad.rgba`�
 
 ## 12. UART 与长稳测试
 
-- 固定 115200、8N1，关闭 workload 的 per-batch/per-frame 高频日志。
+- 固定 9600、8N1，关闭 workload 的 per-batch/per-frame 高频日志，遥测间隔不小于 5 秒。
 - 每个 framework/profile 先连续 `--repeat 30`；再选择 CPU 和 GPU 各做一次至少 30 分钟长稳。
 - `kernel-monitor=critical`、`off`、`full-local` 各执行一次。
 - `full-local` 应在设备 spool 产生 `dmesg.raw`，但 UART 仍只传过滤后的 kernel 事件。
@@ -506,7 +509,7 @@ feedback/<package-id>/<framework>/<board-id>/<case-id>/
   "bsp_kernel_driver_build": "from capabilities.json",
   "transport": "hdc",
   "pc_serial": "COM8",
-  "baudrate": 115200,
+  "baudrate": 9600,
   "started_at": "ISO-8601 with timezone",
   "command": "exact unredacted argument order, secrets removed",
   "expected_exit": 3,
@@ -535,12 +538,12 @@ feedback/<package-id>/<framework>/<board-id>/<case-id>/
 | HDC/ADB 命令、push/pull/hash 失败 | `src/transport.py`、`src/deployment.py` |
 | sysfs/thermal/debugfs 路径或单位错误 | `config/platforms/kirin9020.yaml`、`src/platform_probe.py` |
 | run manifest/environment/telemetry 配置错误 | `src/run_orchestrator.py`、profile YAML |
-| UART CRC、序号、run ID、粘包/断包 | `src/events.py`、`device/avs_device_agent.py` |
+| UART 序号、run ID、粘包/断包 | `src/events.py`、`device/avs_device_agent.sh` |
 | DUT/infra 分类、阈值或原生退出码丢失 | `src/policy_engine.py` |
 | golden/calibration/cohort/rejection 问题 | `src/qualification.py` |
 | baseline 审批、hash、导入导出 | `src/baselines.py` |
 | 产物缺失、不完整或 hash 错误 | `src/artifact_store.py`、`src/cli_commands.py` |
-| 状态未恢复、agent 退出不一致 | `device/avs_device_agent.py`、`src/run_orchestrator.py` |
+| 状态未恢复、agent 退出不一致 | `device/avs_device_agent.sh`、`src/run_orchestrator.py` |
 
 ## 15. 最终发布门槛
 

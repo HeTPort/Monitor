@@ -16,7 +16,7 @@ environment:
   temperature_c: {min: 35.0, max: 60.0}
 baseline: null
 telemetry:
-  interval_ms: 1000
+  interval_ms: 5000
   required: [gpu.frequency, gpu.utilization, gpu.temperature, gpu.hang_count, gpu.power_policy]
   optional: [gpu.throttle, gpu.voltage]
 kernel_monitor: critical

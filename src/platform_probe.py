@@ -178,8 +178,28 @@ class PlatformProbe:
                 except OSError:
                     online = None
             cores.append({"cpu": cpu_id, "path": str(PurePosixPath(path)), "online": online})
+        source = pattern
+        if not cores and self.backend.exists("/proc/stat"):
+            try:
+                proc_stat = self.backend.read_text("/proc/stat")
+            except OSError:
+                proc_stat = ""
+            for line in proc_stat.splitlines():
+                match = re.match(r"^cpu(\d+)\s", line)
+                if not match:
+                    continue
+                cpu_id = int(match.group(1))
+                cores.append(
+                    {
+                        "cpu": cpu_id,
+                        "path": f"/sys/devices/system/cpu/cpu{cpu_id}",
+                        "online": True if cpu_id == 0 else None,
+                    }
+                )
+            if cores:
+                source = "/proc/stat"
         cores.sort(key=lambda item: item["cpu"])
-        return {"core_count": len(cores), "cores": cores, "source_glob": pattern}
+        return {"core_count": len(cores), "cores": cores, "source_glob": pattern, "source": source}
 
     def _probe_thermal(self, *, include_values: bool) -> dict[str, Any]:
         thermal = self.platform.thermal

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 import shutil
 import tempfile
 import time
@@ -142,7 +143,7 @@ def _probe(args: Namespace, paths: PathResolver, transport: Transport, profile: 
         required.extend(profile.telemetry.get("required", []))
     PlatformProbe(platform, TransportProbeBackend(transport, identity)).require(result, sorted(set(required)))
     tool_checks: dict[str, tuple[tuple[str, ...], bool]] = {
-        "device.python3": (("python3", "--version"), True),
+        "device.shell": (("sh", "-c", "exit 0"), True),
         "device.sha256sum": (("sha256sum", "--help"), True),
         "device.dmesg": (("dmesg", "--help"), bool(profile and profile.kernel_monitor != "off")),
         "device.taskset": (("taskset", "--help"), bool(profile and profile.environment.get("affinity"))),
@@ -196,7 +197,7 @@ def _asset_plan(
     profile: ProfileConfig,
     baseline: Baseline | None,
 ) -> tuple[list[AssetSpec], Path, Path]:
-    agent = paths.resolve_resource("device/avs_device_agent.py")
+    agent = paths.resolve_resource("device/avs_device_agent.sh")
     workload = paths.resolve_input(str(profile.workload["binary"]), owner=profile.source_path)
     workload_config_value = profile.workload.get("config")
     if not isinstance(workload_config_value, str):
@@ -246,6 +247,84 @@ def _asset_plan(
                 )
             assets.append(AssetSpec(golden_path, remote_golden, kind="golden"))
     return assets, agent_remote, workload_config
+
+
+def _shell_agent_argv(agent_remote: PurePosixPath, manifest: Mapping[str, Any], baudrate: int) -> list[str]:
+    """Translate a resolved manifest into fixed POSIX-shell agent arguments."""
+
+    def field(value: Any, name: str) -> str:
+        text = str(value)
+        if not text or any(character in text for character in "|\r\n\x00"):
+            raise ConfigError(f"shell agent {name} contains an unsupported delimiter")
+        return text
+
+    def path_suffix(path: str, fallback: int) -> str:
+        for pattern in (r"cpu(\d+)", r"thermal_zone(\d+)", r"state(\d+)", r"policy(\d+)"):
+            match = re.search(pattern, path)
+            if match:
+                return match.group(1)
+        return str(fallback)
+
+    telemetry = manifest.get("telemetry", {})
+    interval_ms = int(telemetry.get("interval_ms", 5000))
+    argv = [
+        "sh",
+        str(agent_remote),
+        "--run-id",
+        field(manifest["run_id"], "run_id"),
+        "--target",
+        field(manifest["target"], "target"),
+        "--uart",
+        field(manifest["uart"], "uart"),
+        "--spool-dir",
+        field(manifest["spool_dir"], "spool_dir"),
+        "--cwd",
+        field(manifest["workload"].get("cwd", "/"), "workload.cwd"),
+        "--baudrate",
+        str(baudrate),
+        "--timeout",
+        str(max(1, int(float(manifest.get("timeout_s", 300))))),
+        "--telemetry-interval",
+        str(max(5, (interval_ms + 999) // 1000)),
+        "--kernel-mode",
+        field(manifest.get("kernel", {}).get("mode", "off"), "kernel.mode"),
+    ]
+    for action in manifest.get("environment", {}).get("actions", []):
+        spec = "|".join(
+            (
+                field(action["path"], "environment.path"),
+                field(action["value"], "environment.value"),
+                "1" if action.get("required", False) else "0",
+            )
+        )
+        argv.extend(("--environment", spec))
+    for sampler in telemetry.get("samplers", []):
+        paths = list(sampler.get("paths", []))
+        for index, path in enumerate(paths):
+            metric = str(sampler["metric"])
+            if len(paths) > 1 and sampler.get("parser") != "proc_stat_utilization":
+                metric = f"{metric}.{path_suffix(str(path), index)}"
+            spec = "|".join(
+                (
+                    field(metric, "telemetry.metric"),
+                    field(sampler.get("parser", "text"), "telemetry.parser"),
+                    field(path, "telemetry.path"),
+                )
+            )
+            argv.extend(("--telemetry", spec))
+    for rule in manifest.get("kernel", {}).get("rules", []):
+        severity = field(rule.get("severity", "warning"), "kernel.severity")
+        rule_id = field(rule.get("id", "kernel-rule"), "kernel.id")
+        pattern = str(rule.get("pattern", ""))
+        if not pattern or any(character in pattern for character in "\t\r\n\x00"):
+            raise ConfigError("shell agent kernel pattern contains an unsupported delimiter")
+        argv.extend(("--kernel-rule", severity, rule_id, pattern))
+    workload_argv = manifest.get("workload", {}).get("argv", [])
+    if not isinstance(workload_argv, list) or not workload_argv:
+        raise ConfigError("shell agent requires a non-empty workload argv list")
+    argv.append("--")
+    argv.extend(field(value, "workload.argv") for value in workload_argv)
+    return argv
 
 
 def _workload_fingerprint_fields(paths: PathResolver, profile: ProfileConfig) -> dict[str, Any]:
@@ -312,16 +391,15 @@ def _verify_existing_assets(transport: Transport, assets: Iterable[AssetSpec]) -
 
 
 def _apply_saved_pairing(args: Namespace, paths: PathResolver) -> None:
-    if args.pc_serial:
-        return
     pairing_path = paths.resolve_state("pairing.conf")
     if not pairing_path.exists():
         return
     pairing = json.loads(pairing_path.read_text(encoding="utf-8"))
-    args.pc_serial = pairing.get("pc_port")
+    if not args.pc_serial:
+        args.pc_serial = pairing.get("pc_port")
     if args.device_uart == "/dev/ttyAMA0" and pairing.get("device_port"):
         args.device_uart = pairing["device_port"]
-    if pairing.get("baudrate"):
+    if args.baudrate is None and pairing.get("baudrate"):
         args.baudrate = int(pairing["baudrate"])
 
 
@@ -337,6 +415,8 @@ def _execute_live_qualification(
     if count <= 0:
         return []
     _apply_saved_pairing(args, paths)
+    if args.baudrate is None:
+        args.baudrate = int(load_platform(paths, profile.platform).serial.get("baudrate", 9600))
     if not args.pc_serial:
         raise ConfigError("--pc-serial is required for live qualification when no saved pairing exists")
     transport = _transport(args, paths)
@@ -385,10 +465,7 @@ def _execute_live_qualification(
         execution = RunOrchestrator(paths.output_root).run_serial(
             manifest,
             transport=transport,
-            agent_argv=[
-                str(agent_remote), "--manifest", str(remote_manifest), "--uart", args.device_uart,
-                "--baudrate", str(args.baudrate),
-            ],
+            agent_argv=_shell_agent_argv(agent_remote, manifest, args.baudrate),
             pc_serial=args.pc_serial,
             baudrate=args.baudrate,
             capabilities=capabilities,
@@ -413,7 +490,7 @@ def cmd_deploy(args: Namespace) -> int:
     paths = make_paths(args)
     transport = _transport(args, paths)
     assets: list[AssetSpec] = [
-        AssetSpec(paths.resolve_resource("device/avs_device_agent.py"), paths.remote("bin/avs-device-agent"), executable=True, kind="agent")
+        AssetSpec(paths.resolve_resource("device/avs_device_agent.sh"), paths.remote("bin/avs-device-agent"), executable=True, kind="agent")
     ]
     requested_profiles: list[ProfileConfig] = []
     if getattr(args, "profile", None):
@@ -665,6 +742,8 @@ def cmd_run(args: Namespace) -> int:
     if not args.pc_serial:
         raise ConfigError("--pc-serial is required when no saved pairing exists")
     profile = load_profile(paths, args.profile)
+    if args.baudrate is None:
+        args.baudrate = int(load_platform(paths, profile.platform).serial.get("baudrate", 9600))
     baseline = _resolve_baseline(args, paths, profile)
     _require_current_correctness(paths, profile, baseline.golden)
     transport = _transport(args, paths)
@@ -715,15 +794,7 @@ def cmd_run(args: Namespace) -> int:
             DeploymentManager(transport).deploy(
                 [AssetSpec(local_manifest, remote_manifest, kind="run-manifest")], verify_hashes=True
             )
-        agent_argv = [
-            str(agent_remote),
-            "--manifest",
-            str(remote_manifest),
-            "--uart",
-            args.device_uart,
-            "--baudrate",
-            str(args.baudrate),
-        ]
+        agent_argv = _shell_agent_argv(agent_remote, manifest, args.baudrate)
         execution = RunOrchestrator(paths.output_root).run_serial(
             manifest,
             transport=transport,
@@ -1030,7 +1101,7 @@ def cmd_validate_v2(args: Namespace) -> int:
         except (BaselineError, OSError, json.JSONDecodeError) as exc:
             errors.append(str(exc))
     if args.package:
-        for resource in ("device/avs_device_agent.py", "config/kernel/critical.conf"):
+        for resource in ("device/avs_device_agent.sh", "config/kernel/critical.conf"):
             try:
                 paths.resolve_resource(resource)
                 checked.append(f"resource:{resource}")

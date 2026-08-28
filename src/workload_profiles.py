@@ -66,7 +66,7 @@ class WorkloadProfile:
     notes: Optional[str] = None
 
     # Common settings (may be applied from config)
-    baudrate: int = 115200
+    baudrate: int = 9600
     heartbeat_timeout_sec: int = 45
     grace_period_sec: int = 2
 
@@ -260,7 +260,7 @@ class WorkloadProfileLoader:
             status=data.get('status', 'implemented'),
             notes=data.get('notes'),
             # Apply common defaults if not specified in profile
-            baudrate=serial_defaults.get('baudrate', 115200),
+            baudrate=serial_defaults.get('baudrate', 9600),
             heartbeat_timeout_sec=test_defaults.get('heartbeat_timeout_sec', 45),
             grace_period_sec=test_defaults.get('grace_period_sec', 2)
         )

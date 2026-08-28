@@ -18,7 +18,7 @@ class WorkloadFingerprintTests(unittest.TestCase):
             config_path = root / "config" / "workloads" / "gpu.json"
             binary_path = root / "tools" / "gpu-avs-workload"
             shader_path = root / "tools" / "shaders" / "workload.frag.spv"
-            agent_path = root / "device" / "avs_device_agent.py"
+            agent_path = root / "device" / "avs_device_agent.sh"
             for path in (profile_path, config_path, binary_path, shader_path, agent_path):
                 path.parent.mkdir(parents=True, exist_ok=True)
             config_path.write_text("{}", encoding="utf-8")

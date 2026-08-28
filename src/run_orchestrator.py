@@ -154,7 +154,8 @@ class RunManifestBuilder:
             "timeout_s": overall_timeout_s,
             "overall_timeout_s": overall_timeout_s,
             "heartbeat_timeout_s": heartbeat_timeout_s,
-            "event_crc": True,
+            "event_crc": False,
+            "agent_backend": "posix-shell",
             "workload": {
                 "argv": workload_argv,
                 "cwd": str(self.paths.device_root),

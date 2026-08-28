@@ -253,7 +253,7 @@ class HDCChannel(DeviceChannel):
                         self._connected = True
                     
                     if self._connected:
-                        logger.info("HDC connection established")
+                        logger.debug("HDC connection established")
                         self._health = ChannelHealth(is_healthy=True, last_check=time.time())
                 else:
                     self._connected = False
@@ -274,7 +274,7 @@ class HDCChannel(DeviceChannel):
         """Close HDC connection."""
         with self._lock:
             self._connected = False
-            logger.info("HDC connection closed")
+            logger.debug("HDC connection closed")
 
     def invoke(self, cmd: str, timeout: int = None,background: bool = False) -> Tuple[int, str, str]:
         """
@@ -291,14 +291,26 @@ class HDCChannel(DeviceChannel):
             timeout = self._timeout
 
         try:
+            remote_marker = "__VMIN_REMOTE_RC__="
+            wrapped_cmd = f"{cmd}; __vmin_rc=$?; echo {remote_marker}$__vmin_rc"
             result = subprocess.run(
-                self._build_hdc_cmd("shell", cmd),
+                self._build_hdc_cmd("shell", wrapped_cmd),
                 capture_output=True,
                 text=True,
                 timeout=timeout
             )
 
-            return (result.returncode, result.stdout, result.stderr)
+            if result.returncode != 0:
+                return (result.returncode, result.stdout, result.stderr)
+            marker_index = result.stdout.rfind(remote_marker)
+            if marker_index < 0:
+                return (-1, result.stdout, (result.stderr + "\nHDC shell returned no remote status").strip())
+            status_text = result.stdout[marker_index + len(remote_marker):].strip().splitlines()[0]
+            try:
+                remote_status = int(status_text)
+            except ValueError:
+                return (-1, result.stdout[:marker_index], f"Invalid HDC remote status: {status_text!r}")
+            return (remote_status, result.stdout[:marker_index], result.stderr)
 
         except subprocess.TimeoutExpired:
             if background:
@@ -330,7 +342,7 @@ class HDCChannel(DeviceChannel):
             )
 
             if result.returncode == 0:
-                logger.info(f"Pushed {local_path} to {remote_path}")
+                logger.debug(f"Pushed {local_path} to {remote_path}")
                 return True
             else:
                 logger.error(f"HDC push failed: {result.stderr}")
@@ -363,7 +375,7 @@ class HDCChannel(DeviceChannel):
             )
 
             if result.returncode == 0:
-                logger.info(f"Pulled {remote_path} to {local_path}")
+                logger.debug(f"Pulled {remote_path} to {local_path}")
                 return True
             else:
                 logger.error(f"HDC pull failed: {result.stderr}")
@@ -481,7 +493,7 @@ class ADBChannel(DeviceChannel):
                                 continue
                             
                             self._connected = True
-                            logger.info("ADB connection established")
+                            logger.debug("ADB connection established")
                             self._health = ChannelHealth(is_healthy=True, last_check=time.time())
                             return True
 
@@ -506,7 +518,7 @@ class ADBChannel(DeviceChannel):
         """Close ADB connection."""
         with self._lock:
             self._connected = False
-            logger.info("ADB connection closed")
+            logger.debug("ADB connection closed")
 
     def invoke(self, cmd: str, timeout: int = None,background: bool = False) -> Tuple[int, str, str]:
         """
@@ -562,7 +574,7 @@ class ADBChannel(DeviceChannel):
             )
 
             if result.returncode == 0:
-                logger.info(f"Pushed {local_path} to {remote_path}")
+                logger.debug(f"Pushed {local_path} to {remote_path}")
                 return True
             else:
                 logger.error(f"ADB push failed: {result.stderr}")
@@ -595,7 +607,7 @@ class ADBChannel(DeviceChannel):
             )
 
             if result.returncode == 0:
-                logger.info(f"Pulled {remote_path} to {local_path}")
+                logger.debug(f"Pulled {remote_path} to {local_path}")
                 return True
             else:
                 logger.error(f"ADB pull failed: {result.stderr}")
@@ -691,7 +703,7 @@ class ChannelManager:
     def mode(self, value: str) -> None:
         """Set operation mode."""
         self._mode = value.upper()
-        logger.info(f"ChannelManager mode set to {self._mode}")
+        logger.debug(f"ChannelManager mode set to {self._mode}")
 
     def add_channel(self, channel: DeviceChannel, priority: int = 0) -> None:
         """
@@ -706,7 +718,7 @@ class ChannelManager:
                 self._channels.append(channel)
                 self._priorities[channel] = priority
                 self._update_channel_order()
-                logger.info(f"Added {channel.get_type()} channel with priority {priority}")
+                logger.debug(f"Added {channel.get_type()} channel with priority {priority}")
 
     def remove_channel(self, channel: DeviceChannel) -> None:
         """
@@ -772,12 +784,12 @@ class ChannelManager:
                     if self._manual_channel and channel != self._manual_channel:
                         continue
 
-                logger.info(f"Trying {channel.get_type()} channel...")
+                logger.debug(f"Trying {channel.get_type()} channel...")
                 if channel.connect():
                     self._current_channel = channel
                     self._primary_channel = channel
                     self._connected = True
-                    logger.info(f"Connected via {channel.get_type()}")
+                    logger.debug(f"Connected via {channel.get_type()}")
 
                     # Start health monitoring
                     self._start_health_monitor()
@@ -801,7 +813,7 @@ class ChannelManager:
 
             self._connected = False
             self._current_channel = None
-            logger.info("All channels disconnected")
+            logger.debug("All channels disconnected")
 
     def invoke(
         self,

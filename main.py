@@ -96,7 +96,7 @@ def _ensure_config_dir() -> str:
         os.makedirs(config_dir, exist_ok=True)
     return config_dir
 
-def save_pairing_result(device_port: str, pc_port: str, baudrate:int = 115200, confidence: float = 1.0) -> bool:
+def save_pairing_result(device_port: str, pc_port: str, baudrate: int = 9600, confidence: float = 1.0) -> bool:
     """
     Save pairing result to config file for persistence.
 
@@ -123,9 +123,7 @@ def save_pairing_result(device_port: str, pc_port: str, baudrate:int = 115200, c
         with open(config_path, 'w') as f:
             json.dump(config_data, f, indent=2)
 
-        logger.info(f"Pairing result saved to: {config_path}")
-        logger.info(f"  Device port: {device_port}")
-        logger.info(f"  PC port: {pc_port}")
+        logger.debug("Pairing result saved to %s", config_path)
         return True
 
     except Exception as e:
@@ -226,7 +224,7 @@ Examples:
     parser.add_argument('--device-root', default='/data/local/tmp/avs')
     parser.add_argument('--pc-serial', help='PC-side UART port')
     parser.add_argument('--device-uart', default='/dev/ttyAMA0')
-    parser.add_argument('--baudrate', dest='global_baudrate', type=int, default=115200)
+    parser.add_argument('--baudrate', dest='global_baudrate', type=int, default=None)
     parser.add_argument('--log-level', choices=['debug', 'info', 'warning', 'error'], default='info')
     parser.add_argument('--json', dest='json_output', action='store_true', help='Print machine-readable command output')
     parser.add_argument(
@@ -448,7 +446,7 @@ def _add_monitor_options(parser: argparse.ArgumentParser) -> None:
         '--baudrate', '-b',
         type=int,
         default=None,
-        help='Serial baud rate (default: 115200)'
+        help='Serial baud rate (default: saved/platform value, Kirin9020: 9600)'
     )
     parser.add_argument(
         '--heartbeat-timeout',
@@ -491,7 +489,7 @@ def _add_pair_options(parser: argparse.ArgumentParser) -> None:
         '--baudrate', '-b',
         type=int,
         default=None,
-        help='Serial baud rate (default: 115200)'
+        help='Serial baud rate (default: 9600)'
     )
     parser.add_argument(
         '--device-port',
@@ -851,7 +849,7 @@ def cmd_monitor(args) -> int:
             args.serial_port = saved.get('pc_port')
 
             if args.baudrate is None:
-                args.baudrate = saved.get('baudrate', 115200)
+                args.baudrate = saved.get('baudrate', 9600)
             logger.info(f"Using saved pairing result: PC port = {args.serial_port} @ {args.baudrate} baud")
         else:
             logger.error("--serial-port is required for monitor command")
@@ -859,7 +857,7 @@ def cmd_monitor(args) -> int:
             return 1
 
     if args.baudrate is None:
-        args.baudrate = 115200
+        args.baudrate = 9600
 
     logger.info(f"Starting serial monitor on {args.serial_port} @ {args.baudrate} baud")
     # Create channel and scheduler
@@ -1038,10 +1036,10 @@ def cmd_execute(args) -> int:
             device_port = saved.get('device_port')
             logger.info(f"Using saved pairing result: PC port = {serial_port}")
             if baudrate is None:
-                baudrate = saved.get('baudrate', 115200)
+                baudrate = saved.get('baudrate', 9600)
             logger.info(f"Using saved pairing result: PC port = {serial_port} @ {baudrate} baud")
     if baudrate is None:
-        baudrate = 115200  
+        baudrate = 9600
     # Create channel
     prefer_hdc = (args.channel == 'hdc')
     channel = create_channel_manager(prefer_hdc=prefer_hdc)
@@ -1069,7 +1067,7 @@ def cmd_execute(args) -> int:
 
     exit_code = 0
     monitor_port = serial_port
-    monitor_baud = baudrate if 'baudrate' in locals() else 115200
+    monitor_baud = baudrate if 'baudrate' in locals() else 9600
 
     if pyserial is None:
         logger.error("pyserial is required for execute; install requirements.txt")
@@ -1311,17 +1309,22 @@ def cmd_pair(args) -> int:
         MockPCSerialScanner
     )
 
-    logger.info("Starting serial port pairing")
+    args.baudrate = args.baudrate or 9600
+    logger.debug("Starting serial port pairing")
 
     # Create channel
     prefer_hdc = (args.channel == 'hdc')
-    channel = create_channel_manager(prefer_hdc=prefer_hdc)
+    channel = create_channel_manager(
+        prefer_hdc=prefer_hdc,
+        hdc_serial=getattr(args, 'device', None),
+        adb_serial=getattr(args, 'device', None),
+    )
 
     if not channel.connect():
         logger.error("Failed to connect to device")
         return 1
 
-    logger.info(f"Connected via {channel.get_current_channel_type()}")
+    logger.debug("Connected via %s", channel.get_current_channel_type())
 
     # Build configuration
     config = SerialPortConfig(
@@ -1348,15 +1351,10 @@ def cmd_pair(args) -> int:
         result = manager.discover()
 
         if result.success:
-            print("\n" + "=" * 60)
-            print("[OK] Serial Port Pairing Successful!")
-            print("=" * 60)
-            print(f"  Device Port: {result.device_port}")
-            print(f"  PC Port:      {result.pc_port}")
-            print(f"  Confidence:   {result.pair.confidence:.2f}")
-            print(f"  Latency:      {result.pair.latency_ms:.1f}ms")
-            print(f"  Duration:     {result.duration_sec:.2f}s")
-            print("=" * 60)
+            print(
+                f"[OK] Pairing {result.device_port} -> {result.pc_port} "
+                f"@ {args.baudrate} baud ({result.pair.latency_ms:.1f} ms)"
+            )
 
             # Save pairing result for future use
             save_pairing_result(
@@ -1368,11 +1366,10 @@ def cmd_pair(args) -> int:
 
             # Optional verification
             if args.verify:
-                print("\nVerifying connection...")
                 if manager.verify_connection():
-                    print("[OK] Connection verified!")
+                    print("[OK] Pairing verified")
                 else:
-                    print("[!] Connection verification failed")
+                    print("[X] Pairing verification failed")
                     return 1
 
             # Optional: Start monitoring after pairing
@@ -1396,24 +1393,10 @@ def cmd_pair(args) -> int:
 
             return 0
         else:
-            print("\n" + "=" * 60)
-            print("[X] Serial Port Pairing Failed!")
-            print("=" * 60)
-            print(f"  Error: {result.error}")
-            print(f"  Device ports found: {len(result.device_ports_found)}")
-            print(f"  PC ports found: {len(result.pc_ports_found)}")
-
-            if result.device_ports_found:
-                print("\n  Available device ports:")
-                for port in result.device_ports_found:
-                    print(f"    - {port.port} ({port.device_type})")
-
-            if result.pc_ports_found:
-                print("\n  Available PC ports:")
-                for port in result.pc_ports_found:
-                    print(f"    - {port.port}: {port.description}")
-
-            print("=" * 60)
+            print(
+                f"[X] Pairing failed: {result.error or 'no working pair'}; "
+                f"baud={args.baudrate}, attempts={result.attempts}, duration={result.duration_sec:.1f}s"
+            )
             return 1
 
     except Exception as e:

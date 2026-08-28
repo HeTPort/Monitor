@@ -123,7 +123,7 @@ class SerialPortConfig:
     explicit_pc_port: Optional[str] = None
 
     # Serial parameters
-    baudrate: int = 115200
+    baudrate: int = 9600
     timeout_sec: float = 2.0
 
     # Fallback ports (used if auto-discovery fails)
@@ -208,9 +208,20 @@ class RealPCSerialScanner(PCSerialScanner):
 
         ports = []
         for port_info in serial.tools.list_ports.comports():
+            description = port_info.description or ""
+            ignored_tokens = (
+                "modem",
+                "bluetooth",
+                "pcui",
+                "mobile connect",
+                "active management technology",
+            )
+            if any(token in description.casefold() for token in ignored_tokens):
+                logger.debug("Skipping unrelated PC port %s (%s)", port_info.device, description)
+                continue
             port = PCSerialPort(
                 port=port_info.device,
-                description=port_info.description or "",
+                description=description,
                 hwid=port_info.hwid or "",
                 available=True,
             )
@@ -246,31 +257,8 @@ class MockPCSerialScanner(PCSerialScanner):
         self._available = True
 
     def list_ports(self) -> List[PCSerialPort]:
-        """List all available serial ports using pyserial."""
-        if not PYSERIAL_AVAILABLE:
-            logger.warning("pyserial not installed, cannot list PC ports")
-            return []
-
-        ports = []
-        for port_info in serial.tools.list_ports.comports():
-            desc = port_info.description or ""
-            
-            # 过滤掉已知的无用虚拟接口，避免占用资源和干扰
-            if "Modem" in desc or "Bluetooth" in desc or "Management Technology" in desc or "PCUI" in desc:
-                logger.debug(f"Skipping useless port: {port_info.device} ({desc})")
-                continue
-
-            port = PCSerialPort(
-                port=port_info.device,
-                description=desc,
-                hwid=port_info.hwid or "",
-                available=True,
-            )
-            ports.append(port)
-            logger.info(f"Found valid PC port: {port.port} - {port.description}")
-
-        self._cached_ports = ports
-        return ports
+        """Return deterministic configured ports without touching host hardware."""
+        return [PCSerialPort(port=name, description="Mock serial port", available=self._available) for name in self._mock_ports]
 
     def is_port_available(self, port_name: str) -> bool:
         """Check if mock port is available."""
@@ -397,13 +385,12 @@ class RealDeviceSerialScanner(DeviceSerialScanner):
             port.is_console = base_dev_name in consoles
 
             if 'HwGS' in device_path:
-                logger.info(f"Skipping USB Gadget port: {device_path}")
+                logger.debug(f"Skipping USB Gadget port: {device_path}")
                 continue
             
             ports.append(port)
-            # Log at INFO level so user can see why each port is selected or skipped
             status = "✓" if port.writable else "✗"
-            logger.info(
+            logger.debug(
                 f"Device port {status} {port.port}: "
                 f"type={port.device_type}, readable={port.readable}, "
                 f"writable={port.writable}, console={port.is_console}"
@@ -478,7 +465,7 @@ class SerialPairingEngine(ABC):
         device_port: str,
         pc_port: str,
         channel,
-        baudrate: int = 115200,
+        baudrate: int = 9600,
         timeout: float = 2.0
     ) -> Tuple[bool, float]:
         """
@@ -546,7 +533,7 @@ class RealSerialPairingEngine(SerialPairingEngine):
         device_port: str,
         pc_port: str,
         channel,
-        baudrate: int = 115200,
+        baudrate: int = 9600,
         timeout: float = 2.0
     ) -> Tuple[bool, float]:
         """
@@ -640,7 +627,7 @@ class RealSerialPairingEngine(SerialPairingEngine):
 
         if not pc_ports:
             result.error = "No PC serial ports found"
-            logger.warning(result.error)
+            logger.debug(result.error)
             return result
 
         # Step 2: If explicit ports configured, test them first
@@ -677,7 +664,7 @@ class RealSerialPairingEngine(SerialPairingEngine):
 
         if not writable_device_ports:
             result.error = "No writable non-console device serial ports found"
-            logger.warning(result.error)
+            logger.debug(result.error)
             return result
 
         # Step 4: Test all combinations
@@ -760,7 +747,7 @@ class PCSerialPortMonitor:
     and storing received data in a thread-safe buffer.
     """
 
-    def __init__(self, port_name: str, baudrate: int = 115200, timeout: float = 10.0):
+    def __init__(self, port_name: str, baudrate: int = 9600, timeout: float = 10.0):
         """
         Initialize PC port monitor.
 
@@ -853,14 +840,14 @@ class PCSerialPortMonitor:
             data = bytes(self._buffer).decode('utf-8', errors='replace')
             found = marker in data
             if found:
-                logger.info(f"Monitor {self.port_name}: FOUND marker '{marker}'")
+                logger.debug("Monitor %s received pair marker", self.port_name)
             return found
 
     def _monitor_loop(self) -> None:
         """Main monitoring loop - runs in separate thread."""
         try:
             with serial.Serial(self.port_name, self.baudrate, timeout=0.1) as ser:
-                logger.info(f"Monitor {self.port_name}: Serial port opened")
+                logger.debug("Monitor %s opened", self.port_name)
 
                 while self._running and not self._stop_event.is_set():
                     try:
@@ -923,7 +910,7 @@ class OptimizedSerialPairingEngine(SerialPairingEngine):
         device_port: str,
         pc_port: str,
         channel,
-        baudrate: int = 115200,
+        baudrate: int = 9600,
         timeout: float = 2.0
     ) -> Tuple[bool, float]:
         """
@@ -940,7 +927,7 @@ class OptimizedSerialPairingEngine(SerialPairingEngine):
         device_port: str,
         pc_port: str,
         channel,
-        baudrate: int = 115200,
+        baudrate: int = 9600,
         timeout: float = 2.0
     ) -> Tuple[bool, float]:
         """Original single-pair test method."""
@@ -948,25 +935,19 @@ class OptimizedSerialPairingEngine(SerialPairingEngine):
             logger.warning("pyserial not installed, cannot test port pairing")
             return (False, 0.0)
 
-        marker = f"PAIR_{int(time.time() * 1000)}"
-        write_cmd = f"echo {marker} > {device_port}"
-        
-        write_start_time = time.time()
-
         try:
-            # Write marker to device serial port via channel
-            logger.debug(f"TEST_PAIR: Writing '{marker}' to {device_port}")
-            code, _, stderr = channel.invoke(write_cmd, timeout=5)
-
-            if code != 0:
-                logger.debug(f"Failed to write to device port {device_port}: {stderr}")
-                return (False, 0.0)
-
-            # Monitor PC serial port for marker
             try:
-                with serial.Serial(pc_port, baudrate, timeout=timeout) as ser:
+                with serial.Serial(pc_port, baudrate, timeout=0.1) as ser:
+                    if hasattr(ser, "reset_input_buffer"):
+                        ser.reset_input_buffer()
+                    marker = f"PAIR_{int(time.time() * 1000)}"
+                    write_cmd = f"echo {marker} > {device_port}"
+                    write_start_time = time.time()
+                    code, _, stderr = channel.invoke(write_cmd, timeout=5)
+                    if code != 0:
+                        logger.error("Device UART write failed on %s: %s", device_port, stderr.strip() or f"exit {code}")
+                        return (False, 0.0)
                     buffer = bytearray()
-                    # FIX: Wait full timeout AFTER invoke returns
                     deadline = time.time() + timeout
 
                     while time.time() < deadline:
@@ -976,20 +957,19 @@ class OptimizedSerialPairingEngine(SerialPairingEngine):
 
                             if marker.encode() in buffer:
                                 latency_ms = (time.time() - write_start_time) * 1000
-                                logger.info(f"Pair test SUCCESS: {device_port} <-> {pc_port} (latency: {latency_ms:.1f}ms)")
+                                logger.debug("Pair marker received on %s", pc_port)
                                 return (True, latency_ms)
 
                         time.sleep(0.01)
 
-                    logger.debug(f"Pair test TIMEOUT: {device_port} <-> {pc_port}")
                     return (False, 0.0)
 
             except serial.SerialException as e:
-                logger.debug(f"PC serial error on {pc_port}: {e}")
+                logger.error("Cannot use PC serial port %s: %s", pc_port, e)
                 return (False, 0.0)
 
         except Exception as e:
-            logger.warning(f"Pair test ERROR: {device_port} <-> {pc_port}: {e}")
+            logger.error("Pair test failed for %s <-> %s: %s", device_port, pc_port, e)
             return (False, 0.0)
 
     def auto_pair(
@@ -1016,8 +996,38 @@ class OptimizedSerialPairingEngine(SerialPairingEngine):
         result = PairingResult()
         result.device_ports_found = device_ports
 
+        if config.explicit_device_port and config.explicit_pc_port:
+            result.pc_ports_found = [PCSerialPort(port=config.explicit_pc_port, description="Explicit PC port")]
+            success, latency = self.test_pair(
+                config.explicit_device_port,
+                config.explicit_pc_port,
+                channel,
+                config.baudrate,
+                config.timeout_sec,
+            )
+            result.attempts = 1
+            result.duration_sec = time.time() - start_time
+            if success:
+                result.success = True
+                result.pair = PortPair(
+                    device_port=config.explicit_device_port,
+                    pc_port=config.explicit_pc_port,
+                    confidence=1.0,
+                    latency_ms=latency,
+                )
+            else:
+                result.error = (
+                    f"No marker received: {config.explicit_device_port} -> "
+                    f"{config.explicit_pc_port} at {config.baudrate} baud"
+                )
+            return result
+
         # Step 1: Get PC ports
-        pc_ports = pc_scanner.list_ports()
+        pc_ports = (
+            [PCSerialPort(port=config.explicit_pc_port, description="Explicit PC port")]
+            if config.explicit_pc_port
+            else pc_scanner.list_ports()
+        )
         result.pc_ports_found = pc_ports
 
         if not pc_ports:
@@ -1025,9 +1035,7 @@ class OptimizedSerialPairingEngine(SerialPairingEngine):
             logger.warning(result.error)
             return result
 
-        logger.info(f"OPTIMIZED PAIRING: {len(device_ports)} device ports × {len(pc_ports)} PC ports")
-        logger.info(f"PC ports: {[p.port for p in pc_ports]}")
-        logger.info(f"Device ports: {[p.port for p in device_ports]}")
+        logger.debug("Pair candidates: %d device ports x %d PC ports", len(device_ports), len(pc_ports))
 
         # Step 2: Start monitors on ALL PC ports
         monitors_started = 0
@@ -1053,7 +1061,7 @@ class OptimizedSerialPairingEngine(SerialPairingEngine):
             logger.warning(result.error)
             return result
 
-        logger.info(f"Started {monitors_started}/{len(pc_ports)} PC port monitors threads")
+        logger.debug("Started %d/%d PC serial monitors", monitors_started, len(pc_ports))
 
         # Give monitors time to open and be ready
         time.sleep(1.0)
@@ -1069,40 +1077,40 @@ class OptimizedSerialPairingEngine(SerialPairingEngine):
         self._monitors = active_monitors
         
         if failed_to_open:
-            logger.warning(f"Failed to open PC ports (may be occupied or invalid): {failed_to_open}")
+            logger.debug("PC serial ports unavailable: %s", failed_to_open)
             
         if not self._monitors:
             result.error = "Failed to open ANY PC serial ports. Please close other serial tools (like SecureCRT) and try again."
             logger.error(result.error)
             return result
             
-        logger.info(f"Successfully opened {len(self._monitors)} PC ports for monitoring: {list(self._monitors.keys())}")
+        logger.debug("Active PC serial monitors: %s", list(self._monitors.keys()))
         # Step 3: Test each device port
         candidates = []
         test_attempt = 0
 
         try:
             for device_port in device_ports:
-                logger.info(f"--- Testing device port: {device_port.port} ---")
+                logger.debug("Testing device port %s", device_port.port)
                 logger.debug(f"Device port info: type={device_port.device_type}, "
                             f"readable={device_port.readable}, writable={device_port.writable}, "
                             f"console={device_port.is_console}")
 
                 # Skip non-writable ports
                 if not device_port.writable:
-                    logger.info(f"SKIP {device_port.port}: not writable")
+                    logger.debug("Skipping non-writable device port %s", device_port.port)
                     continue
 
                 # Skip console ports correctly identified
                 if device_port.is_console:
-                    logger.info(f"SKIP {device_port.port}: is active console")
+                    logger.debug("Skipping active console %s", device_port.port)
                     continue
 
                 # Generate unique marker for this device port
                 test_attempt += 1
                 marker = f"PAIR_{int(time.time() * 1000)}_{test_attempt}"
 
-                logger.info(f"Writing marker '{marker}' to {device_port.port}")
+                logger.debug("Sending pair marker through %s", device_port.port)
 
                 write_cmd = f"echo {marker} > {device_port.port}"
                 
@@ -1110,7 +1118,7 @@ class OptimizedSerialPairingEngine(SerialPairingEngine):
                 code, stdout, stderr = channel.invoke(write_cmd, timeout=5)
 
                 if code != 0:
-                    logger.warning(f"WRITE FAILED {device_port.port}: code={code}, stderr={stderr}")
+                    logger.error("Device UART write failed on %s: %s", device_port.port, stderr.strip() or f"exit {code}")
                     continue
 
                 logger.debug(f"WRITE OK {device_port.port}: marker sent")
@@ -1119,7 +1127,7 @@ class OptimizedSerialPairingEngine(SerialPairingEngine):
                 # Give 3 full seconds to allow data to transmit over serial lines.
                 found_on_port = None
                 found_latency_ms = 0.0
-                wait_deadline = time.time() + 3.0  
+                wait_deadline = time.time() + config.timeout_sec
 
                 while time.time() < wait_deadline:
                     for pc_port_name, monitor in self._monitors.items():
@@ -1145,11 +1153,7 @@ class OptimizedSerialPairingEngine(SerialPairingEngine):
                     )
                     candidates.append(pair)
 
-                    logger.info(f"★★★ PAIRING SUCCESS! ★★★")
-                    logger.info(f"    Device: {device_port.port}")
-                    logger.info(f"    PC:      {found_on_port}")
-                    logger.info(f"    Latency: {found_latency_ms:.1f}ms")
-                    logger.info(f"    Marker:  {marker}")
+                    logger.debug("Pair marker matched %s to %s", device_port.port, found_on_port)
 
                     # Early exit since we found a working pair
                     result.attempts += 1
@@ -1170,7 +1174,7 @@ class OptimizedSerialPairingEngine(SerialPairingEngine):
 
         finally:
             # Step 4: Stop all monitors
-            logger.info("Stopping all PC port monitors...")
+            logger.debug("Stopping PC serial monitors")
             for pc_port_name, monitor in self._monitors.items():
                 monitor.stop()
             self._monitors.clear()
@@ -1184,17 +1188,21 @@ class OptimizedSerialPairingEngine(SerialPairingEngine):
             if best.confidence >= config.min_confidence_threshold:
                 result.success = True
                 result.pair = best
-                logger.info(f"Best pair selected: {best.device_port} <-> {best.pc_port}")
+                logger.debug("Selected pair %s <-> %s", best.device_port, best.pc_port)
             else:
                 result.error = f"No pair met confidence threshold ({config.min_confidence_threshold})"
         else:
             result.error = "No working pairs found"
-            logger.warning(result.error)
+            logger.debug(result.error)
 
         result.duration_sec = time.time() - start_time
 
-        logger.info(f"OPTIMIZED PAIRING complete: success={result.success}, "
-                   f"attempts={result.attempts}, duration={result.duration_sec:.2f}s")
+        logger.debug(
+            "Pairing complete: success=%s attempts=%d duration=%.2fs",
+            result.success,
+            result.attempts,
+            result.duration_sec,
+        )
 
         return result
 
@@ -1227,7 +1235,7 @@ class MockSerialPairingEngine(SerialPairingEngine):
         device_port: str,
         pc_port: str,
         channel=None,
-        baudrate: int = 115200,
+        baudrate: int = 9600,
         timeout: float = 2.0
     ) -> Tuple[bool, float]:
         """Simulate pair test."""
@@ -1362,11 +1370,17 @@ class SerialPortManager:
             If config.auto_discover is False and explicit ports are set,
             only tests the explicit ports.
         """
-        logger.info("Starting serial port discovery")
-
-        # Get device ports
-        device_ports = self._device_scanner.list_device_ports(self._channel)
-        logger.info(f"Found {len(device_ports)} device ports")
+        if self._config.explicit_device_port:
+            device_ports = [
+                DeviceSerialPort(
+                    port=self._config.explicit_device_port,
+                    writable=True,
+                    device_type="explicit",
+                )
+            ]
+        else:
+            device_ports = self._device_scanner.list_device_ports(self._channel)
+        logger.debug("Found %d device serial candidates", len(device_ports))
 
         if not device_ports and not self._config.explicit_device_port:
             logger.warning("No device ports found, using fallback ports")
@@ -1387,9 +1401,9 @@ class SerialPortManager:
         if result.success:
             self._current_pair = result.pair
             self._verified = False  # Needs verification
-            logger.info(f"Paired: {result.device_port} <-> {result.pc_port}")
+            logger.debug(f"Paired: {result.device_port} <-> {result.pc_port}")
         else:
-            logger.warning(f"Pairing failed: {result.error}")
+            logger.debug(f"Pairing failed: {result.error}")
 
         return result
 
@@ -1404,7 +1418,7 @@ class SerialPortManager:
             logger.warning("No pair to verify")
             return False
 
-        logger.info(f"Verifying connection: {self._current_pair.device_port} <-> {self._current_pair.pc_port}")
+        logger.debug(f"Verifying connection: {self._current_pair.device_port} <-> {self._current_pair.pc_port}")
 
         # Test the pair again
         success, latency = self._pairing_engine.test_pair(
@@ -1418,7 +1432,7 @@ class SerialPortManager:
         self._verified = success
 
         if success:
-            logger.info(f"Verification SUCCESS (latency: {latency:.1f}ms)")
+            logger.debug(f"Verification SUCCESS (latency: {latency:.1f}ms)")
         else:
             logger.warning("Verification FAILED")
 

@@ -15,7 +15,7 @@ environment:
   temperature_c: {min: 35.0, max: 60.0}
 baseline: null
 telemetry:
-  interval_ms: 1000
+  interval_ms: 5000
   required: [cpu.frequency, cpu.online, cpu.temperature, cpu.utilization]
   optional: [cpu.idle_residency, cpu.throttle, cpu.voltage]
 kernel_monitor: critical

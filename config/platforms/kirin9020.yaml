@@ -10,26 +10,34 @@ transport:
   hdc_bin: hdc
 
 serial:
-  uart_candidates: [/dev/ttyAMA0]
-  baudrate: 115200
+  uart_candidates: [/dev/ttyHW0, /dev/ttyHW4, /dev/ttyHW5, /dev/ttyAMA0]
+  baudrate: 9600
 
 cpu:
   topology_glob: /sys/devices/system/cpu/cpu[0-9]*
   interfaces:
     frequency:
-      candidates: [/sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq]
+      candidates:
+        - /sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq
+        - /sys/devices/system/cpu/cpufreq/policy*/scaling_cur_freq
       unit: kHz
       required: true
     minimum_frequency:
-      candidates: [/sys/devices/system/cpu/cpu*/cpufreq/scaling_min_freq]
+      candidates:
+        - /sys/devices/system/cpu/cpu*/cpufreq/scaling_min_freq
+        - /sys/devices/system/cpu/cpufreq/policy*/scaling_min_freq
       unit: kHz
       required: true
     maximum_frequency:
-      candidates: [/sys/devices/system/cpu/cpu*/cpufreq/scaling_max_freq]
+      candidates:
+        - /sys/devices/system/cpu/cpu*/cpufreq/scaling_max_freq
+        - /sys/devices/system/cpu/cpufreq/policy*/scaling_max_freq
       unit: kHz
       required: true
     governor:
-      candidates: [/sys/devices/system/cpu/cpu*/cpufreq/scaling_governor]
+      candidates:
+        - /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
+        - /sys/devices/system/cpu/cpufreq/policy*/scaling_governor
       required: true
     online:
       candidates: [/sys/devices/system/cpu/cpu*/online]

@@ -81,6 +81,19 @@ class PlatformProbeTests(unittest.TestCase):
             with self.assertRaisesRegex(ProbeError, "gpu.frequency"):
                 probe.require(result, ["gpu.frequency"])
 
+    def test_cpu_topology_falls_back_to_proc_stat(self) -> None:
+        files = {
+            "/proc/stat": (
+                "cpu  10 0 10 100 0 0 0 0 0 0\n"
+                "cpu0 5 0 5 50 0 0 0 0 0 0\n"
+                "cpu1 5 0 5 50 0 0 0 0 0 0\n"
+            )
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            result = PlatformProbe(self.platform(Path(tmp)), MappingProbeBackend(files)).probe(full=True)
+        self.assertEqual(result["cpu_topology"]["core_count"], 2)
+        self.assertEqual(result["cpu_topology"]["source"], "/proc/stat")
+
 
 if __name__ == "__main__":
     unittest.main()
