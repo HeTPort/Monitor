@@ -52,7 +52,7 @@ Batch testing consumes an approved baseline directly:
 
 ```powershell
 vmin_judge.exe `
-  --pc-serial COM8 `
+  --pc-serial '<PC_UART_PORT>' `
   --baudrate 9600 `
   --output-dir D:\avs-results `
   run `
@@ -90,7 +90,7 @@ vmin_judge.exe [global-options] <command> [command-options]
 | `--adb-bin PATH` | Explicit ADB executable. | Config, packaged tool, then `PATH`. |
 | `--hdc-bin PATH` | Explicit HDC executable. | Config, packaged tool, then `PATH`. |
 | `--device-root POSIX_PATH` | Remote deployment root. | `/data/local/tmp/avs`. |
-| `--pc-serial PORT` | PC-side UART such as `COM8`. | Saved pairing or command-specific requirement. |
+| `--pc-serial PORT` | Actual PC-side UART enumerated by the host. | Saved pairing or command-specific requirement. |
 | `--device-uart POSIX_PATH` | Device-side UART such as `/dev/ttyAMA0`. | Saved pairing or platform profile. |
 | `--baudrate INTEGER` | UART baud. | Saved/platform value; Kirin9020 uses `9600`. |
 | `--log-level LEVEL` | `debug`, `info`, `warning`, or `error`. | `info`. |
@@ -130,7 +130,7 @@ vmin_judge.exe `
 | `--refresh` | Ignore a cached capability record. |
 | `--require NAME` | Require a named capability; repeatable. |
 
-**Outputs:** `capabilities.json`, device identity, resolved interface provenance, units, permissions, and required/optional status.
+**Outputs:** `capabilities.json`, device identity, resolved interface provenance, units, permissions, and required/optional status. Thermal records retain the raw value, configured/applied unit, normalized Celsius value, and validity reason. Profile-driven commands gate only on that profile's required capabilities while retaining platform-wide gaps as `platform_required_missing`.
 
 **Handoff:** Consumed by `deploy`, `golden`, `calibrate`, and `run`.
 
@@ -150,8 +150,9 @@ vmin_judge.exe `
 vmin_judge.exe `
   --transport hdc `
   pair `
-  --device-port /dev/ttyHW0 `
-  --pc-port COM8 `
+  --platform kirin9020 `
+  --device-port '<DEVICE_UART_PATH>' `
+  --pc-port '<PC_UART_PORT>' `
   --baudrate 9600 `
   --verify
 ```
@@ -160,15 +161,16 @@ vmin_judge.exe `
 |---|---|
 | `--device-port PATH` | Optional explicit device UART. |
 | `--pc-port PORT` | Optional explicit PC serial port. |
+| `--platform NAME` | Optional device-specific UART candidates and baud-rate source. |
 | `--timeout SECONDS` | Marker receive timeout. |
 | `--verify` | Repeat a verification marker after pairing. |
 | `--monitor` | Start diagnostic monitoring after success. |
 
-**Outputs:** Persistent pairing record containing device UART, PC port, baud, confidence, latency, device identity, and timestamp.
+**Outputs:** Persistent pairing record plus bounded `pair-diagnostic.json` evidence containing the failure class, marker write count, received-byte count, and a short hexadecimal preview.
 
 **Handoff:** Used by later `run` or `monitor` commands when serial parameters are omitted.
 
-**Errors:** No device ports, no PC ports, occupied serial port, marker timeout, or ambiguous pairing.
+**Behavior and errors:** The generic engine opens the selected PC port first, settles and clears stale bytes, retries a unique marker up to a bounded count, and accepts fragmented input. It does not guess host/device port names and does not reconfigure the device with `stty`. Errors distinguish missing candidates, busy/open failures, remote echo failure, zero received bytes, and received data without the marker.
 
 ### API: `deploy`
 
@@ -369,7 +371,7 @@ vmin_judge.exe baseline deprecate BASELINE_ID --reason "driver update"
 
 ```powershell
 vmin_judge.exe `
-  --pc-serial COM8 `
+  --pc-serial '<PC_UART_PORT>' `
   run `
   --profile gpu_vulkan_mixed `
   --baseline BASELINE_ID `
@@ -419,7 +421,7 @@ Legacy `--no-launch` and `--auto-pair` are rejected by the v2 alias with an acti
 **Usage:**
 
 ```powershell
-vmin_judge.exe --pc-serial COM8 --baudrate 9600 monitor --save-raw
+vmin_judge.exe --pc-serial '<PC_UART_PORT>' --baudrate 9600 monitor --save-raw
 ```
 
 | Parameter | Meaning |
@@ -430,6 +432,8 @@ vmin_judge.exe --pc-serial COM8 --baudrate 9600 monitor --save-raw
 | `--timeout SEC` | Stop if no usable record arrives. |
 
 **Outputs:** Decoded events and optional raw stream; no DUT PASS unless a complete compatible run manifest and terminal evidence are available.
+
+Run `monitor` only while a device agent or other documented JSONL frame producer is active. Pairing markers are raw bring-up bytes, not protocol events.
 
 **Errors:** Serial open/read failure, framing/sequence/schema error, or timeout.
 

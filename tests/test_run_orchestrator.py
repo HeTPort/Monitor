@@ -73,7 +73,17 @@ class RunManifestTests(unittest.TestCase):
                     "cpu.governor": {"paths": ["/sys/cpu4/governor", "/sys/cpu5/governor"]},
                     "cpu.online": {"paths": ["/sys/cpu4/online", "/sys/cpu5/online", "/sys/cpu6/online"]},
                     "cpu.frequency": {"paths": ["/sys/cpu4/freq", "/sys/cpu5/freq"], "unit": "kHz"},
-                    "cpu.temperature": {"paths": ["/sys/thermal/temp"], "unit": "millidegree_celsius"},
+                    "cpu.temperature": {
+                        "paths": [
+                            "/sys/class/thermal/thermal_zone0/temp",
+                            "/sys/class/thermal/thermal_zone2/temp",
+                        ],
+                        "unit": "celsius",
+                        "parser_by_path": {
+                            "/sys/class/thermal/thermal_zone0/temp": "millidegree_celsius",
+                            "/sys/class/thermal/thermal_zone2/temp": "degree_celsius",
+                        },
+                    },
                 }
             }
             rules = root / "rules.conf"
@@ -99,6 +109,13 @@ class RunManifestTests(unittest.TestCase):
             self.assertEqual(agent_argv[agent_argv.index("--telemetry-interval") + 1], "5")
             self.assertEqual(agent_argv[agent_argv.index("--baudrate") + 1], "9600")
             self.assertIn("--", agent_argv)
+            telemetry_specs = [
+                agent_argv[index + 1]
+                for index, value in enumerate(agent_argv[:-1])
+                if value == "--telemetry"
+            ]
+            self.assertTrue(any("|millidegree_celsius|" in spec for spec in telemetry_specs))
+            self.assertTrue(any("|degree_celsius|" in spec for spec in telemetry_specs))
 
             qualification = RunManifestBuilder(paths).build_qualification(
                 profile=current_profile,
@@ -108,6 +125,7 @@ class RunManifestTests(unittest.TestCase):
                 run_id="golden-1",
                 kernel_mode="critical",
                 kernel_rules_path=rules,
+                device_uart="/dev/ttyQualification7",
             )
             self.assertIsNone(qualification["baseline"])
             self.assertEqual(qualification["qualification"]["mode"], "golden")

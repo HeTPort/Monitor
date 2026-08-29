@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from src.config_loader import ConfigError, ProfileConfig, document_sha256, load_document
+from src.config_loader import ConfigError, PlatformConfig, ProfileConfig, document_sha256, load_document
 
 
 def valid_profile() -> dict:
@@ -49,6 +49,49 @@ class ConfigLoaderTests(unittest.TestCase):
             path.write_text("schema_version=1", encoding="utf-8")
             with self.assertRaisesRegex(ConfigError, "unsupported configuration extension"):
                 load_document(path)
+
+    def test_platform_rejects_non_generic_serial_shapes(self) -> None:
+        base = {
+            "schema_version": 1,
+            "name": "serial-test",
+            "transport": {},
+            "serial": {},
+            "cpu": {},
+            "gpu": {},
+            "thermal": {},
+        }
+        for serial, expected in (
+            ({"baudrate": 0}, "positive integer"),
+            ({"uart_candidates": "/dev/ttyVendor0"}, "list of non-empty strings"),
+        ):
+            data = dict(base)
+            data["serial"] = serial
+            with self.subTest(serial=serial), tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "platform.json"
+                path.write_text(json.dumps(data), encoding="utf-8")
+                with self.assertRaisesRegex(ConfigError, expected):
+                    PlatformConfig.from_file(path)
+
+    def test_platform_rejects_invalid_thermal_unit_and_range(self) -> None:
+        base = {
+            "schema_version": 1,
+            "name": "thermal-test",
+            "transport": {},
+            "serial": {},
+            "cpu": {},
+            "gpu": {},
+        }
+        for thermal, expected in (
+            ({"temperature_unit": "guess"}, "temperature_unit"),
+            ({"plausible_range_c": {"min": 80, "max": 20}}, "min must be less than max"),
+        ):
+            data = dict(base)
+            data["thermal"] = thermal
+            with self.subTest(thermal=thermal), tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "platform.json"
+                path.write_text(json.dumps(data), encoding="utf-8")
+                with self.assertRaisesRegex(ConfigError, expected):
+                    PlatformConfig.from_file(path)
 
 
 if __name__ == "__main__":

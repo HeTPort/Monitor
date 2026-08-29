@@ -8,7 +8,7 @@ import unittest
 from argparse import Namespace
 from pathlib import Path
 
-from src.cli_commands import _apply_saved_pairing
+from src.cli_commands import _apply_platform_serial, _apply_saved_pairing
 from src.events import build_event, encode_event
 from src.path_resolver import PathResolver
 
@@ -38,6 +38,13 @@ class CLITests(unittest.TestCase):
         for command in ("probe", "deploy", "golden", "calibrate", "baseline", "run", "collect", "report"):
             self.assertIn(command, help_result.stdout)
 
+    def test_pair_help_exposes_optional_platform_serial_config(self) -> None:
+        result = self.run_cli("pair", "--help")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("--platform", result.stdout)
+        self.assertIn("UART", result.stdout)
+        self.assertIn("candidates", result.stdout)
+
     def test_baseline_list_is_machine_readable_without_hardware(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             result = self.run_cli("--state-dir", tmp, "--json", "baseline", "list")
@@ -61,11 +68,41 @@ class CLITests(unittest.TestCase):
                 output_root=root / "output",
                 cwd=root,
             )
-            args = Namespace(pc_serial="COM9", device_uart="/dev/ttyAMA0", baudrate=None)
+            args = Namespace(pc_serial="COM9", device_uart=None, baudrate=None)
             _apply_saved_pairing(args, paths)
             self.assertEqual(args.pc_serial, "COM9")
             self.assertEqual(args.device_uart, "/dev/ttyHW0")
             self.assertEqual(args.baudrate, 9600)
+
+    def test_selected_platform_supplies_serial_settings_only_when_unresolved(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            platform_path = root / "vendor-platform.json"
+            platform_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "name": "vendor-platform",
+                        "transport": {},
+                        "serial": {"baudrate": 38400, "uart_candidates": ["/dev/ttyVendor2"]},
+                        "cpu": {},
+                        "gpu": {},
+                        "thermal": {},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            paths = PathResolver(
+                bundle_root=root,
+                exe_root=root,
+                state_root=root / "state",
+                output_root=root / "output",
+                cwd=root,
+            )
+            args = Namespace(device_uart=None, baudrate=None)
+            _apply_platform_serial(args, paths, Namespace(platform=str(platform_path)))
+            self.assertEqual(args.device_uart, "/dev/ttyVendor2")
+            self.assertEqual(args.baudrate, 38400)
 
     def test_legacy_execute_rejects_unsafe_ignored_modes(self) -> None:
         result = self.run_cli("execute", "--no-launch")

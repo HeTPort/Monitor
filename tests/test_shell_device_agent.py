@@ -39,6 +39,10 @@ class ShellDeviceAgentTests(unittest.TestCase):
             spool = root / "spool"
             state = root / "governor"
             state.write_text("ondemand\n", encoding="utf-8")
+            temp_milli = root / "temp-milli"
+            temp_degree = root / "temp-degree"
+            temp_milli.write_text("31074\n", encoding="utf-8")
+            temp_degree.write_text("30\n", encoding="utf-8")
             workload = root / "workload.sh"
             workload.write_text(
                 "#!/bin/sh\n"
@@ -69,6 +73,10 @@ class ShellDeviceAgentTests(unittest.TestCase):
                     "off",
                     "--environment",
                     f"{shell_path(state)}|performance|1",
+                    "--telemetry",
+                    f"cpu.temperature.0|temperature_auto|{shell_path(temp_milli)}",
+                    "--telemetry",
+                    f"cpu.temperature.1|temperature_auto|{shell_path(temp_degree)}",
                     "--",
                     "sh",
                     shell_path(workload),
@@ -88,6 +96,13 @@ class ShellDeviceAgentTests(unittest.TestCase):
             self.assertIn("summary", [event.type for event in events])
             self.assertEqual(events[-1].type, "agent_final")
             self.assertTrue(events[-1].payload["restoration_ok"])
+            temperatures = {
+                event.payload["metric"]: event.payload["value"]
+                for event in events
+                if event.type == "telemetry" and "temperature" in event.payload.get("metric", "")
+            }
+            self.assertEqual(temperatures["cpu.temperature.0"], 31.074)
+            self.assertEqual(temperatures["cpu.temperature.1"], 30.0)
             self.assertTrue((spool / "events.jsonl").exists())
 
 

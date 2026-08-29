@@ -10,7 +10,7 @@ from src.platform_probe import MappingProbeBackend, PlatformProbe, ProbeError
 
 
 class PlatformProbeTests(unittest.TestCase):
-    def platform(self, root: Path) -> PlatformConfig:
+    def platform(self, root: Path, *, temperature_unit: str = "millidegree_celsius") -> PlatformConfig:
         path = root / "platform.json"
         path.write_text(
             json.dumps(
@@ -44,6 +44,7 @@ class PlatformProbeTests(unittest.TestCase):
                     },
                     "thermal": {
                         "zone_glob": "/sys/class/thermal/thermal_zone*",
+                        "temperature_unit": temperature_unit,
                         "cpu_type_patterns": ["cpu"],
                         "gpu_type_patterns": ["gpu"],
                     },
@@ -80,6 +81,46 @@ class PlatformProbeTests(unittest.TestCase):
             self.assertFalse(result["supported"])
             with self.assertRaisesRegex(ProbeError, "gpu.frequency"):
                 probe.require(result, ["gpu.frequency"])
+
+    def test_profile_scope_preserves_platform_gaps_without_blocking_cpu(self) -> None:
+        files = {
+            "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq": "2100000\n",
+            "/sys/devices/system/cpu/cpu0/online": "1\n",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            probe = PlatformProbe(self.platform(Path(tmp)), MappingProbeBackend(files))
+            result = probe.probe(full=True)
+            self.assertFalse(result["supported"])
+            probe.apply_required_scope(
+                result,
+                ["cpu.frequency", "cpu.online"],
+                scope="profile:cpu-test",
+            )
+        self.assertTrue(result["supported"])
+        self.assertEqual(result["required_missing"], [])
+        self.assertIn("gpu.frequency", result["platform_required_missing"])
+        self.assertEqual(result["required_scope"]["name"], "profile:cpu-test")
+
+    def test_auto_temperature_unit_preserves_raw_and_handles_mixed_scales(self) -> None:
+        files = {
+            "/sys/class/thermal/thermal_zone0/type": "cpu-soc\n",
+            "/sys/class/thermal/thermal_zone0/temp": "31074\n",
+            "/sys/class/thermal/thermal_zone1/type": "gpu\n",
+            "/sys/class/thermal/thermal_zone1/temp": "30\n",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            result = PlatformProbe(
+                self.platform(Path(tmp), temperature_unit="auto"),
+                MappingProbeBackend(files),
+            ).probe(full=True)
+        cpu = result["thermal_zones"]["zones"]["cpu"][0]
+        gpu = result["thermal_zones"]["zones"]["gpu"][0]
+        self.assertEqual(cpu["raw_value"], "31074")
+        self.assertEqual(cpu["temperature_c"], 31.074)
+        self.assertEqual(cpu["temperature_unit_applied"], "millidegree_celsius")
+        self.assertEqual(gpu["raw_value"], "30")
+        self.assertEqual(gpu["temperature_c"], 30.0)
+        self.assertEqual(gpu["temperature_unit_applied"], "degree_celsius")
 
     def test_cpu_topology_falls_back_to_proc_stat(self) -> None:
         files = {

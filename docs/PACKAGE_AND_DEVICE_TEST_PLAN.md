@@ -43,13 +43,13 @@ Monitor 进程退出码：
 | P0 | 状态安全 | PASS、FAIL、超时、中止和控制链路异常后的 governor/frequency/online 状态恢复。 |
 | P1 | 故障注入 | checksum/golden mismatch、超时、遥测违规、关键内核事件、串口损坏。 |
 | P1 | 产物 | 本地/设备 spool 收集、哈希校验、报告重建、离线回放。 |
-| P1 | 长稳与带宽 | 9600 波特率下无丢帧/乱序，原始 `dmesg` 不进入 UART。 |
+| P1 | 长稳与带宽 | 平台配置波特率下无丢帧/乱序，原始 `dmesg` 不进入 UART。 |
 
 ## 3. 测试环境与变量
 
 ### 3.1 必需环境
 
-- Windows 测试 PC，能够访问 HDC 或 ADB，并有可用的 PC UART（例如 `COM8`）。
+- Windows 测试 PC，能够访问 HDC 或 ADB，并有可用的 PC UART；端口号以设备管理器实际枚举为准。
 - 至少一块单框架设备、一块双框架设备；生产基线校准至少覆盖两块代表性已知良品板。
 - 设备镜像允许读取必需 sysfs，并允许设置 governor/frequency/online 状态。
 - 设备代理使用固定 POSIX Shell 实现，不要求板端安装 Python；设备必须提供 `/bin/sh`，建议提供 `mkfifo`、`awk`、`sed` 和 `sha256sum`/`toybox sha256sum`。
@@ -69,8 +69,9 @@ $PackageId = 'vmin-judge-2.0.0-YYYYMMDD'
 $Device = 'DEVICE_ID'
 $BoardId = 'BOARD_001'
 $Framework = 'single'       # single 或 dual
-$PcSerial = 'COM8'
-$DeviceUart = '/dev/ttyHW0' # 以板端确认的业务 UART 为准，不要使用 /dev/tty0
+$PcSerial = '<PC_UART_PORT>'
+$DeviceUart = '<DEVICE_UART_PATH>' # 以板端/BSP 确认的业务 UART 为准，不要使用控制台
+$Baudrate = 9600                 # Kirin9020 配置值；其他平台按其配置填写
 $Out = "D:\MonitorTest\$PackageId\$Framework\$BoardId\output"
 $State = "D:\MonitorTest\$PackageId\$Framework\$BoardId\state"
 $Evidence = "D:\MonitorTest\$PackageId\$Framework\$BoardId\evidence"
@@ -88,7 +89,7 @@ python -m unittest discover -s tests -v *> "$Evidence\REL-01-unittest.txt"
 $LASTEXITCODE
 ```
 
-通过标准：全部测试通过，退出码为 0。当前仓库离线测试已包含 9600 显式配对、HDC 远端退出码和 Shell agent 回归；发布前仍需在实际构建环境重跑。
+通过标准：全部测试通过，退出码为 0。当前仓库离线测试已包含任意端口/波特率、marker 重发、分片接收、配对故障分类、HDC 远端退出码和 Shell agent 混合温标回归；发布前仍需在实际构建环境重跑。
 
 覆盖内容包括路径、schema、协议碎片/粘包/CRC/乱序、策略优先级、基线不可变性、校准、设备代理单写者与恢复、部署幂等、CLI、产物哈希和离线回放。
 
@@ -217,8 +218,10 @@ Copy-Item "$Out\probes\$Device\capabilities.json" `
 - CPU：每核 frequency/min/max/governor/online、`/proc/stat` utilization、按 thermal `type` 匹配的温度。
 - GPU：frequency/min/max/governor/utilization/power policy/hang count、按 thermal `type` 匹配的温度。
 - 工具：`device.shell`、`device.sha256sum` 可用；CPU profile 运行时 `device.taskset` 必需；kernel monitor 开启时 `device.dmesg` 必需。
-- 每个 metric 都有实际路径、单位、值和 provenance，不允许只有“可用”布尔值。
+- 每个 metric 都有实际路径、单位、值和 provenance，不允许只有“可用”布尔值。温度还要核对 `raw_value`、配置/实际采用单位、归一化摄氏值、`valid` 和 `invalid_reason`。
 - 单/双框架可以使用不同真实路径，但语义、单位和必需能力必须等价。把两个 `capabilities.json` 做字段级 diff，并注明所有差异。
+
+`--full` 是平台全量清单，仍会报告所有平台级必需能力缺口。实际 CPU/GPU `run`、`golden`、`calibrate` 按所选 profile 的 required capability 重新判定：CPU profile 不因仅 GPU 所需的 `gpu.hang_count` 缺失而阻断；GPU profile 仍必须阻断并收集证据。输出中的 `platform_required_missing` 保留全量缺口，`required_missing` 表示当前执行范围。
 
 缺少必需接口时预期退出码为 5。不要通过删除 profile 的 required 项来“通过”验收。
 
@@ -227,22 +230,25 @@ Copy-Item "$Out\probes\$Device\capabilities.json" `
 配对时只连接一块目标设备，避免旧 `pair` 接口选择歧义：
 
 ```powershell
-& $Exe --device $Device --state-dir $State pair --channel hdc --device-port $DeviceUart `
-  --pc-port $PcSerial --baudrate 9600 --timeout 5 --verify `
+& $Exe --device $Device --state-dir $State pair --channel hdc --platform kirin9020 `
+  --device-port $DeviceUart --pc-port $PcSerial --baudrate $Baudrate --timeout 5 --verify `
   *> "$Evidence\DEV-03-pair.txt"
 $PairExit = $LASTEXITCODE
+Copy-Item "$State\pair-diagnostic.json" "$Evidence\DEV-03-pair-diagnostic.json"
 ```
 
-随后进行外部启动/串口 bring-up 时可使用：
+不传显式端口时，PC 端来自实际枚举，设备端来自实际扫描；只有传入 `--platform kirin9020` 时才把该平台的 `serial.uart_candidates` 用作扫描失败后的候选。通用配对层不猜测 `/dev/tty*` 或 `COM*`。算法先打开 PC 端、等待短暂稳定、清空旧输入，在一个总超时内最多发送 3 次唯一 marker，并持续匹配可分片到达的字节。
+
+配对成功后，先完成 DEV-04 部署并启动 device agent/workload（或另一个明确的 JSONL 帧生产者），随后才能用 `monitor` 验证协议流：
 
 ```powershell
-& $Exe --pc-serial $PcSerial --baudrate 9600 --output-dir $Out --state-dir $State `
+& $Exe --pc-serial $PcSerial --baudrate $Baudrate --output-dir $Out --state-dir $State `
   monitor --save-raw --timeout 60
 ```
 
-通过标准：pair 退出码 0；monitor 能识别连续事件。`monitor` 是诊断命令，结果必须是 `NOT_EVALUATED`，不能输出 DUT PASS。
+通过标准：pair 退出码 0，`pair-diagnostic.json` 的最终记录为 `SUCCESS` 且 verification 成功；在帧生产者运行时，monitor 能识别连续事件。原始 pair marker 不是事件帧，不能用它单独判定 monitor。`monitor` 是诊断命令，结果必须是 `NOT_EVALUATED`，不能输出 DUT PASS。
 
-Pair 只在 PC 端打开串口时设置 9600。设备 UART 应由 BSP/console 预先配置，程序不会自动执行 `stty` 修改设备端波特率；这样可以避免破坏控制台。若失败，只采集 `stty -a < $DeviceUart` 作为诊断，并与 BSP 配置核对。正常 marker、扫描列表和串口内容不打印到控制台，只保存在 UART/测试产物中；控制台仅保留成功摘要或关键错误。
+Pair 只在 PC 端打开串口时设置 `$Baudrate`。设备 UART 应由 BSP 预先配置，程序不会自动执行 `stty` 修改设备端波特率，避免破坏控制台。失败码至少区分 `NO_DEVICE_PORTS`、`NO_PC_PORTS`、`PC_PORT_BUSY`、`PC_PORT_OPEN_FAILED`、`DEVICE_ECHO_FAILED`、`NO_RX_BYTES` 和 `MARKER_NOT_FOUND`。若失败，采集 `stty -a < $DeviceUart`（只读诊断）、BSP 配置及 `pair-diagnostic.json`；正常 marker 和串口正文不打印到控制台，诊断文件只保留有界十六进制预览。
 
 ### DEV-04：部署与幂等
 
@@ -464,7 +470,7 @@ GPU 错误 golden 应以新文件名部署，例如 `gpu_vulkan_mixed.bad.rgba`�
 
 ## 12. UART 与长稳测试
 
-- 固定 9600、8N1，关闭 workload 的 per-batch/per-frame 高频日志，遥测间隔不小于 5 秒。
+- 使用目标平台声明的波特率和帧格式（Kirin9020 当前为 9600、8N1），关闭 workload 的 per-batch/per-frame 高频日志，遥测间隔不小于 5 秒；其他支持的串口配置需要分别验收。
 - 每个 framework/profile 先连续 `--repeat 30`；再选择 CPU 和 GPU 各做一次至少 30 分钟长稳。
 - `kernel-monitor=critical`、`off`、`full-local` 各执行一次。
 - `full-local` 应在设备 spool 产生 `dmesg.raw`，但 UART 仍只传过滤后的 kernel 事件。
@@ -486,6 +492,7 @@ feedback/<package-id>/<framework>/<board-id>/<case-id>/
   expected-vs-actual.md
   package-sha256.txt
   capabilities.json
+  pair-diagnostic.json
   deployment-manifest.json
   output/<run-id>/...
   device-spool/...
@@ -508,7 +515,7 @@ feedback/<package-id>/<framework>/<board-id>/<case-id>/
   "device_serial": "DEVICE_ID",
   "bsp_kernel_driver_build": "from capabilities.json",
   "transport": "hdc",
-  "pc_serial": "COM8",
+  "pc_serial": "actual enumerated PC port",
   "baudrate": 9600,
   "started_at": "ISO-8601 with timezone",
   "command": "exact unredacted argument order, secrets removed",
@@ -528,7 +535,9 @@ feedback/<package-id>/<framework>/<board-id>/<case-id>/
 - 若只在某 BSP/kernel/driver 上出现，附两份 `capabilities.json` 的 diff。
 - 对状态恢复问题，附 before/after 的具体路径、写入值、读回值和权限错误。
 - 对性能问题，附所有样本和 rejected 原因，不能只发平均值。
-- 对串口问题，附 `serial.raw`、事件文件、线材/转换器型号、COM 驱动版本和波特率。
+- 对串口问题，附 `pair-diagnostic.json`、`serial.raw`、事件文件、设备 UART 原始只读/可写权限、`/proc/consoles`、`stty -a`、BSP UART 配置、线材/转换器型号、主机驱动版本和波特率。
+- 对温度问题，附每个 thermal zone 的 `type` 和原始 `temp` 内容，不能只附换算后的摄氏值。
+- 对 GPU capability 问题，附 hang/reset/fault counter 的真实候选路径、权限、空闲值以及一次可控恢复/故障前后的值；在没有证据前不要猜路径或把它改成 optional。
 
 ## 14. 代码调整定位指南
 

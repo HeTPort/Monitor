@@ -191,6 +191,42 @@ class PlatformConfig:
             if not isinstance(value, dict):
                 raise ConfigError(f"{context}.{section}: expected mapping")
             sections[section] = dict(value)
+        serial = sections["serial"]
+        baudrate = serial.get("baudrate")
+        if baudrate is not None and (not isinstance(baudrate, int) or isinstance(baudrate, bool) or baudrate <= 0):
+            raise ConfigError(f"{context}.serial.baudrate: expected a positive integer")
+        uart_candidates = serial.get("uart_candidates", [])
+        if not isinstance(uart_candidates, list) or any(
+            not isinstance(candidate, str) or not candidate.strip()
+            for candidate in uart_candidates
+        ):
+            raise ConfigError(f"{context}.serial.uart_candidates: expected a list of non-empty strings")
+        thermal = sections["thermal"]
+        allowed_temperature_units = {"auto", "degree_celsius", "celsius", "millidegree_celsius", "millicelsius"}
+        temperature_unit = str(thermal.get("temperature_unit", "millidegree_celsius")).lower()
+        if temperature_unit not in allowed_temperature_units:
+            raise ConfigError(
+                f"{context}.thermal.temperature_unit: expected one of {sorted(allowed_temperature_units)}"
+            )
+        unit_overrides = thermal.get("temperature_unit_by_type", {})
+        if not isinstance(unit_overrides, dict) or any(
+            not isinstance(pattern, str)
+            or str(unit).lower() not in allowed_temperature_units
+            for pattern, unit in unit_overrides.items()
+        ):
+            raise ConfigError(
+                f"{context}.thermal.temperature_unit_by_type: expected a mapping of patterns to supported units"
+            )
+        plausible = thermal.get("plausible_range_c", {"min": -40.0, "max": 200.0})
+        if not isinstance(plausible, dict):
+            raise ConfigError(f"{context}.thermal.plausible_range_c: expected mapping")
+        try:
+            plausible_min = float(plausible.get("min", -40.0))
+            plausible_max = float(plausible.get("max", 200.0))
+        except (TypeError, ValueError) as exc:
+            raise ConfigError(f"{context}.thermal.plausible_range_c: min/max must be numeric") from exc
+        if plausible_min >= plausible_max:
+            raise ConfigError(f"{context}.thermal.plausible_range_c: min must be less than max")
         return cls(
             schema_version=version,
             name=name,

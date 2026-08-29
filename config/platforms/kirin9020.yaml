@@ -115,7 +115,11 @@ gpu:
 thermal:
   zone_glob: /sys/class/thermal/thermal_zone*
   match_by_type: true
-  temperature_unit: millidegree_celsius
+  # This platform image exposes both millidegree (for example 31074) and
+  # degree-scaled (for example 30) thermal zones. Preserve raw values and
+  # infer the scale per reading instead of applying one global divisor.
+  temperature_unit: auto
+  plausible_range_c: {min: -40.0, max: 200.0}
   cpu_type_patterns: [cpu, soc, cluster]
   gpu_type_patterns: [gpu]
   legacy_gpu_type: /sys/class/thermal/thermal_zone5/type

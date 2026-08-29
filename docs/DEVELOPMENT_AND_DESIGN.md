@@ -191,15 +191,17 @@ class Transport:
 
 Rationale: structured argument lists and typed results are safer than concatenating shell strings and treating workload exit codes as transport failures.
 
+Serial pairing is a separate device-agnostic transaction. The engine consumes discovered or operator/platform-supplied candidates, opens all eligible PC ports before device transmission, waits for driver settle, clears stale input, retransmits a unique marker within one bounded timeout, and matches across fragmented reads. It never guesses product-specific device nodes or host port numbers. A bounded diagnostic record classifies remote-write, port-open/busy, zero-RX, and marker-mismatch failures without dumping arbitrary UART contents.
+
 ### 7.3 `PlatformProbe`
 
 Purpose: discover device identity, CPU topology, GPU driver, telemetry paths, permissions, utilities, serial UARTs, and capability versions.
 
 Origin: consolidates paths from `default.yaml`, `monitor_profiles.yaml`, serial discovery, and runtime probing.
 
-Output: versioned `capabilities.json` with required/optional capability status and normalized units.
+Output: versioned `capabilities.json` with required/optional capability status and normalized units. Thermal evidence retains raw values, configured/applied parsers, normalized Celsius values, and validity. Mixed degree/millidegree sources are normalized per path rather than by one platform-wide assumption.
 
-Rationale: thermal-zone numbers, debugfs availability, devfreq aliases, and permissions may change between builds even when single-/dual-framework hardware interfaces are intended to match.
+Rationale: thermal-zone numbers, debugfs availability, devfreq aliases, units, and permissions may change between builds even when single-/dual-framework hardware interfaces are intended to match. Platform-wide missing requirements remain visible, but execution support is recomputed from the selected profile's requirement scope so an unrelated GPU-only gap does not block CPU qualification.
 
 ### 7.4 `DeploymentManager`
 
@@ -424,6 +426,8 @@ bundled defaults
 ```
 
 Correctness-critical changes are made in a versioned profile/configuration. They change the fingerprint and require a matching newly qualified baseline; production runs reject ad-hoc overrides.
+
+Serial candidates and baud rates are platform data, not pairing-engine constants. `config/platforms/<platform>.yaml` may declare them for that device family; explicit operator values take precedence, and an unselected platform cannot inject its UART paths into generic discovery.
 
 ## 13. Event protocol
 

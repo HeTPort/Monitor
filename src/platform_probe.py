@@ -126,6 +126,28 @@ class PlatformProbe:
         if missing:
             raise ProbeError(f"required capabilities unavailable: {', '.join(sorted(missing))}")
 
+    def apply_required_scope(
+        self,
+        probe_result: dict[str, Any],
+        names: list[str],
+        *,
+        scope: str,
+    ) -> dict[str, Any]:
+        """Gate execution on an explicit profile/command requirement set.
+
+        The complete platform requirement result is retained for audit, while
+        ``supported`` and ``required_missing`` become scoped to the requested
+        operation.
+        """
+        capabilities = probe_result.get("capabilities", {})
+        required = sorted(set(names))
+        missing = sorted(name for name in required if not capabilities.get(name, {}).get("available"))
+        probe_result["platform_required_missing"] = list(probe_result.get("required_missing", []))
+        probe_result["required_scope"] = {"name": scope, "capabilities": required}
+        probe_result["required_missing"] = missing
+        probe_result["supported"] = not missing
+        return probe_result
+
     def _probe_interface(self, name: str, definition: Mapping[str, Any], *, include_values: bool) -> dict[str, Any]:
         candidates = definition.get("candidates", [])
         if isinstance(candidates, str):
@@ -222,27 +244,99 @@ class PlatformProbe:
                 "zone": str(PurePosixPath(zone)),
                 "type": zone_type,
                 "path": str(PurePosixPath(temp_path)),
+                "temperature_unit_configured": self._configured_temperature_unit(zone_type),
             }
             if include_values and self.backend.exists(temp_path):
                 try:
-                    record["temperature_c"] = float(self.backend.read_text(temp_path).strip()) / 1000.0
+                    raw_text = self.backend.read_text(temp_path).strip()
+                    normalized = self._normalize_temperature(raw_text, zone_type)
+                    record.update(normalized)
                 except (OSError, ValueError) as exc:
                     record["error"] = str(exc)
             groups[group].append(record)
         result: dict[str, Any] = {"zones": groups, "source_glob": zone_glob}
         for group in ("cpu", "gpu"):
             paths = [record["path"] for record in groups[group]]
+            invalid_paths = [
+                record["path"]
+                for record in groups[group]
+                if include_values and ("error" in record or record.get("valid") is False)
+            ]
             result[group] = {
                 "name": f"{group}.temperature",
-                "available": bool(paths),
+                "available": bool(paths) and (not include_values or len(invalid_paths) < len(paths)),
                 "required": True,
                 "unit": "celsius",
                 "paths": paths,
-                "readable": all("error" not in record for record in groups[group]),
-                "values": {record["path"]: record.get("temperature_c") for record in groups[group]},
+                "readable": bool(paths) and not invalid_paths,
+                "invalid_paths": invalid_paths,
+                "raw_values": {record["path"]: record.get("raw_value") for record in groups[group]},
+                "parser_by_path": {
+                    record["path"]: self._temperature_parser(record["temperature_unit_configured"])
+                    for record in groups[group]
+                },
+                "values": {
+                    record["path"]: record.get("temperature_c") if record.get("valid", True) else None
+                    for record in groups[group]
+                },
                 "provenance": "thermal-zone-type-probe",
             }
         return result
+
+    def _normalize_temperature(self, raw: str, zone_type: str) -> dict[str, Any]:
+        thermal = self.platform.thermal
+        configured_unit = self._configured_temperature_unit(zone_type)
+        numeric = float(raw)
+        if configured_unit == "auto":
+            if abs(numeric) > 200.0:
+                temperature_c = numeric / 1000.0
+                applied_unit = "millidegree_celsius"
+            else:
+                temperature_c = numeric
+                applied_unit = "degree_celsius"
+        elif configured_unit in {"millidegree_celsius", "millicelsius"}:
+            temperature_c = numeric / 1000.0
+            applied_unit = "millidegree_celsius"
+        elif configured_unit in {"degree_celsius", "celsius"}:
+            temperature_c = numeric
+            applied_unit = "degree_celsius"
+        else:
+            raise ProbeError(f"unsupported thermal temperature unit: {configured_unit}")
+
+        plausible = thermal.get("plausible_range_c", {"min": -40.0, "max": 200.0})
+        if not isinstance(plausible, dict):
+            raise ProbeError("platform thermal.plausible_range_c must be a mapping")
+        minimum = float(plausible.get("min", -40.0))
+        maximum = float(plausible.get("max", 200.0))
+        valid = minimum <= temperature_c <= maximum
+        return {
+            "raw_value": raw,
+            "temperature_c": temperature_c,
+            "temperature_unit_configured": configured_unit,
+            "temperature_unit_applied": applied_unit,
+            "valid": valid,
+            "invalid_reason": None if valid else f"outside plausible range [{minimum}, {maximum}] celsius",
+        }
+
+    def _configured_temperature_unit(self, zone_type: str) -> str:
+        thermal = self.platform.thermal
+        configured_unit = str(thermal.get("temperature_unit", "millidegree_celsius")).lower()
+        overrides = thermal.get("temperature_unit_by_type", {})
+        if overrides and not isinstance(overrides, dict):
+            raise ProbeError("platform thermal.temperature_unit_by_type must be a mapping")
+        for pattern, unit in dict(overrides or {}).items():
+            if str(pattern).lower() in zone_type.lower():
+                configured_unit = str(unit).lower()
+                break
+        return configured_unit
+
+    @staticmethod
+    def _temperature_parser(configured_unit: str) -> str:
+        if configured_unit == "auto":
+            return "temperature_auto"
+        if configured_unit in {"degree_celsius", "celsius"}:
+            return "degree_celsius"
+        return "millidegree_celsius"
 
     @staticmethod
     def _has_glob(path: str) -> bool:

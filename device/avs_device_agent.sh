@@ -185,7 +185,17 @@ sample_telemetry() {
                 payload="{\"metric\":\"$metric\",\"value\":$value,\"path\":\"$source_path\"}"
                 ;;
             millidegree_celsius)
-                value=$(printf '%s\n' "$raw" | awk 'match($0,/[-+]?[0-9]+([.][0-9]+)?/){printf "%.3f", substr($0,RSTART,RLENGTH)/1000; exit}')
+                value=$(printf '%s\n' "$raw" | awk 'match($0,/[-+]?[0-9]+([.][0-9]+)?/){v=substr($0,RSTART,RLENGTH)+0; v=v/1000; if(v>=-40 && v<=200) printf "%.3f",v; exit}')
+                [ -n "$value" ] || continue
+                payload="{\"metric\":\"$metric\",\"value\":$value,\"path\":\"$source_path\"}"
+                ;;
+            degree_celsius)
+                value=$(printf '%s\n' "$raw" | awk 'match($0,/[-+]?[0-9]+([.][0-9]+)?/){v=substr($0,RSTART,RLENGTH)+0; if(v>=-40 && v<=200) printf "%.3f",v; exit}')
+                [ -n "$value" ] || continue
+                payload="{\"metric\":\"$metric\",\"value\":$value,\"path\":\"$source_path\"}"
+                ;;
+            temperature_auto)
+                value=$(printf '%s\n' "$raw" | awk 'match($0,/[-+]?[0-9]+([.][0-9]+)?/){v=substr($0,RSTART,RLENGTH)+0; if(v>200 || v< -200) v=v/1000; if(v>=-40 && v<=200) printf "%.3f",v; exit}')
                 [ -n "$value" ] || continue
                 payload="{\"metric\":\"$metric\",\"value\":$value,\"path\":\"$source_path\"}"
                 ;;

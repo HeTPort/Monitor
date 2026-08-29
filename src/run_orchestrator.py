@@ -86,8 +86,10 @@ class RunManifestBuilder:
         overall_timeout_s: float = 300.0,
         heartbeat_timeout_s: float = 45.0,
         kernel_rules_path: Path | None = None,
-        device_uart: str = "/dev/ttyAMA0",
+        device_uart: str | None = None,
     ) -> dict[str, Any]:
+        if not device_uart:
+            raise RunError("device UART must be resolved from an explicit value, saved pairing, or platform config")
         if baseline.status != "approved":
             raise RunError(f"baseline is not approved: {baseline.id} ({baseline.status})")
         for name, actual, expected in (
@@ -197,7 +199,7 @@ class RunManifestBuilder:
         overall_timeout_s: float = 300.0,
         heartbeat_timeout_s: float = 45.0,
         kernel_rules_path: Path | None = None,
-        device_uart: str = "/dev/ttyAMA0",
+        device_uart: str | None = None,
     ) -> dict[str, Any]:
         if mode not in {"golden", "calibration"}:
             raise RunError(f"unsupported qualification mode: {mode}")
@@ -314,8 +316,13 @@ class RunManifestBuilder:
             unit = record.get("unit")
             if record.get("derivation") == "delta_busy_over_delta_total":
                 parser = "proc_stat_utilization"
-            elif unit == "millidegree_celsius" or metric.endswith("temperature"):
-                parser = "millidegree_celsius"
+            elif metric.endswith("temperature"):
+                if unit in {"millidegree_celsius", "millicelsius"}:
+                    parser = "millidegree_celsius"
+                elif unit in {"degree_celsius", "celsius"}:
+                    parser = "degree_celsius"
+                else:
+                    parser = "temperature_auto"
             elif metric.endswith("online"):
                 parser = "int"
             elif unit in {"Hz", "kHz", "count", "us", "percent"}:
@@ -327,7 +334,8 @@ class RunManifestBuilder:
                     "metric": metric,
                     "paths": list(paths),
                     "parser": parser,
-                    "unit": "celsius" if parser == "millidegree_celsius" else unit,
+                    "parser_by_path": dict(record.get("parser_by_path", {})),
+                    "unit": "celsius" if parser in {"millidegree_celsius", "degree_celsius", "temperature_auto"} else unit,
                     "required": metric in profile.telemetry.get("required", []),
                 }
             )

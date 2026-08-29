@@ -981,7 +981,7 @@ class ChannelManager:
             daemon=True
         )
         self._health_monitor_thread.start()
-        logger.info("Health monitoring started")
+        logger.debug("Health monitoring started")
 
     def _health_monitor_loop(self) -> None:
         """

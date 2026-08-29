@@ -102,7 +102,7 @@ def save_pairing_result(device_port: str, pc_port: str, baudrate: int = 9600, co
 
     Args:
         device_port: Device serial port (e.g., '/dev/tty0')
-        pc_port: PC serial port (e.g., 'COM8')
+        pc_port: PC serial port (for example, 'COM4' or '/dev/ttyUSB0')
         confidence: Pairing confidence (0.0-1.0)
 
     Returns:
@@ -129,6 +129,34 @@ def save_pairing_result(device_port: str, pc_port: str, baudrate: int = 9600, co
     except Exception as e:
         logger.warning(f"Failed to save pairing result: {e}")
         return False
+
+
+def save_pairing_diagnostic(result, *, verification: Optional[bool] = None) -> Optional[str]:
+    """Persist bounded pair-stage evidence without printing UART contents."""
+    try:
+        destination = runtime_paths.resolve_state("pair-diagnostic.json", create_parent=True)
+        payload = {
+            "schema_version": 1,
+            "saved_at": time.strftime('%Y-%m-%dT%H:%M:%S%z'),
+            "success": bool(result.success),
+            "failure_code": result.failure_code,
+            "attempts": result.attempts,
+            "duration_sec": result.duration_sec,
+            "device_port": result.device_port,
+            "pc_port": result.pc_port,
+            "diagnostics": list(result.diagnostics),
+        }
+        if verification is not None:
+            payload["verification_success"] = verification
+        temporary = destination.with_suffix(destination.suffix + ".tmp")
+        with temporary.open('w', encoding='utf-8', newline='\n') as stream:
+            json.dump(payload, stream, indent=2, ensure_ascii=False)
+            stream.write('\n')
+        os.replace(temporary, destination)
+        return str(destination)
+    except Exception as e:
+        logger.warning("Failed to save pairing diagnostic: %s", e)
+        return None
 
 def load_pairing_result() -> dict:
     """
@@ -223,7 +251,7 @@ Examples:
     parser.add_argument('--hdc-bin', help='Explicit HDC executable')
     parser.add_argument('--device-root', default='/data/local/tmp/avs')
     parser.add_argument('--pc-serial', help='PC-side UART port')
-    parser.add_argument('--device-uart', default='/dev/ttyAMA0')
+    parser.add_argument('--device-uart', help='Device UART path; saved pairing or selected platform fills it when omitted')
     parser.add_argument('--baudrate', dest='global_baudrate', type=int, default=None)
     parser.add_argument('--log-level', choices=['debug', 'info', 'warning', 'error'], default='info')
     parser.add_argument('--json', dest='json_output', action='store_true', help='Print machine-readable command output')
@@ -489,7 +517,11 @@ def _add_pair_options(parser: argparse.ArgumentParser) -> None:
         '--baudrate', '-b',
         type=int,
         default=None,
-        help='Serial baud rate (default: 9600)'
+        help='Serial baud rate (explicit value, then platform value, then 9600)'
+    )
+    parser.add_argument(
+        '--platform',
+        help='Optional platform configuration supplying UART candidates and baud rate'
     )
     parser.add_argument(
         '--device-port',
@@ -1309,7 +1341,16 @@ def cmd_pair(args) -> int:
         MockPCSerialScanner
     )
 
-    args.baudrate = args.baudrate or 9600
+    platform_serial = {}
+    if getattr(args, 'platform', None):
+        from src.cli_commands import load_platform
+        platform_serial = load_platform(runtime_paths, args.platform).serial
+
+    args.baudrate = (
+        args.baudrate
+        if args.baudrate is not None
+        else platform_serial.get('baudrate', 9600)
+    )
     logger.debug("Starting serial port pairing")
 
     # Create channel
@@ -1334,6 +1375,7 @@ def cmd_pair(args) -> int:
         explicit_pc_port=args.pc_port,
         baudrate=args.baudrate,
         timeout_sec=args.timeout,
+        fallback_device_ports=list(platform_serial.get('uart_candidates') or []),
     )
 
     # Use real implementation (scans actual hardware)
@@ -1349,6 +1391,7 @@ def cmd_pair(args) -> int:
 
         # Perform discovery/pairing
         result = manager.discover()
+        diagnostic_path = save_pairing_diagnostic(result)
 
         if result.success:
             print(
@@ -1366,7 +1409,12 @@ def cmd_pair(args) -> int:
 
             # Optional verification
             if args.verify:
-                if manager.verify_connection():
+                verified = manager.verify_connection()
+                verification_diagnostic = manager.get_last_diagnostic()
+                if verification_diagnostic:
+                    result.diagnostics.append(verification_diagnostic)
+                save_pairing_diagnostic(result, verification=verified)
+                if verified:
                     print("[OK] Pairing verified")
                 else:
                     print("[X] Pairing verification failed")
@@ -1396,6 +1444,7 @@ def cmd_pair(args) -> int:
             print(
                 f"[X] Pairing failed: {result.error or 'no working pair'}; "
                 f"baud={args.baudrate}, attempts={result.attempts}, duration={result.duration_sec:.1f}s"
+                + (f"; diagnostic={diagnostic_path}" if diagnostic_path else "")
             )
             return 1
 

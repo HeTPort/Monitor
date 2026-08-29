@@ -135,13 +135,16 @@ def _probe(args: Namespace, paths: PathResolver, transport: Transport, profile: 
         raise ConfigError("platform is required")
     platform = load_platform(paths, platform_name)
     identity = transport.connect()
-    result = PlatformProbe(platform, TransportProbeBackend(transport, identity)).probe(
+    probe = PlatformProbe(platform, TransportProbeBackend(transport, identity))
+    result = probe.probe(
         full=bool(getattr(args, "full", False) or profile is not None)
     )
     required = list(getattr(args, "require", []) or [])
     if profile is not None:
         required.extend(profile.telemetry.get("required", []))
-    PlatformProbe(platform, TransportProbeBackend(transport, identity)).require(result, sorted(set(required)))
+        probe.apply_required_scope(result, required, scope=f"profile:{profile.name}")
+    else:
+        probe.require(result, sorted(set(required)))
     tool_checks: dict[str, tuple[tuple[str, ...], bool]] = {
         "device.shell": (("sh", "-c", "exit 0"), True),
         "device.sha256sum": (("sha256sum", "--help"), True),
@@ -300,14 +303,16 @@ def _shell_agent_argv(agent_remote: PurePosixPath, manifest: Mapping[str, Any], 
         argv.extend(("--environment", spec))
     for sampler in telemetry.get("samplers", []):
         paths = list(sampler.get("paths", []))
+        parser_by_path = dict(sampler.get("parser_by_path", {}))
         for index, path in enumerate(paths):
             metric = str(sampler["metric"])
             if len(paths) > 1 and sampler.get("parser") != "proc_stat_utilization":
                 metric = f"{metric}.{path_suffix(str(path), index)}"
+            parser = parser_by_path.get(str(path), sampler.get("parser", "text"))
             spec = "|".join(
                 (
                     field(metric, "telemetry.metric"),
-                    field(sampler.get("parser", "text"), "telemetry.parser"),
+                    field(parser, "telemetry.parser"),
                     field(path, "telemetry.path"),
                 )
             )
@@ -397,10 +402,24 @@ def _apply_saved_pairing(args: Namespace, paths: PathResolver) -> None:
     pairing = json.loads(pairing_path.read_text(encoding="utf-8"))
     if not args.pc_serial:
         args.pc_serial = pairing.get("pc_port")
-    if args.device_uart == "/dev/ttyAMA0" and pairing.get("device_port"):
+    if not args.device_uart and pairing.get("device_port"):
         args.device_uart = pairing["device_port"]
     if args.baudrate is None and pairing.get("baudrate"):
         args.baudrate = int(pairing["baudrate"])
+
+
+def _apply_platform_serial(args: Namespace, paths: PathResolver, profile: ProfileConfig) -> None:
+    """Fill unresolved serial settings from the selected device platform."""
+    platform = load_platform(paths, profile.platform)
+    if args.baudrate is None:
+        args.baudrate = int(platform.serial.get("baudrate", 9600))
+    if not args.device_uart:
+        candidates = list(platform.serial.get("uart_candidates", []))
+        if not candidates:
+            raise ConfigError(
+                "--device-uart is required when neither saved pairing nor platform UART candidates are available"
+            )
+        args.device_uart = candidates[0]
 
 
 def _execute_live_qualification(
@@ -415,8 +434,7 @@ def _execute_live_qualification(
     if count <= 0:
         return []
     _apply_saved_pairing(args, paths)
-    if args.baudrate is None:
-        args.baudrate = int(load_platform(paths, profile.platform).serial.get("baudrate", 9600))
+    _apply_platform_serial(args, paths, profile)
     if not args.pc_serial:
         raise ConfigError("--pc-serial is required for live qualification when no saved pairing exists")
     transport = _transport(args, paths)
@@ -742,8 +760,7 @@ def cmd_run(args: Namespace) -> int:
     if not args.pc_serial:
         raise ConfigError("--pc-serial is required when no saved pairing exists")
     profile = load_profile(paths, args.profile)
-    if args.baudrate is None:
-        args.baudrate = int(load_platform(paths, profile.platform).serial.get("baudrate", 9600))
+    _apply_platform_serial(args, paths, profile)
     baseline = _resolve_baseline(args, paths, profile)
     _require_current_correctness(paths, profile, baseline.golden)
     transport = _transport(args, paths)

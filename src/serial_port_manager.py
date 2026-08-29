@@ -31,6 +31,7 @@ from __future__ import annotations
 import time
 import logging
 import re
+import shlex
 import threading
 import queue
 from abc import ABC, abstractmethod
@@ -90,6 +91,33 @@ class PortPair:
 
 
 @dataclass
+class PairingDiagnostic:
+    """Bounded, device-agnostic evidence for one pairing transaction."""
+    code: str = "NOT_RUN"
+    device_port: Optional[str] = None
+    pc_port: Optional[str] = None
+    baudrate: Optional[int] = None
+    marker_writes: int = 0
+    bytes_received: int = 0
+    rx_preview_hex: str = ""
+    remote_status: Optional[int] = None
+    detail: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "code": self.code,
+            "device_port": self.device_port,
+            "pc_port": self.pc_port,
+            "baudrate": self.baudrate,
+            "marker_writes": self.marker_writes,
+            "bytes_received": self.bytes_received,
+            "rx_preview_hex": self.rx_preview_hex,
+            "remote_status": self.remote_status,
+            "detail": self.detail,
+        }
+
+
+@dataclass
 class PairingResult:
     """Result of a pairing attempt."""
     success: bool = False
@@ -99,6 +127,8 @@ class PairingResult:
     pc_ports_found: List[PCSerialPort] = field(default_factory=list)
     attempts: int = 0
     duration_sec: float = 0.0
+    failure_code: Optional[str] = None
+    diagnostics: List[Dict[str, Any]] = field(default_factory=list)
 
     @property
     def device_port(self) -> Optional[str]:
@@ -125,36 +155,34 @@ class SerialPortConfig:
     # Serial parameters
     baudrate: int = 9600
     timeout_sec: float = 2.0
+    settle_time_sec: float = 0.35
+    marker_retries: int = 3
+    marker_retry_interval_sec: float = 0.35
+    diagnostic_bytes: int = 128
 
-    # Fallback ports (used if auto-discovery fails)
-    fallback_device_ports: List[str] = field(
-        default_factory=lambda: [
-            '/dev/ttyAMA0',
-            '/dev/ttyAMA1',
-            '/dev/ttyUSB0',
-            '/dev/ttyUSB1',
-            '/dev/ttyACM0',
-        ]
-    )
-    fallback_pc_ports: List[str] = field(
-        default_factory=lambda: ['COM3', 'COM4', 'COM5', 'COM6', '/dev/ttyUSB0']
-    )
+    # Optional operator/platform fallbacks. Empty by default so the generic
+    # engine never guesses device-specific nodes or host port numbers.
+    fallback_device_ports: List[str] = field(default_factory=list)
+    fallback_pc_ports: List[str] = field(default_factory=list)
 
     # Pairing parameters
     max_pairing_attempts: int = 20
     min_confidence_threshold: float = 0.5
 
     def __post_init__(self):
-        """Set fallback defaults if empty."""
-        if not self.fallback_device_ports:
-            self.fallback_device_ports = [
-                '/dev/ttyAMA0', '/dev/ttyAMA1', '/dev/ttyUSB0',
-                '/dev/ttyUSB1', '/dev/ttyACM0',
-            ]
-        if not self.fallback_pc_ports:
-            self.fallback_pc_ports = ['COM3', 'COM4', 'COM5', 'COM6', '/dev/ttyUSB0']
-
-
+        """Validate generic transaction settings without injecting device data."""
+        if self.baudrate <= 0:
+            raise ValueError("baudrate must be positive")
+        if self.timeout_sec <= 0:
+            raise ValueError("timeout_sec must be positive")
+        if self.settle_time_sec < 0:
+            raise ValueError("settle_time_sec must be non-negative")
+        if self.marker_retries < 1:
+            raise ValueError("marker_retries must be at least 1")
+        if self.marker_retry_interval_sec <= 0:
+            raise ValueError("marker_retry_interval_sec must be positive")
+        if self.diagnostic_bytes < 0:
+            raise ValueError("diagnostic_bytes must be non-negative")
 # =============================================================================
 # PC Serial Scanner
 # =============================================================================
@@ -279,20 +307,6 @@ class DeviceSerialScanner(ABC):
 
     Scans for serial ports on the embedded device via channel.
     """
-
-    # Common device serial ports for common platforms
-    COMMON_DEVICE_PORTS = [
-        '/dev/ttyAMA0',   # Built-in UART (HiSilicon/Huawei)
-        '/dev/ttyAMA1',   # Secondary UART
-        '/dev/ttyUSB0',   # USB-UART adapter
-        '/dev/ttyUSB1',   # USB-UART adapter 2
-        '/dev/ttyACM0',   # ACM modem port
-        '/dev/ttyACM1',   # ACM modem port 2
-        '/dev/ttyS0',     # Standard UART 0
-        '/dev/ttyS1',     # Standard UART 1
-        '/dev/ttyHS0',    # HiSilicon HS UART
-        '/dev/ttyWRAP',   # Huawei wrapper device
-    ]
 
     @abstractmethod
     def list_device_ports(self, channel: Optional['DeviceChannel'] = None) -> List[DeviceSerialPort]:
@@ -466,7 +480,12 @@ class SerialPairingEngine(ABC):
         pc_port: str,
         channel,
         baudrate: int = 9600,
-        timeout: float = 2.0
+        timeout: float = 2.0,
+        *,
+        settle_time_sec: float = 0.35,
+        marker_retries: int = 3,
+        marker_retry_interval_sec: float = 0.35,
+        diagnostic_bytes: int = 128,
     ) -> Tuple[bool, float]:
         """
         Test a specific device-to-PC port pairing.
@@ -534,7 +553,12 @@ class RealSerialPairingEngine(SerialPairingEngine):
         pc_port: str,
         channel,
         baudrate: int = 9600,
-        timeout: float = 2.0
+        timeout: float = 2.0,
+        *,
+        settle_time_sec: float = 0.35,
+        marker_retries: int = 3,
+        marker_retry_interval_sec: float = 0.35,
+        diagnostic_bytes: int = 128,
     ) -> Tuple[bool, float]:
         """
         Test a device-to-PC port pairing using echo test.
@@ -843,6 +867,11 @@ class PCSerialPortMonitor:
                 logger.debug("Monitor %s received pair marker", self.port_name)
             return found
 
+    def snapshot(self) -> bytes:
+        """Return a thread-safe copy of buffered bytes without clearing them."""
+        with self._lock:
+            return bytes(self._buffer)
+
     def _monitor_loop(self) -> None:
         """Main monitoring loop - runs in separate thread."""
         try:
@@ -904,6 +933,7 @@ class OptimizedSerialPairingEngine(SerialPairingEngine):
         """
         self._monitors: Dict[str, PCSerialPortMonitor] = {}
         self._lock = threading.Lock()
+        self.last_diagnostic = PairingDiagnostic()
 
     def test_pair(
         self,
@@ -911,7 +941,12 @@ class OptimizedSerialPairingEngine(SerialPairingEngine):
         pc_port: str,
         channel,
         baudrate: int = 9600,
-        timeout: float = 2.0
+        timeout: float = 2.0,
+        *,
+        settle_time_sec: float = 0.35,
+        marker_retries: int = 3,
+        marker_retry_interval_sec: float = 0.35,
+        diagnostic_bytes: int = 128,
     ) -> Tuple[bool, float]:
         """
         Test a device-to-PC port pairing.
@@ -920,7 +955,17 @@ class OptimizedSerialPairingEngine(SerialPairingEngine):
         This method is kept for backward compatibility.
         """
         # Fall back to original method
-        return self._test_pair_original(device_port, pc_port, channel, baudrate, timeout)
+        return self._test_pair_original(
+            device_port,
+            pc_port,
+            channel,
+            baudrate,
+            timeout,
+            settle_time_sec=settle_time_sec,
+            marker_retries=marker_retries,
+            marker_retry_interval_sec=marker_retry_interval_sec,
+            diagnostic_bytes=diagnostic_bytes,
+        )
 
     def _test_pair_original(
         self,
@@ -928,49 +973,93 @@ class OptimizedSerialPairingEngine(SerialPairingEngine):
         pc_port: str,
         channel,
         baudrate: int = 9600,
-        timeout: float = 2.0
+        timeout: float = 2.0,
+        *,
+        settle_time_sec: float = 0.35,
+        marker_retries: int = 3,
+        marker_retry_interval_sec: float = 0.35,
+        diagnostic_bytes: int = 128,
     ) -> Tuple[bool, float]:
-        """Original single-pair test method."""
+        """Run a bounded open-settle-send/read transaction for one port pair."""
+        diagnostic = PairingDiagnostic(
+            device_port=device_port,
+            pc_port=pc_port,
+            baudrate=baudrate,
+        )
+        self.last_diagnostic = diagnostic
         if not PYSERIAL_AVAILABLE:
             logger.warning("pyserial not installed, cannot test port pairing")
+            diagnostic.code = "PYSERIAL_UNAVAILABLE"
             return (False, 0.0)
 
         try:
             try:
                 with serial.Serial(pc_port, baudrate, timeout=0.1) as ser:
+                    if settle_time_sec:
+                        time.sleep(settle_time_sec)
                     if hasattr(ser, "reset_input_buffer"):
                         ser.reset_input_buffer()
-                    marker = f"PAIR_{int(time.time() * 1000)}"
-                    write_cmd = f"echo {marker} > {device_port}"
-                    write_start_time = time.time()
-                    code, _, stderr = channel.invoke(write_cmd, timeout=5)
-                    if code != 0:
-                        logger.error("Device UART write failed on %s: %s", device_port, stderr.strip() or f"exit {code}")
-                        return (False, 0.0)
+                    marker = f"PAIR_{time.time_ns()}"
+                    write_cmd = f"echo {marker} > {shlex.quote(device_port)}"
                     buffer = bytearray()
-                    deadline = time.time() + timeout
+                    write_start_time = time.time()
+                    deadline: Optional[float] = None
+                    next_write_at = write_start_time
 
-                    while time.time() < deadline:
+                    while deadline is None or time.time() < deadline:
+                        now = time.time()
+                        if diagnostic.marker_writes < marker_retries and now >= next_write_at:
+                            code, _, stderr = channel.invoke(write_cmd, timeout=max(1.0, min(5.0, timeout)))
+                            diagnostic.remote_status = code
+                            if code != 0:
+                                diagnostic.code = "DEVICE_ECHO_FAILED"
+                                diagnostic.detail = (stderr.strip() or f"exit {code}")[:256]
+                                logger.error(
+                                    "Device UART write failed on %s: %s",
+                                    device_port,
+                                    diagnostic.detail,
+                                )
+                                return (False, 0.0)
+                            diagnostic.marker_writes += 1
+                            if deadline is None:
+                                deadline = time.time() + timeout
+                            next_write_at = time.time() + marker_retry_interval_sec
+
                         if ser.in_waiting > 0:
                             data = ser.read(ser.in_waiting)
                             buffer.extend(data)
+                            diagnostic.bytes_received = len(buffer)
+                            diagnostic.rx_preview_hex = bytes(buffer[:diagnostic_bytes]).hex()
 
                             if marker.encode() in buffer:
                                 latency_ms = (time.time() - write_start_time) * 1000
+                                diagnostic.code = "SUCCESS"
                                 logger.debug("Pair marker received on %s", pc_port)
                                 return (True, latency_ms)
 
                         time.sleep(0.01)
 
+                    diagnostic.code = "NO_RX_BYTES" if not buffer else "MARKER_NOT_FOUND"
                     return (False, 0.0)
 
             except serial.SerialException as e:
+                diagnostic.code = self._classify_pc_port_error(e)
+                diagnostic.detail = str(e)[:256]
                 logger.error("Cannot use PC serial port %s: %s", pc_port, e)
                 return (False, 0.0)
 
         except Exception as e:
+            diagnostic.code = "PAIR_INTERNAL_ERROR"
+            diagnostic.detail = str(e)[:256]
             logger.error("Pair test failed for %s <-> %s: %s", device_port, pc_port, e)
             return (False, 0.0)
+
+    @staticmethod
+    def _classify_pc_port_error(error: Exception) -> str:
+        message = str(error).lower()
+        if any(token in message for token in ("access is denied", "access denied", "permission", "busy", "in use")):
+            return "PC_PORT_BUSY"
+        return "PC_PORT_OPEN_FAILED"
 
     def auto_pair(
         self,
@@ -996,6 +1085,12 @@ class OptimizedSerialPairingEngine(SerialPairingEngine):
         result = PairingResult()
         result.device_ports_found = device_ports
 
+        if not device_ports:
+            result.failure_code = "NO_DEVICE_PORTS"
+            result.error = "No writable, non-console device serial candidates were found"
+            result.duration_sec = time.time() - start_time
+            return result
+
         if config.explicit_device_port and config.explicit_pc_port:
             result.pc_ports_found = [PCSerialPort(port=config.explicit_pc_port, description="Explicit PC port")]
             success, latency = self.test_pair(
@@ -1004,7 +1099,13 @@ class OptimizedSerialPairingEngine(SerialPairingEngine):
                 channel,
                 config.baudrate,
                 config.timeout_sec,
+                settle_time_sec=config.settle_time_sec,
+                marker_retries=config.marker_retries,
+                marker_retry_interval_sec=config.marker_retry_interval_sec,
+                diagnostic_bytes=config.diagnostic_bytes,
             )
+            diagnostic = self.last_diagnostic.to_dict()
+            result.diagnostics.append(diagnostic)
             result.attempts = 1
             result.duration_sec = time.time() - start_time
             if success:
@@ -1016,9 +1117,11 @@ class OptimizedSerialPairingEngine(SerialPairingEngine):
                     latency_ms=latency,
                 )
             else:
+                result.failure_code = diagnostic["code"]
                 result.error = (
-                    f"No marker received: {config.explicit_device_port} -> "
-                    f"{config.explicit_pc_port} at {config.baudrate} baud"
+                    f"{result.failure_code}: {config.explicit_device_port} -> "
+                    f"{config.explicit_pc_port} at {config.baudrate} baud; "
+                    f"writes={diagnostic['marker_writes']}, rx_bytes={diagnostic['bytes_received']}"
                 )
             return result
 
@@ -1031,6 +1134,7 @@ class OptimizedSerialPairingEngine(SerialPairingEngine):
         result.pc_ports_found = pc_ports
 
         if not pc_ports:
+            result.failure_code = "NO_PC_PORTS"
             result.error = "No PC serial ports found"
             logger.warning(result.error)
             return result
@@ -1057,6 +1161,7 @@ class OptimizedSerialPairingEngine(SerialPairingEngine):
                 logger.debug(f"SKIP PC port {pc_port_obj.port}: failed to start monitor")
 
         if not self._monitors:
+            result.failure_code = "PC_PORT_OPEN_FAILED"
             result.error = "Failed to start any PC port monitors"
             logger.warning(result.error)
             return result
@@ -1064,7 +1169,7 @@ class OptimizedSerialPairingEngine(SerialPairingEngine):
         logger.debug("Started %d/%d PC serial monitors", monitors_started, len(pc_ports))
 
         # Give monitors time to open and be ready
-        time.sleep(1.0)
+        time.sleep(max(0.05, config.settle_time_sec))
 
         active_monitors = {}
         failed_to_open = []
@@ -1080,6 +1185,7 @@ class OptimizedSerialPairingEngine(SerialPairingEngine):
             logger.debug("PC serial ports unavailable: %s", failed_to_open)
             
         if not self._monitors:
+            result.failure_code = "PC_PORT_OPEN_FAILED"
             result.error = "Failed to open ANY PC serial ports. Please close other serial tools (like SecureCRT) and try again."
             logger.error(result.error)
             return result
@@ -1112,24 +1218,52 @@ class OptimizedSerialPairingEngine(SerialPairingEngine):
 
                 logger.debug("Sending pair marker through %s", device_port.port)
 
-                write_cmd = f"echo {marker} > {device_port.port}"
-                
+                write_cmd = f"echo {marker} > {shlex.quote(device_port.port)}"
+                monitor_offsets = {
+                    pc_port_name: len(monitor.snapshot())
+                    for pc_port_name, monitor in self._monitors.items()
+                }
+                attempt_diagnostic: Dict[str, Any] = {
+                    "code": "NOT_RUN",
+                    "device_port": device_port.port,
+                    "pc_port": None,
+                    "baudrate": config.baudrate,
+                    "marker_writes": 0,
+                    "bytes_received": 0,
+                    "rx_preview_hex": "",
+                    "remote_status": None,
+                    "detail": None,
+                }
                 write_start_time = time.time()
-                code, stdout, stderr = channel.invoke(write_cmd, timeout=5)
-
-                if code != 0:
-                    logger.error("Device UART write failed on %s: %s", device_port.port, stderr.strip() or f"exit {code}")
-                    continue
-
-                logger.debug(f"WRITE OK {device_port.port}: marker sent")
-
-                # FIX CRITICAL BUG: Calculate deadline AFTER invoke returns.
-                # Give 3 full seconds to allow data to transmit over serial lines.
                 found_on_port = None
                 found_latency_ms = 0.0
-                wait_deadline = time.time() + config.timeout_sec
+                wait_deadline: Optional[float] = None
+                next_write_at = write_start_time
+                device_write_failed = False
 
-                while time.time() < wait_deadline:
+                while wait_deadline is None or time.time() < wait_deadline:
+                    now = time.time()
+                    if attempt_diagnostic["marker_writes"] < config.marker_retries and now >= next_write_at:
+                        code, _, stderr = channel.invoke(
+                            write_cmd,
+                            timeout=max(1.0, min(5.0, config.timeout_sec)),
+                        )
+                        attempt_diagnostic["remote_status"] = code
+                        if code != 0:
+                            attempt_diagnostic["code"] = "DEVICE_ECHO_FAILED"
+                            attempt_diagnostic["detail"] = (stderr.strip() or f"exit {code}")[:256]
+                            logger.error(
+                                "Device UART write failed on %s: %s",
+                                device_port.port,
+                                attempt_diagnostic["detail"],
+                            )
+                            device_write_failed = True
+                            break
+                        attempt_diagnostic["marker_writes"] += 1
+                        if wait_deadline is None:
+                            wait_deadline = time.time() + config.timeout_sec
+                        next_write_at = time.time() + config.marker_retry_interval_sec
+
                     for pc_port_name, monitor in self._monitors.items():
                         if monitor.contains(marker):
                             found_on_port = pc_port_name
@@ -1137,7 +1271,16 @@ class OptimizedSerialPairingEngine(SerialPairingEngine):
                             break
                     if found_on_port:
                         break
-                    time.sleep(0.05)  # Small sleep before re-checking
+                    time.sleep(0.02)
+
+                received_by_port: Dict[str, bytes] = {}
+                for pc_port_name, monitor in self._monitors.items():
+                    snapshot = monitor.snapshot()
+                    received_by_port[pc_port_name] = snapshot[monitor_offsets[pc_port_name]:]
+                received_total = sum(len(data) for data in received_by_port.values())
+                preview = b"".join(received_by_port.values())[:config.diagnostic_bytes]
+                attempt_diagnostic["bytes_received"] = received_total
+                attempt_diagnostic["rx_preview_hex"] = preview.hex()
 
                 if found_on_port:
                     # Calculate confidence based on actual latency
@@ -1152,6 +1295,9 @@ class OptimizedSerialPairingEngine(SerialPairingEngine):
                         test_marker=marker
                     )
                     candidates.append(pair)
+                    attempt_diagnostic["code"] = "SUCCESS"
+                    attempt_diagnostic["pc_port"] = found_on_port
+                    result.diagnostics.append(attempt_diagnostic)
 
                     logger.debug("Pair marker matched %s to %s", device_port.port, found_on_port)
 
@@ -1163,7 +1309,11 @@ class OptimizedSerialPairingEngine(SerialPairingEngine):
                     return result
 
                 else:
-                    logger.debug(f"MARKER NOT FOUND on any PC port: {marker}")
+                    if not device_write_failed:
+                        attempt_diagnostic["code"] = "MARKER_NOT_FOUND" if received_total else "NO_RX_BYTES"
+                    result.failure_code = attempt_diagnostic["code"]
+                    result.diagnostics.append(attempt_diagnostic)
+                    logger.debug("Pair marker not found for device port %s", device_port.port)
 
                 result.attempts += 1
 
@@ -1192,7 +1342,8 @@ class OptimizedSerialPairingEngine(SerialPairingEngine):
             else:
                 result.error = f"No pair met confidence threshold ({config.min_confidence_threshold})"
         else:
-            result.error = "No working pairs found"
+            result.failure_code = result.failure_code or "NO_WORKING_PAIR"
+            result.error = f"{result.failure_code}: no working pairs found"
             logger.debug(result.error)
 
         result.duration_sec = time.time() - start_time
@@ -1236,7 +1387,12 @@ class MockSerialPairingEngine(SerialPairingEngine):
         pc_port: str,
         channel=None,
         baudrate: int = 9600,
-        timeout: float = 2.0
+        timeout: float = 2.0,
+        *,
+        settle_time_sec: float = 0.35,
+        marker_retries: int = 3,
+        marker_retry_interval_sec: float = 0.35,
+        diagnostic_bytes: int = 128,
     ) -> Tuple[bool, float]:
         """Simulate pair test."""
         self._call_count += 1
@@ -1382,9 +1538,8 @@ class SerialPortManager:
             device_ports = self._device_scanner.list_device_ports(self._channel)
         logger.debug("Found %d device serial candidates", len(device_ports))
 
-        if not device_ports and not self._config.explicit_device_port:
-            logger.warning("No device ports found, using fallback ports")
-            # Create fallback device ports
+        if not device_ports and self._config.fallback_device_ports:
+            logger.warning("No device ports discovered; using configured fallback candidates")
             device_ports = [
                 DeviceSerialPort(port=p, writable=True)
                 for p in self._config.fallback_device_ports
@@ -1426,7 +1581,11 @@ class SerialPortManager:
             self._current_pair.pc_port,
             self._channel,
             self._config.baudrate,
-            self._config.timeout_sec
+            self._config.timeout_sec,
+            settle_time_sec=self._config.settle_time_sec,
+            marker_retries=self._config.marker_retries,
+            marker_retry_interval_sec=self._config.marker_retry_interval_sec,
+            diagnostic_bytes=self._config.diagnostic_bytes,
         )
 
         self._verified = success
@@ -1449,6 +1608,11 @@ class SerialPortManager:
     def get_pair(self) -> Optional[PortPair]:
         """Get current port pair."""
         return self._current_pair
+
+    def get_last_diagnostic(self) -> Optional[Dict[str, Any]]:
+        """Return bounded evidence from the most recent direct/verification attempt."""
+        diagnostic = getattr(self._pairing_engine, "last_diagnostic", None)
+        return diagnostic.to_dict() if isinstance(diagnostic, PairingDiagnostic) else None
 
     def reset(self) -> None:
         """Reset pairing state."""
