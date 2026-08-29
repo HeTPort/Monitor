@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "saved_at": "2026-08-29T15:27:52+0800",
+  "success": true,
+  "failure_code": null,
+  "attempts": 1,
+  "duration_sec": 0.5247564315795898,
+  "device_port": "/dev/ttyHW0",
+  "pc_port": "COM6",
+  "diagnostics": [
+    {
+      "code": "SUCCESS",
+      "device_port": "/dev/ttyHW0",
+      "pc_port": "COM6",
+      "baudrate": 9600,
+      "marker_writes": 1,
+      "bytes_received": 27,
+      "rx_preview_hex": "330d0a504149525f31373837393838343731373232313238373030",
+      "remote_status": 0,
+      "detail": null
+    },
+    {
+      "code": "SUCCESS",
+      "device_port": "/dev/ttyHW0",
+      "pc_port": "COM6",
+      "baudrate": 9600,
+      "marker_writes": 2,
+      "bytes_received": 50,
+      "rx_preview_hex": "0d0a504149525f313738373938383437323234393938383730300d0a504149525f3137383739383834373232343939383837",
+      "remote_status": 0,
+      "detail": null
+    }
+  ],
+  "verification_success": true
+}

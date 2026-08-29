@@ -1,0 +1,309 @@
+PS D:\h60106817\release> $Exe = 'D:\h60106817\release\vmin_judge.exe'
+PS D:\h60106817\release> $PackageId = 'vmin-judge-2.0.0-20260829_A'
+PS D:\h60106817\release> $Device = '0123456789ABCDEF'
+PS D:\h60106817\release> $BoardId = 'NCH-003'
+PS D:\h60106817\release> $Framework = 'single'
+PS D:\h60106817\release>  $PcSerial = 'COM6'
+PS D:\h60106817\release> $DeviceUart = '/dev/ttyHW0'
+PS D:\h60106817\release> $Baudrate = 9600
+PS D:\h60106817\release> $Out = "D:\MonitorTest\$PackageId\$Framework\$BoardId\output"
+PS D:\h60106817\release> $State = "D:\MonitorTest\$PackageId\$Framework\$BoardId\state"
+PS D:\h60106817\release> $Evidence = "D:\MonitorTest\$PackageId\$Framework\$BoardId\evidence"
+PS D:\h60106817\release> New-Item -ItemType Directory -Force -Path $Out, $State, $Evidence | Out-Null
+PS D:\h60106817\release> Push-Location $env:TEMP
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --version *> "$Evidence\REL-03-version.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $LASTEXITCODE
+0
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --help *> "$Evidence\REL-03-help.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> HelpExit = $LASTEXITCODE
+HelpExit : 无法将“HelpExit”项识别为 cmdlet、函数、脚本文件或可运行程序的名称。请检查名称的拼写，如果包括路径，请确保
+路径正确，然后再试一次。
+所在位置 行:1 字符: 1
++ HelpExit = $LASTEXITCODE
++ ~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (HelpExit:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $HelpExit = $LASTEXITCODE
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $HelpExit
+0
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --output-dir $Out --state-dir $State --json validate --all --package --offline `
+>>   *> "$Evidence\REL-03-validate.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $ValidateExit = $LASTEXITCODE
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $ValidateExit
+0
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --output-dir $Out --state-dir $State --json list-profiles `
+>>   *> "$Evidence\REL-03-profiles.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $ProfilesExit = $LASTEXITCODE
+PS C:\Users\p_BalongAVS\AppData\Local\Temp>  $ProfilesExit
+0
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --config-dir D:\approved-config `
+>>   --output-dir $Out --state-dir $State --json validate --all --package --offline
+{
+  "checked": [
+    "profile:cpu_mixed_big4",
+    "platform:kirin9020",
+    "workload-config:cpu_mixed_big4",
+    "workload-binary:cpu_mixed_big4",
+    "profile:gpu_vulkan_mixed",
+    "platform:kirin9020",
+    "workload-config:gpu_vulkan_mixed",
+    "workload-binary:gpu_vulkan_mixed",
+    "workload-asset:gpu_vulkan_mixed:shaders/vulkan/fullscreen.vert.spv",
+    "workload-asset:gpu_vulkan_mixed:shaders/vulkan/workload.frag.spv",
+    "resource:device/avs_device_agent.sh",
+    "resource:config/kernel/critical.conf"
+  ],
+  "errors": [],
+  "offline": true,
+  "valid": true
+}
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --output-dir $Out --state-dir $State --json simulate --events does-not-exist.jsonl `
+>>   *> "$Evidence\REL-05-invalid-config.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $LASTEXITCODE
+4
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc shell
+# ls /data/local/tmp/avs
+bin  configs  shaders
+# ls /data/local/tmp/avs/bin
+avs-device-agent  cpu-avs-workload  gpu-avs-workload
+# /data/local/tmp/avs/bin/avs-device-agent --version
+avs-device-agent 0.1.0 protocol 1
+# exit
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device list targets
+0123456789ABCDEF
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell sh -c 'echo shell-ok'
+shell-ok
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell mkfifo --help
+usage: mkfifo [NAME...]
+
+Create FIFOs (named pipes).
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell sha256sum --help
+usage: ???sum [-bcs] [FILE]...
+
+Calculate hash for each input file, reading from stdin if none, writing
+hexadecimal digits to stdout for each input file (md5=32 hex digits,
+sha1=40, sha224=56, sha256=64, sha384=96, sha512=128) followed by filename.
+
+-b      Brief (hash only, no filename)
+-c      Check each line of each FILE is the same hash+filename we'd output
+-s      No output, exit status 0 if all hashes match, 1 otherwise
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell dmesg --help
+usage: dmesg [-Cc] [-r|-t|-T] [-n LEVEL] [-s SIZE] [-w|-W]
+
+Print or control the kernel ring buffer.
+
+-C      Clear ring buffer without printing
+-c      Clear ring buffer after printing
+-n      Set kernel logging LEVEL (1-8)
+-r      Raw output (with <level markers>)
+-S      Use syslog(2) rather than /dev/kmsg
+-s      Show the last SIZE many bytes
+-T      Human readable timestamps
+-t      Don't print timestamps
+-w      Keep waiting for more output (aka --follow)
+-W      Wait for output, only printing new messages
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell taskset --help
+usage: taskset [-ap] [mask] [PID | cmd [args...]]
+
+Launch a new task which may only run on certain processors, or change
+the processor affinity of an existing PID.
+
+Mask is a hex string where each bit represents a processor the process
+is allowed to run on. PID without a mask displays existing affinity.
+
+-p      Set/get the affinity of given PID instead of a new command
+-a      Set/get the affinity of all threads of the PID
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --transport hdc --device $Device --output-dir $Out --state-dir $State --json `
+>>   probe --platform kirin9020 --full --refresh `
+>>   *> "$Evidence\DEV-02-probe.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $ProbeExit = $LASTEXITCODE
+PS C:\Users\p_BalongAVS\AppData\Local\Temp>  $ProbeExit
+5
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Copy-Item "$Out\probes\$Device\capabilities.json" `
+>>   "$Evidence\DEV-02-capabilities-$Framework.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc shell
+# cat /sys/module/hvgr_kmd_v350/parameters/gpu_hang_count
+/bin/sh: cat: /sys/module/hvgr_kmd_v350/parameters/gpu_hang_count: No such file or directory
+# find -name "gpu_hang_count"
+find: './mnt/lower/usr': loop detected
+find: ./mnt/hmdfs/100/account/device_view/cloud: No such file or directory
+find: ./mnt/hmdfs/100/non_account/device_view/cloud: No such file or directory
+find: ./proc/1/task/1/fd/23: Invalid argument
+find: ./proc/1/task/1/fd/24: Invalid argument
+find: ./proc/1/fd/23: Invalid argument
+find: ./proc/1/fd/24: Invalid argument
+find: ./proc/3883/eventpoll/5/ready_fds/21: No such file or directory
+find: ./proc/3936/eventpoll/14/ready_fds/21: No such file or directory
+find: ./proc/3962/eventpoll/14/ready_fds/21: No such file or directory
+find: ./proc/5189/eventpoll/14/ready_fds/21: No such file or directory
+find: ./storage/media/100/cloud: No such file or directory
+./sys/module/hvgr_kmd_v500/parameters/gpu_hang_count
+# cat /sys/module/hvgr_kmd_v500/parameters/gpu_hang_count
+0
+# exit
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc shell
+# ls /sys/class/thermal
+cooling_device0  thermal_zone13  thermal_zone23  thermal_zone33
+cooling_device1  thermal_zone14  thermal_zone24  thermal_zone34
+cooling_device2  thermal_zone15  thermal_zone25  thermal_zone4
+cooling_device3  thermal_zone16  thermal_zone26  thermal_zone5
+cooling_device4  thermal_zone17  thermal_zone27  thermal_zone6
+cooling_device5  thermal_zone18  thermal_zone28  thermal_zone7
+thermal_zone0    thermal_zone19  thermal_zone29  thermal_zone8
+thermal_zone1    thermal_zone2   thermal_zone3   thermal_zone9
+thermal_zone10   thermal_zone20  thermal_zone30
+thermal_zone11   thermal_zone21  thermal_zone31
+thermal_zone12   thermal_zone22  thermal_zone32
+# ls /sys/class/thermal/thermal_zone5
+available_policies  emul_temp        k_pu     power              type
+boost               integral_cutoff  mode     slope              uevent
+boost_timeout       k_d              offset   subsystem
+cur_enable          k_i              passive  sustainable_power
+cur_power           k_po             policy   temp
+# cat/sys/class/thermal/thermal_zone5/type
+/bin/sh: cat/sys/class/thermal/thermal_zone5/type: inaccessible or not found
+# cat /sys/class/thermal/thermal_zone5/type
+cluster3
+# cat /sys/class/thermal/thermal_zone6/type
+gpu
+# ls /sys/devices/system/
+clockevents  clocksource  container  cpu  edac  ldk-cpu
+# ls /sys/devices/system/cpu
+core_ctl           cpu10  cpu2  cpu6  cpufreq     offline
+core_ctl_isolated  cpu11  cpu3  cpu7  cpuidle     online
+cpu0               cpu12  cpu4  cpu8  kernel_max  possible
+cpu1               cpu13  cpu5  cpu9  mips_mem    present
+# exit
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --device $Device --state-dir $State pair --channel hdc --platform kirin9020 `
+>>   --device-port $DeviceUart --pc-port $PcSerial --baudrate $Baudrate --timeout 5 --verify `
+>>   *> "$Evidence\DEV-03-pair.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $PairExit = $LASTEXITCODE\
+所在位置 行:1 字符: 26
++ $PairExit = $LASTEXITCODE\
++                          ~
+表达式或语句中包含意外的标记“\”。
+    + CategoryInfo          : ParserError: (:) [], ParentContainsErrorRecordException
+    + FullyQualifiedErrorId : UnexpectedToken
+
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $PairExit = $LASTEXITCODE
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $PairExit
+0
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Copy-Item "$State\pair-diagnostic.json" "$Evidence\DEV-03-pair-diagnostic.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --pc-serial $PcSerial --baudrate $Baudrate --output-dir $Out --state-dir $State `
+>>   monitor --save-raw --timeout 60
+error: no usable framed event received
+exit_code: 3
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> ^C
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> zzz^C
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> ^C
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> ^C
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> ^C
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> ^C
+PS C:\Users\p_BalongAVS\AppData\Local\Temp>
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> ^C
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --transport hdc --device $Device --output-dir $Out --state-dir $State --json `
+>>   deploy --target all --verify-hashes *> "$Evidence\DEV-04-deploy-first.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Copy-Item "$Out\deployment-manifest.json" "$Evidence\DEV-04-manifest-first.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --transport hdc --device $Device --output-dir $Out --state-dir $State --json `
+>>   deploy --target all --verify-hashes *> "$Evidence\DEV-04-deploy-second.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Copy-Item "$Out\deployment-manifest.json" "$Evidence\DEV-04-manifest-second.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell /data/local/tmp/avs/bin/avs-device-agent --version `
+>>   *> "$Evidence\DEV-04-agent-version.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --pc-serial $PcSerial --baudrate $Baudrate --output-dir $Out --state-dir $State `
+>>   monitor --save-raw --timeout 60
+error: no usable framed event received
+exit_code: 3
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc shell
+# ls /data/local/tmp/avs
+bin  configs  shaders
+# ls /data/local/tmp/avs/bin
+avs-device-agent  cpu-avs-workload  gpu-avs-workload
+# exit
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell "nohup /data/local/tmp/avs/bin/avs-device-agent > /data/local/tmp/avs/agent.log 2>&1 &"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --pc-serial $PcSerial --baudrate $Baudrate --output-dir $Out --state-dir $State monitor --save-raw --timeout 60
+error: no usable framed event received
+exit_code: 3
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell "nohup /data/local/tmp/avs/bin/cpu-avs-workload > /dev/null 2>&1 &"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --pc-serial $PcSerial --baudrate $Baudrate --output-dir $Out --state-dir $State monitor --save-raw --timeout 60
+error: no usable framed event received
+exit_code: 3
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --transport hdc --device $Device --pc-serial $PcSerial `
+>>   --output-dir $Out --state-dir $State --json `
+>>   golden cpu --profile cpu_mixed_big4 --runs 10 --known-good --board-id $BoardId `
+>>   *> "$Evidence\QUAL-01-cpu-golden.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $LASTEXITCODE
+3
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --transport hdc --device $Device --pc-serial $PcSerial `
+>>   --output-dir $Out --state-dir $State --json `
+>>   golden gpu --profile gpu_vulkan_mixed --runs 10 --known-good --board-id $BoardId `
+>>   --readback-name gpu-golden.rgba *> "$Evidence\QUAL-02-gpu-golden.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $LASTEXITCODE
+5
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --transport hdc --device $Device --output-dir $Out --state-dir $State --json `
+>>  probe --platform kirin9020 --full --refresh *> "$Evidence\DEV-02-probe-v2.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $ProbeExit = $LASTEXITCODE
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $ProbeExit
+5
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Copy-Item "$Out\probes\$Device\capabilities.json" `
+>> "$Evidence\DEV-02-capabilities-$Framework-v2.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --transport hdc --device $Device --pc-serial $PcSerial `
+>>   --output-dir $Out --state-dir $State --json `
+>> golden cpu --profile cpu_mixed_big4 --runs 10 --known-good --board-id $BoardId `
+>>  *> "$Evidence\QUAL-01-cpu-golden_v2.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $GoldenGpuExit = $LASTEXITCODE
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $GoldenGpuExit
+3
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --transport hdc --device $Device --pc-serial $PcSerial `
+>>  --output-dir $Out --state-dir $State --json `
+>> golden gpu --profile gpu_vulkan_mixed --runs 10 --known-good --board-id $BoardId `
+>>   --readback-name gpu-golden.rgba *> "$Evidence\QUAL-02-gpu-golden_v2.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $GoldenGpuExit = $LASTEXITCODE
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $GoldenGpuExit
+5
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --transport hdc --device $Device --output-dir $Out --state-dir $State --json `
+>>   probe --platform kirin9020 --full --refresh *> "$Evidence\DEV-02-probe-v2.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $ProbeExit = $LASTEXITCODE
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $ProbeExit
+5
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Copy-Item "$Out\probes\$Device\capabilities.json" `
+>>   "$Evidence\DEV-02-capabilities-$Framework_v3.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc shell cat /data/local/tmp/avs/agent.log
+avs-device-agent: invalid run id
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Remove-Item "$State\probes" -Recurse -Force -ErrorAction SilentlyContinue
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --config-dir D:\approved-config --transport hdc --device $Device --output-dir $Out --state-dir $State --json `
+>>   probe --platform kirin9020 --full --refresh *> "$Evidence\DEV-02-probe-v2.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $ProbeExit = $LASTEXITCODE
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $ProbeExit
+5
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Write-Host "Probe Exit Code: $ProbeExit"
+Probe Exit Code: 5
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Get-Content "$Evidence\DEV-02-probe-v2.json" | ConvertFrom-Json | Select-Object -ExpandProperty required_missing
+gpu.hang_count
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Get-Content "$Evidence\DEV-02-probe-v2.json" | ConvertFrom-Json | Select-Object -ExpandProperty platform_required_missing
+Select-Object : 找不到属性“platform_required_missing”。
+所在位置 行:1 字符: 67
++ ... rtFrom-Json | Select-Object -ExpandProperty platform_required_missing
++                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidArgument: (@{capabilities=...upported=False}:PSObject) [Select-Object]，PSArgumentException
+    + FullyQualifiedErrorId : ExpandPropertyNotFound,Microsoft.PowerShell.Commands.SelectObjectCommand
+
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell cat /sys/module/hvgr_kmd_v500/parameters/gpu_hang_count
+0
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell "pkill avs-device-agent"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell "rm -f /data/local/tmp/avs/agent.log"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --transport hdc --device $Device --pc-serial $PcSerial `
+>>  --output-dir $Out --state-dir $State --json `
+>>   golden cpu --profile cpu_mixed_big4 --runs 1 --known-good --board-id $BoardId `
+>>   *> "$Evidence\QUAL-01-cpu-golden-debug.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp>  $GoldenExit = $LASTEXITCODE
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Write-Host "Golden Exit Code: $GoldenExit"
+Golden Exit Code: 3
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell cat /data/local/tmp/avs/agent.log > "$Evidence\device-agent.log"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp>  $RunDir = Get-ChildItem "$Out\qualification" -Directory | Select-Object -First 1
+Get-ChildItem : 找不到路径“D:\MonitorTest\vmin-judge-2.0.0-20260829_A\single\NCH-003\output\qualification”，因为该路径不存在。
+所在位置 行:1 字符: 12
++  $RunDir = Get-ChildItem "$Out\qualification" -Directory | Select-Obj ...
++            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (D:\MonitorTest\...t\qualification:String) [Get-ChildItem], ItemNotFoundException
+    + FullyQualifiedErrorId : PathNotFound,Microsoft.PowerShell.Commands.GetChildItemCommand

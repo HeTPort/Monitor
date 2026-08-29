@@ -1,0 +1,53 @@
+{
+  "assets": [
+    {
+      "action": "unchanged",
+      "executable": true,
+      "kind": "agent",
+      "local": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI138002\\device\\avs_device_agent.sh",
+      "local_sha256": "b33ce2bfeb080c00c82b4b73917d55e4377da3fdf06394333f160624b478a786",
+      "mode": "0755",
+      "remote": "/data/local/tmp/avs/bin/avs-device-agent",
+      "remote_sha256": "b33ce2bfeb080c00c82b4b73917d55e4377da3fdf06394333f160624b478a786",
+      "required": true,
+      "size": 11580,
+      "verified": true
+    },
+    {
+      "action": "unchanged",
+      "executable": true,
+      "kind": "workload",
+      "local": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI138002\\tools\\cpu-avs-workload",
+      "local_sha256": "fd8ceb01ff187a4f473f73bfa318ecc95c5bd19b5fb2eb5e8383ce3cac36cc90",
+      "mode": "0755",
+      "remote": "/data/local/tmp/avs/bin/cpu-avs-workload",
+      "remote_sha256": "fd8ceb01ff187a4f473f73bfa318ecc95c5bd19b5fb2eb5e8383ce3cac36cc90",
+      "required": true,
+      "size": 4889160,
+      "verified": true
+    },
+    {
+      "action": "unchanged",
+      "executable": false,
+      "kind": "workload-config",
+      "local": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI138002\\config\\workloads\\cpu_mixed_big4.json",
+      "local_sha256": "666a96cf88504969d5976f5de2ef8a076e73cd1a1be99c451afca42fe9007ca2",
+      "mode": null,
+      "remote": "/data/local/tmp/avs/configs/cpu_mixed_big4.json",
+      "remote_sha256": "666a96cf88504969d5976f5de2ef8a076e73cd1a1be99c451afca42fe9007ca2",
+      "required": true,
+      "size": 309,
+      "verified": true
+    }
+  ],
+  "complete": true,
+  "created_at": "2026-08-29T08:39:11.376755+00:00",
+  "producer": {
+    "component": "DeploymentManager",
+    "name": "vmin_judge"
+  },
+  "removed_stale": [],
+  "schema_version": 1,
+  "transport": "hdc",
+  "verified": true
+}

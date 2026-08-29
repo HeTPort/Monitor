@@ -1,0 +1,5 @@
+7da6a7f","seq":1,"timestamp_ms":974947000,"source":"agent","type":"agent_start","payload":{"agent_version":"0.1.0","protocol_version":1,"baudrate":9600}}
+{"schema_version":1,"run_id":"golden-cpu-20260829T075607Z-e7da6a7f","seq":2,"timestamp_ms":974948000,"source":"agent","type":"error","payload":{"origin":"agent","error_code":"ENVIRONMENT_READBACK_FAILED"}}
+{"schema_version":1,"run_id":"golden-cpu-20260829T075607Z-e7da6a7f","seq":3,"timestamp_ms":974950000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.voltage","value":"","path":"/sys/kernel/debug/lpmcu_debug/cluster_volt"}}
+{"schema_version":1,"run_id":"golden-cpu-20260829T075607Z-e7da6a7f","seq":4,"timestamp_ms":974950000,"source":"agent","type":"agent_final","payload":{"workload_exit_code":3,"summary_seen":false,"timed_out":false,"restoration_ok":true,"spool_complete":true}}
+{"schema_version":1,"run_id":"gold

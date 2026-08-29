@@ -1,0 +1,428 @@
+{
+  "agent_backend": "posix-shell",
+  "assets": [
+    {
+      "path": "/data/local/tmp/avs/bin/avs-device-agent",
+      "sha256": "b33ce2bfeb080c00c82b4b73917d55e4377da3fdf06394333f160624b478a786"
+    },
+    {
+      "path": "/data/local/tmp/avs/bin/cpu-avs-workload",
+      "sha256": "fd8ceb01ff187a4f473f73bfa318ecc95c5bd19b5fb2eb5e8383ce3cac36cc90"
+    },
+    {
+      "path": "/data/local/tmp/avs/configs/cpu_mixed_big4.json",
+      "sha256": "666a96cf88504969d5976f5de2ef8a076e73cd1a1be99c451afca42fe9007ca2"
+    }
+  ],
+  "baseline": null,
+  "capabilities_sha256": "d9ac88f024b8db32d5e55781f8b9d98b07ec162c7cf13dec442a030de03f2975",
+  "environment": {
+    "actions": [
+      {
+        "kind": "governor",
+        "path": "/sys/devices/system/cpu/cpufreq/policy0/scaling_governor",
+        "required": true,
+        "value": "performance"
+      },
+      {
+        "kind": "governor",
+        "path": "/sys/devices/system/cpu/cpufreq/policy1/scaling_governor",
+        "required": true,
+        "value": "performance"
+      },
+      {
+        "kind": "governor",
+        "path": "/sys/devices/system/cpu/cpufreq/policy2/scaling_governor",
+        "required": true,
+        "value": "performance"
+      },
+      {
+        "kind": "governor",
+        "path": "/sys/devices/system/cpu/cpufreq/policy3/scaling_governor",
+        "required": true,
+        "value": "performance"
+      },
+      {
+        "kind": "maximum_frequency",
+        "path": "/sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq",
+        "policy_metric": "cpu.frequency",
+        "policy_value": 2508000,
+        "required": true,
+        "value": "2508000"
+      },
+      {
+        "kind": "maximum_frequency",
+        "path": "/sys/devices/system/cpu/cpufreq/policy1/scaling_max_freq",
+        "policy_metric": "cpu.frequency",
+        "policy_value": 2508000,
+        "required": true,
+        "value": "2508000"
+      },
+      {
+        "kind": "maximum_frequency",
+        "path": "/sys/devices/system/cpu/cpufreq/policy2/scaling_max_freq",
+        "policy_metric": "cpu.frequency",
+        "policy_value": 2508000,
+        "required": true,
+        "value": "2508000"
+      },
+      {
+        "kind": "maximum_frequency",
+        "path": "/sys/devices/system/cpu/cpufreq/policy3/scaling_max_freq",
+        "policy_metric": "cpu.frequency",
+        "policy_value": 2508000,
+        "required": true,
+        "value": "2508000"
+      },
+      {
+        "kind": "minimum_frequency",
+        "path": "/sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq",
+        "policy_metric": "cpu.frequency",
+        "policy_value": 2508000,
+        "required": true,
+        "value": "2508000"
+      },
+      {
+        "kind": "minimum_frequency",
+        "path": "/sys/devices/system/cpu/cpufreq/policy1/scaling_min_freq",
+        "policy_metric": "cpu.frequency",
+        "policy_value": 2508000,
+        "required": true,
+        "value": "2508000"
+      },
+      {
+        "kind": "minimum_frequency",
+        "path": "/sys/devices/system/cpu/cpufreq/policy2/scaling_min_freq",
+        "policy_metric": "cpu.frequency",
+        "policy_value": 2508000,
+        "required": true,
+        "value": "2508000"
+      },
+      {
+        "kind": "minimum_frequency",
+        "path": "/sys/devices/system/cpu/cpufreq/policy3/scaling_min_freq",
+        "policy_metric": "cpu.frequency",
+        "policy_value": 2508000,
+        "required": true,
+        "value": "2508000"
+      },
+      {
+        "kind": "online",
+        "path": "/sys/devices/system/cpu/cpu4/online",
+        "policy_metric": "cpu.online.4",
+        "policy_value": 1,
+        "required": true,
+        "value": "1"
+      },
+      {
+        "kind": "online",
+        "path": "/sys/devices/system/cpu/cpu5/online",
+        "policy_metric": "cpu.online.5",
+        "policy_value": 1,
+        "required": true,
+        "value": "1"
+      },
+      {
+        "kind": "online",
+        "path": "/sys/devices/system/cpu/cpu6/online",
+        "policy_metric": "cpu.online.6",
+        "policy_value": 1,
+        "required": true,
+        "value": "1"
+      },
+      {
+        "kind": "online",
+        "path": "/sys/devices/system/cpu/cpu7/online",
+        "policy_metric": "cpu.online.7",
+        "policy_value": 1,
+        "required": true,
+        "value": "1"
+      }
+    ],
+    "requested": {
+      "affinity": "4-7",
+      "frequency_khz": "platform_max",
+      "governor": "performance",
+      "online_cores": [
+        4,
+        5,
+        6,
+        7
+      ],
+      "temperature_c": {
+        "max": 60.0,
+        "min": 35.0
+      }
+    },
+    "restoration_required": true
+  },
+  "event_crc": false,
+  "heartbeat_timeout_s": 45.0,
+  "kernel": {
+    "dedupe_window_ms": 1000,
+    "max_events_per_second": 10,
+    "mode": "critical",
+    "raw_local": false,
+    "required": true,
+    "rules": [
+      {
+        "id": "kernel-warn-001",
+        "pattern": "thermal.*(?:throttl|limit)",
+        "severity": "warning"
+      },
+      {
+        "id": "kernel-warn-002",
+        "pattern": "voltage.*(?:droop|low)",
+        "severity": "warning"
+      },
+      {
+        "id": "kernel-fail-001",
+        "pattern": "kernel panic|\\bpanic\\b|\\boops\\b",
+        "severity": "critical"
+      },
+      {
+        "id": "kernel-fail-002",
+        "pattern": "watchdog.*(?:hard lockup|soft lockup)|rcu.*stall|hung task",
+        "severity": "critical"
+      },
+      {
+        "id": "kernel-fail-003",
+        "pattern": "gpu.*(?:hang|fault|reset)|hvgr.*(?:hang|fault|reset)",
+        "severity": "critical"
+      },
+      {
+        "id": "kernel-fail-004",
+        "pattern": "smmu.*fault|iommu.*fault|bus error|ecc.*(?:uncorrect|fatal)",
+        "severity": "critical"
+      },
+      {
+        "id": "kernel-fail-005",
+        "pattern": "pmic.*(?:fault|undervoltage)|under.?voltage",
+        "severity": "critical"
+      }
+    ]
+  },
+  "manifest_sha256": "63cd75ad5982cf5405d36e50dad95e95f8a7f6237111d957e0d017f5a5373661",
+  "overall_timeout_s": 300.0,
+  "platform": "kirin9020",
+  "policy": {
+    "required_telemetry": [
+      "cpu.frequency",
+      "cpu.online",
+      "cpu.temperature",
+      "cpu.utilization"
+    ],
+    "thresholds": {
+      "telemetry": {
+        "cpu.frequency": {
+          "max": 2558160.0,
+          "min": 2457840.0
+        },
+        "cpu.online.4": {
+          "max": 1,
+          "min": 1
+        },
+        "cpu.online.5": {
+          "max": 1,
+          "min": 1
+        },
+        "cpu.online.6": {
+          "max": 1,
+          "min": 1
+        },
+        "cpu.online.7": {
+          "max": 1,
+          "min": 1
+        },
+        "cpu.temperature": {
+          "max": 60.0,
+          "min": 35.0
+        }
+      }
+    }
+  },
+  "producer": {
+    "component": "RunManifestBuilder",
+    "name": "vmin_judge",
+    "version": "2.0.0"
+  },
+  "profile": {
+    "id": "cpu_mixed_big4",
+    "sha256": "4ffa1fd881492b1c57cda65a9dd06de6531cd0e8c3c2b9c41f776edddfea54af"
+  },
+  "qualification": {
+    "mode": "golden",
+    "production_baseline_allowed": false
+  },
+  "restoration_plan": [
+    "/sys/devices/system/cpu/cpufreq/policy0/scaling_governor",
+    "/sys/devices/system/cpu/cpufreq/policy1/scaling_governor",
+    "/sys/devices/system/cpu/cpufreq/policy2/scaling_governor",
+    "/sys/devices/system/cpu/cpufreq/policy3/scaling_governor",
+    "/sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq",
+    "/sys/devices/system/cpu/cpufreq/policy1/scaling_max_freq",
+    "/sys/devices/system/cpu/cpufreq/policy2/scaling_max_freq",
+    "/sys/devices/system/cpu/cpufreq/policy3/scaling_max_freq",
+    "/sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq",
+    "/sys/devices/system/cpu/cpufreq/policy1/scaling_min_freq",
+    "/sys/devices/system/cpu/cpufreq/policy2/scaling_min_freq",
+    "/sys/devices/system/cpu/cpufreq/policy3/scaling_min_freq",
+    "/sys/devices/system/cpu/cpu4/online",
+    "/sys/devices/system/cpu/cpu5/online",
+    "/sys/devices/system/cpu/cpu6/online",
+    "/sys/devices/system/cpu/cpu7/online"
+  ],
+  "run_id": "golden-cpu-20260829T083911Z-86057049",
+  "schema_version": 1,
+  "spool_dir": "/data/local/tmp/avs/runs/golden-cpu-20260829T083911Z-86057049/spool",
+  "target": "cpu",
+  "telemetry": {
+    "interval_ms": 5000,
+    "samplers": [
+      {
+        "metric": "cpu.frequency",
+        "parser": "number",
+        "parser_by_path": {},
+        "paths": [
+          "/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq",
+          "/sys/devices/system/cpu/cpufreq/policy1/scaling_cur_freq",
+          "/sys/devices/system/cpu/cpufreq/policy2/scaling_cur_freq",
+          "/sys/devices/system/cpu/cpufreq/policy3/scaling_cur_freq"
+        ],
+        "required": true,
+        "unit": "kHz"
+      },
+      {
+        "metric": "cpu.online",
+        "parser": "int",
+        "parser_by_path": {},
+        "paths": [
+          "/sys/devices/system/cpu/cpu0/online",
+          "/sys/devices/system/cpu/cpu1/online",
+          "/sys/devices/system/cpu/cpu10/online",
+          "/sys/devices/system/cpu/cpu11/online",
+          "/sys/devices/system/cpu/cpu12/online",
+          "/sys/devices/system/cpu/cpu13/online",
+          "/sys/devices/system/cpu/cpu2/online",
+          "/sys/devices/system/cpu/cpu3/online",
+          "/sys/devices/system/cpu/cpu4/online",
+          "/sys/devices/system/cpu/cpu5/online",
+          "/sys/devices/system/cpu/cpu6/online",
+          "/sys/devices/system/cpu/cpu7/online",
+          "/sys/devices/system/cpu/cpu8/online",
+          "/sys/devices/system/cpu/cpu9/online"
+        ],
+        "required": true,
+        "unit": null
+      },
+      {
+        "metric": "cpu.temperature",
+        "parser": "degree_celsius",
+        "parser_by_path": {
+          "/sys/class/thermal/thermal_zone0/temp": "temperature_auto",
+          "/sys/class/thermal/thermal_zone2/temp": "temperature_auto",
+          "/sys/class/thermal/thermal_zone3/temp": "temperature_auto",
+          "/sys/class/thermal/thermal_zone4/temp": "temperature_auto",
+          "/sys/class/thermal/thermal_zone5/temp": "temperature_auto"
+        },
+        "paths": [
+          "/sys/class/thermal/thermal_zone0/temp",
+          "/sys/class/thermal/thermal_zone2/temp",
+          "/sys/class/thermal/thermal_zone3/temp",
+          "/sys/class/thermal/thermal_zone4/temp",
+          "/sys/class/thermal/thermal_zone5/temp"
+        ],
+        "required": true,
+        "unit": "celsius"
+      },
+      {
+        "metric": "cpu.utilization",
+        "parser": "proc_stat_utilization",
+        "parser_by_path": {},
+        "paths": [
+          "/proc/stat"
+        ],
+        "required": true,
+        "unit": "percent"
+      },
+      {
+        "metric": "cpu.idle_residency",
+        "parser": "number",
+        "parser_by_path": {},
+        "paths": [
+          "/sys/devices/system/cpu/cpu0/cpuidle/state0/time",
+          "/sys/devices/system/cpu/cpu0/cpuidle/state1/time",
+          "/sys/devices/system/cpu/cpu0/cpuidle/state2/time",
+          "/sys/devices/system/cpu/cpu1/cpuidle/state0/time",
+          "/sys/devices/system/cpu/cpu1/cpuidle/state1/time",
+          "/sys/devices/system/cpu/cpu1/cpuidle/state2/time",
+          "/sys/devices/system/cpu/cpu10/cpuidle/state0/time",
+          "/sys/devices/system/cpu/cpu10/cpuidle/state1/time",
+          "/sys/devices/system/cpu/cpu10/cpuidle/state2/time",
+          "/sys/devices/system/cpu/cpu11/cpuidle/state0/time",
+          "/sys/devices/system/cpu/cpu11/cpuidle/state1/time",
+          "/sys/devices/system/cpu/cpu11/cpuidle/state2/time",
+          "/sys/devices/system/cpu/cpu12/cpuidle/state0/time",
+          "/sys/devices/system/cpu/cpu12/cpuidle/state1/time",
+          "/sys/devices/system/cpu/cpu12/cpuidle/state2/time",
+          "/sys/devices/system/cpu/cpu13/cpuidle/state0/time",
+          "/sys/devices/system/cpu/cpu13/cpuidle/state1/time",
+          "/sys/devices/system/cpu/cpu13/cpuidle/state2/time",
+          "/sys/devices/system/cpu/cpu2/cpuidle/state0/time",
+          "/sys/devices/system/cpu/cpu2/cpuidle/state1/time",
+          "/sys/devices/system/cpu/cpu2/cpuidle/state2/time",
+          "/sys/devices/system/cpu/cpu3/cpuidle/state0/time",
+          "/sys/devices/system/cpu/cpu3/cpuidle/state1/time",
+          "/sys/devices/system/cpu/cpu3/cpuidle/state2/time",
+          "/sys/devices/system/cpu/cpu4/cpuidle/state0/time",
+          "/sys/devices/system/cpu/cpu4/cpuidle/state1/time",
+          "/sys/devices/system/cpu/cpu4/cpuidle/state2/time",
+          "/sys/devices/system/cpu/cpu5/cpuidle/state0/time",
+          "/sys/devices/system/cpu/cpu5/cpuidle/state1/time",
+          "/sys/devices/system/cpu/cpu5/cpuidle/state2/time",
+          "/sys/devices/system/cpu/cpu6/cpuidle/state0/time",
+          "/sys/devices/system/cpu/cpu6/cpuidle/state1/time",
+          "/sys/devices/system/cpu/cpu6/cpuidle/state2/time",
+          "/sys/devices/system/cpu/cpu7/cpuidle/state0/time",
+          "/sys/devices/system/cpu/cpu7/cpuidle/state1/time",
+          "/sys/devices/system/cpu/cpu7/cpuidle/state2/time",
+          "/sys/devices/system/cpu/cpu8/cpuidle/state0/time",
+          "/sys/devices/system/cpu/cpu8/cpuidle/state1/time",
+          "/sys/devices/system/cpu/cpu8/cpuidle/state2/time",
+          "/sys/devices/system/cpu/cpu9/cpuidle/state0/time",
+          "/sys/devices/system/cpu/cpu9/cpuidle/state1/time",
+          "/sys/devices/system/cpu/cpu9/cpuidle/state2/time"
+        ],
+        "required": false,
+        "unit": "us"
+      },
+      {
+        "metric": "cpu.voltage",
+        "parser": "text",
+        "parser_by_path": {},
+        "paths": [
+          "/sys/kernel/debug/lpmcu_debug/cluster_volt"
+        ],
+        "required": false,
+        "unit": "platform_text"
+      }
+    ],
+    "source": "cpu-telemetry"
+  },
+  "timeout_s": 300.0,
+  "uart": "/dev/ttyHW0",
+  "workload": {
+    "argv": [
+      "taskset",
+      "-c",
+      "4-7",
+      "/data/local/tmp/avs/bin/cpu-avs-workload",
+      "--config",
+      "/data/local/tmp/avs/configs/cpu_mixed_big4.json",
+      "--generate-golden",
+      "true"
+    ],
+    "config_path": "/data/local/tmp/avs/configs/cpu_mixed_big4.json",
+    "cwd": "/data/local/tmp/avs"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "sha256": {
+    "capabilities.json": "bd8bd2ac65786adfa989c07c43f85fb77af450fa0d387618039adcc9989ad9d4",
+    "deployment-manifest.json": "9d8217570294c3d4f8a0eb627ec19cac376db94321ad82b9acb3d66d86249574",
+    "effective-profile.json": "310c1dc89a4512e31933f418e7aec7b7d75a9d81dbb58a9e9acdd66e3d297c0f",
+    "run-manifest.json": "ec9955309bea7f2167a5b3409853d128961dde2f6c4622a5ebdd184412ed31d4",
+    "serial.raw": "e127ec9519d042653f25f4e16d56106b9b7d4527d113b71d7724b67611f88d4f"
+  }
+}

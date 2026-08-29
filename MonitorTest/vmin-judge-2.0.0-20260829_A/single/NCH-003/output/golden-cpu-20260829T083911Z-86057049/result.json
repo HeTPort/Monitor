@@ -1,0 +1,76 @@
+{
+  "agent_final_seen": false,
+  "artifacts": {
+    "complete": true,
+    "hash_manifest": "artifact-hashes.json",
+    "hashed_file_count": 5
+  },
+  "baseline_id": null,
+  "completed_at": "2026-08-29T08:39:21.060378+00:00",
+  "dut_reasons": [],
+  "event_count": 0,
+  "exit_code": 3,
+  "infrastructure_reasons": [
+    {
+      "code": "malformed_json",
+      "message": "invalid JSON event: Extra data",
+      "scope": "protocol"
+    },
+    {
+      "code": "truncated_line",
+      "message": "UART stream ended with an incomplete JSONL record",
+      "scope": "protocol"
+    },
+    {
+      "code": "REQUIRED_TELEMETRY_MISSING",
+      "metric": "cpu.frequency",
+      "scope": "telemetry"
+    },
+    {
+      "code": "REQUIRED_TELEMETRY_MISSING",
+      "metric": "cpu.online",
+      "scope": "telemetry"
+    },
+    {
+      "code": "REQUIRED_TELEMETRY_MISSING",
+      "metric": "cpu.temperature",
+      "scope": "telemetry"
+    },
+    {
+      "code": "REQUIRED_TELEMETRY_MISSING",
+      "metric": "cpu.utilization",
+      "scope": "telemetry"
+    },
+    {
+      "code": "AGENT_FINAL_MISSING",
+      "scope": "agent"
+    },
+    {
+      "agent_process_exit": 3,
+      "code": "AGENT_EXIT_MISMATCH",
+      "expected_workload_exit": null,
+      "scope": "agent-process",
+      "stderr": "",
+      "timed_out": false
+    }
+  ],
+  "liveness": {
+    "agent_final_seen": false,
+    "timed_out": false
+  },
+  "producer": {
+    "component": "RunOrchestrator",
+    "name": "vmin_judge",
+    "version": "2.0.0"
+  },
+  "profile_id": "cpu_mixed_big4",
+  "run_id": "golden-cpu-20260829T083911Z-86057049",
+  "schema_version": 1,
+  "telemetry_seen": [],
+  "terminal_summary_seen": false,
+  "verdict": "INFRA_ERROR",
+  "warnings": [],
+  "workload_exit_code": null,
+  "workload_result": null,
+  "workload_summary": null
+}
