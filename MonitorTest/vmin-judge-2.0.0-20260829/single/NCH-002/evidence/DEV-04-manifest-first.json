@@ -1,0 +1,105 @@
+{
+  "assets": [
+    {
+      "action": "pushed",
+      "executable": true,
+      "kind": "agent",
+      "local": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI209762\\device\\avs_device_agent.sh",
+      "local_sha256": "d6517fa26be29e4f5bdb5ed4db9de6d529910a84c23ff4e21f4bb689069cfb7a",
+      "mode": "0755",
+      "remote": "/data/local/tmp/avs/bin/avs-device-agent",
+      "remote_sha256": "d6517fa26be29e4f5bdb5ed4db9de6d529910a84c23ff4e21f4bb689069cfb7a",
+      "required": true,
+      "size": 10815,
+      "verified": true
+    },
+    {
+      "action": "unchanged",
+      "executable": true,
+      "kind": "workload",
+      "local": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI209762\\tools\\cpu-avs-workload",
+      "local_sha256": "fd8ceb01ff187a4f473f73bfa318ecc95c5bd19b5fb2eb5e8383ce3cac36cc90",
+      "mode": "0755",
+      "remote": "/data/local/tmp/avs/bin/cpu-avs-workload",
+      "remote_sha256": "fd8ceb01ff187a4f473f73bfa318ecc95c5bd19b5fb2eb5e8383ce3cac36cc90",
+      "required": true,
+      "size": 4889160,
+      "verified": true
+    },
+    {
+      "action": "unchanged",
+      "executable": false,
+      "kind": "workload-config",
+      "local": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI209762\\config\\workloads\\cpu_mixed_big4.json",
+      "local_sha256": "666a96cf88504969d5976f5de2ef8a076e73cd1a1be99c451afca42fe9007ca2",
+      "mode": null,
+      "remote": "/data/local/tmp/avs/configs/cpu_mixed_big4.json",
+      "remote_sha256": "666a96cf88504969d5976f5de2ef8a076e73cd1a1be99c451afca42fe9007ca2",
+      "required": true,
+      "size": 309,
+      "verified": true
+    },
+    {
+      "action": "unchanged",
+      "executable": true,
+      "kind": "workload",
+      "local": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI209762\\tools\\gpu-avs-workload",
+      "local_sha256": "e97e7a1ac2cd6e3538456f8f601f2ca8f79729d003c626b05602c6067d6ce6dd",
+      "mode": "0755",
+      "remote": "/data/local/tmp/avs/bin/gpu-avs-workload",
+      "remote_sha256": "e97e7a1ac2cd6e3538456f8f601f2ca8f79729d003c626b05602c6067d6ce6dd",
+      "required": true,
+      "size": 1202864,
+      "verified": true
+    },
+    {
+      "action": "unchanged",
+      "executable": false,
+      "kind": "workload-config",
+      "local": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI209762\\config\\workloads\\gpu_vulkan_mixed.json",
+      "local_sha256": "10874b9299cf12b2883442ce451a9e338310aecc0176c1cc0fdd7295921d4944",
+      "mode": null,
+      "remote": "/data/local/tmp/avs/configs/gpu_vulkan_mixed.json",
+      "remote_sha256": "10874b9299cf12b2883442ce451a9e338310aecc0176c1cc0fdd7295921d4944",
+      "required": true,
+      "size": 558,
+      "verified": true
+    },
+    {
+      "action": "unchanged",
+      "executable": false,
+      "kind": "shader",
+      "local": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI209762\\tools\\shaders\\vulkan\\fullscreen.vert.spv",
+      "local_sha256": "e12aae1cfc3959515badec3c7b85433622e83c56fb7ad9f30bc92d9f65a4ed17",
+      "mode": null,
+      "remote": "/data/local/tmp/avs/shaders/vulkan/fullscreen.vert.spv",
+      "remote_sha256": "e12aae1cfc3959515badec3c7b85433622e83c56fb7ad9f30bc92d9f65a4ed17",
+      "required": true,
+      "size": 1352,
+      "verified": true
+    },
+    {
+      "action": "unchanged",
+      "executable": false,
+      "kind": "shader",
+      "local": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI209762\\tools\\shaders\\vulkan\\workload.frag.spv",
+      "local_sha256": "31ef0207fc83a5fc07769b4aac227eaa77c533341b021b40954a6cf7382bf37c",
+      "mode": null,
+      "remote": "/data/local/tmp/avs/shaders/vulkan/workload.frag.spv",
+      "remote_sha256": "31ef0207fc83a5fc07769b4aac227eaa77c533341b021b40954a6cf7382bf37c",
+      "required": true,
+      "size": 9184,
+      "verified": true
+    }
+  ],
+  "complete": true,
+  "created_at": "2026-08-29T03:15:39.066422+00:00",
+  "producer": {
+    "component": "DeploymentManager",
+    "name": "vmin_judge"
+  },
+  "removed_stale": [],
+  "schema_version": 1,
+  "transport": "hdc",
+  "verified": true
+}

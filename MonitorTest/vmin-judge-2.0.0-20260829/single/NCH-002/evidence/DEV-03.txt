@@ -1,0 +1,73 @@
+PS C:\Users\p_BalongAVS>  $port = New-Object System.IO.Ports.SerialPort COM6,9600,None,8,1
+PS C:\Users\p_BalongAVS> $port.Open()
+PS C:\Users\p_BalongAVS> while($true){ if($port.BytesToRead -gt 0){ Write-Host -NoNewline $port.ReadExisting() }; Start-Sleep -Milliseconds 50 }
+7
+test
+test
+test
+test
+test
+test
+test
+test
+test
+hello
+hello
+hello
+h
+PS C:\Users\p_BalongAVS> $port = New-Object System.IO.Ports.SerialPort COM6,115200,None,8,1
+PS C:\Users\p_BalongAVS> $port.Open()
+使用“0”个参数调用“Open”时发生异常:“对端口“COM6”的访问被拒绝。”
+所在位置 行:1 字符: 1
++ $port.Open()
++ ~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [], MethodInvocationException
+    + FullyQualifiedErrorId : UnauthorizedAccessException
+
+PS C:\Users\p_BalongAVS> $port.Close()
+PS C:\Users\p_BalongAVS> $port.Dispose()
+PS C:\Users\p_BalongAVS> $port = New-Object System.IO.Ports.SerialPort COM6,115200,None,8,1
+PS C:\Users\p_BalongAVS> $port.Open()
+使用“0”个参数调用“Open”时发生异常:“对端口“COM6”的访问被拒绝。”
+所在位置 行:1 字符: 1
++ $port.Open()
++ ~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [], MethodInvocationException
+    + FullyQualifiedErrorId : UnauthorizedAccessException
+
+PS C:\Users\p_BalongAVS> $port = New-Object System.IO.Ports.SerialPort COM6,115200,None,8,1
+PS C:\Users\p_BalongAVS> $port.Open()
+使用“0”个参数调用“Open”时发生异常:“对端口“COM6”的访问被拒绝。”
+所在位置 行:1 字符: 1
++ $port.Open()
++ ~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [], MethodInvocationException
+    + FullyQualifiedErrorId : UnauthorizedAccessException
+
+PS C:\Users\p_BalongAVS>  $port = New-Object System.IO.Ports.SerialPort COM6,9600,None,8,1
+PS C:\Users\p_BalongAVS> $port.Open()
+使用“0”个参数调用“Open”时发生异常:“对端口“COM6”的访问被拒绝。”
+所在位置 行:1 字符: 1
++ $port.Open()
++ ~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [], MethodInvocationException
+    + FullyQualifiedErrorId : UnauthorizedAccessException
+
+
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc shell
+# ls /dev/tty*
+/dev/tty   /dev/ttyHW0  /dev/ttyHW5    /dev/ttyHwGS1
+/dev/tty0  /dev/ttyHW4  /dev/ttyHwGS0  /dev/ttyHwGS2
+# echo 'test' >/dev/ttyHW0
+# echo 'test' >/dev/ttyHW0
+# echo 'test' >/dev/ttyHW0
+# echo 'test' >/dev/ttyHW0
+# echo 'test' >/dev/ttyHW0
+# echo 'test' >/dev/ttyHW0
+# echo 'test' >/dev/ttyHW0
+# echo 'test' >/dev/ttyHW0
+# echo 'test' >/dev/ttyHW0
+# echo "hello" > /dev/ttyHW0
+# echo "hello" > /dev/ttyHW0
+# echo "hello" > /dev/ttyHW0
+# echo "hello" > /dev/ttyHW0

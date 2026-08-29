@@ -1,0 +1,56 @@
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device list targets
+0123456789ABCDEF
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell sh -c 'echo shell-ok'
+shell-ok
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell mkfifo --help
+usage: mkfifo [NAME...]
+
+Create FIFOs (named pipes).
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell sha256sum --help
+usage: ???sum [-bcs] [FILE]...
+
+Calculate hash for each input file, reading from stdin if none, writing
+hexadecimal digits to stdout for each input file (md5=32 hex digits,
+sha1=40, sha224=56, sha256=64, sha384=96, sha512=128) followed by filename.
+
+-b      Brief (hash only, no filename)
+-c      Check each line of each FILE is the same hash+filename we'd output
+-s      No output, exit status 0 if all hashes match, 1 otherwise
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell dmesg --help
+usage: dmesg [-Cc] [-r|-t|-T] [-n LEVEL] [-s SIZE] [-w|-W]
+
+Print or control the kernel ring buffer.
+
+-C      Clear ring buffer without printing
+-c      Clear ring buffer after printing
+-n      Set kernel logging LEVEL (1-8)
+-r      Raw output (with <level markers>)
+-S      Use syslog(2) rather than /dev/kmsg
+-s      Show the last SIZE many bytes
+-T      Human readable timestamps
+-t      Don't print timestamps
+-w      Keep waiting for more output (aka --follow)
+-W      Wait for output, only printing new messages
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell taskset --help
+usage: taskset [-ap] [mask] [PID | cmd [args...]]
+
+Launch a new task which may only run on certain processors, or change
+the processor affinity of an existing PID.
+
+Mask is a hex string where each bit represents a processor the process
+is allowed to run on. PID without a mask displays existing affinity.
+
+-p      Set/get the affinity of given PID instead of a new command
+-a      Set/get the affinity of all threads of the PID
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $LASTEXITCODE
+0
+
+PS C:\Users\p_BalongAVS> hdc shell
+# ls /data/local/tmp
+avs               gpu_case_judge_arm64    judge_logs   wl.json
+debugserver       gpu_case_logs           kingkongDir  workload_output.jsonl
+gpu-avs-workload  gpu_case_rules_v2.conf  shaders
+# ls /data/local/tmp/avs
+bin  configs  shaders
+# ls /data/local/tmp/avs/bin
+avs-device-agent  cpu-avs-workload  gpu-avs-workload

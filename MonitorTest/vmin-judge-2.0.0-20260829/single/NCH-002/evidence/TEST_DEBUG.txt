@@ -1,0 +1,189 @@
+PS D:\h60106817\release> $Exe = 'D:\h60106817\release\vmin_judge.exe'
+PS D:\h60106817\release> $PackageId = 'vmin-judge-2.0.0-20260829'
+PS D:\h60106817\release> $Device = '0123456789ABCDEF'
+PS D:\h60106817\release> $BoardId = 'NCH-002'
+PS D:\h60106817\release> $Framework = 'single'
+PS D:\h60106817\release> $PcSerial = 'COM8'
+PS D:\h60106817\release> $DeviceUart = '/dev/ttyHW0'
+PS D:\h60106817\release> $Out = "D:\MonitorTest\$PackageId\$Framework\$BoardId\output"
+PS D:\h60106817\release> $State = "D:\MonitorTest\$PackageId\$Framework\$BoardId\state"
+PS D:\h60106817\release> $Evidence = "D:\MonitorTest\$PackageId\$Framework\$BoardId\evidence"
+PS D:\h60106817\release> New-Item -ItemType Directory -Force -Path $Out, $State, $Evidence | Out-Null
+PS D:\h60106817\release> Push-Location $env:TEMP
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --version *> "$Evidence\REL-03-version.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $LASTEXITCODE
+0
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --help *> "$Evidence\REL-03-help.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $LASTEXITCODE
+0
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --output-dir $Out --state-dir $State --json validate --all --package --offline `
+>>   *> "$Evidence\REL-03-validate.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp>  $LASTEXITCODE
+0
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --output-dir $Out --state-dir $State --json list-profiles `
+>>   *> "$Evidence\REL-03-profiles.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $LASTEXITCODE
+0
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Pop-Location
+PS D:\h60106817\release> Push-Location $env:TEMP
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --config-dir D:\approved-config `
+>>   --output-dir $Out --state-dir $State --json validate --all --package --offline
+{
+  "checked": [
+    "profile:cpu_mixed_big4",
+    "platform:kirin9020",
+    "workload-config:cpu_mixed_big4",
+    "workload-binary:cpu_mixed_big4",
+    "profile:gpu_vulkan_mixed",
+    "platform:kirin9020",
+    "workload-config:gpu_vulkan_mixed",
+    "workload-binary:gpu_vulkan_mixed",
+    "workload-asset:gpu_vulkan_mixed:shaders/vulkan/fullscreen.vert.spv",
+    "workload-asset:gpu_vulkan_mixed:shaders/vulkan/workload.frag.spv",
+    "resource:device/avs_device_agent.sh",
+    "resource:config/kernel/critical.conf"
+  ],
+  "errors": [],
+  "offline": true,
+  "valid": true
+}
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --output-dir $Out --state-dir $State --json simulate --events does-not-exist.jsonl `
+>>   *> "$Evidence\REL-05-invalid-config.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $LASTEXITCODE
+4
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device list targets
+0123456789ABCDEF
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell sh -c 'echo shell-ok'
+shell-ok
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell mkfifo --help
+usage: mkfifo [NAME...]
+
+Create FIFOs (named pipes).
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell sha256sum --help
+usage: ???sum [-bcs] [FILE]...
+
+Calculate hash for each input file, reading from stdin if none, writing
+hexadecimal digits to stdout for each input file (md5=32 hex digits,
+sha1=40, sha224=56, sha256=64, sha384=96, sha512=128) followed by filename.
+
+-b      Brief (hash only, no filename)
+-c      Check each line of each FILE is the same hash+filename we'd output
+-s      No output, exit status 0 if all hashes match, 1 otherwise
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell dmesg --help
+usage: dmesg [-Cc] [-r|-t|-T] [-n LEVEL] [-s SIZE] [-w|-W]
+
+Print or control the kernel ring buffer.
+
+-C      Clear ring buffer without printing
+-c      Clear ring buffer after printing
+-n      Set kernel logging LEVEL (1-8)
+-r      Raw output (with <level markers>)
+-S      Use syslog(2) rather than /dev/kmsg
+-s      Show the last SIZE many bytes
+-T      Human readable timestamps
+-t      Don't print timestamps
+-w      Keep waiting for more output (aka --follow)
+-W      Wait for output, only printing new messages
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell taskset --help
+usage: taskset [-ap] [mask] [PID | cmd [args...]]
+
+Launch a new task which may only run on certain processors, or change
+the processor affinity of an existing PID.
+
+Mask is a hex string where each bit represents a processor the process
+is allowed to run on. PID without a mask displays existing affinity.
+
+-p      Set/get the affinity of given PID instead of a new command
+-a      Set/get the affinity of all threads of the PID
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $LASTEXITCODE
+0
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --transport hdc --device $Device --output-dir $Out --state-dir $State --json `
+>>   probe --platform kirin9020 --full --refresh `
+>>   *> "$Evidence\DEV-02-probe.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp>
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $LASTEXITCODE
+5
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Copy-Item "$Out\probes\$Device\capabilities.json" `
+>>   "$Evidence\DEV-02-capabilities-$Framework.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --device $Device --state-dir $State pair --channel hdc --device-port $DeviceUart `
+>>   --pc-port $PcSerial --baudrate 9600 --timeout 5 --verify `
+>>   *> "$Evidence\DEV-03-pair.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $LASTEXITCODE
+1
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --pc-serial $PcSerial --baudrate 9600 --output-dir $Out --state-dir $State `
+>>   monitor --save-raw --timeout 60
+error: no usable framed event received
+exit_code: 3
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $PcSerial = 'COM6'
+PS C:\Users\p_BalongAVS\AppData\Local\Temp>
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $PcSerial
+COM6
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --device $Device --state-dir $State pair --channel hdc --device-port $DeviceUart `
+>>   --pc-port $PcSerial --baudrate 9600 --timeout 5 --verify `
+>>   *> "$Evidence\DEV-03-pair_2.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc shell
+# ls /dev/tty*
+/dev/tty   /dev/ttyHW0  /dev/ttyHW5    /dev/ttyHwGS1
+/dev/tty0  /dev/ttyHW4  /dev/ttyHwGS0  /dev/ttyHwGS2
+# echo 'test' >/dev/ttyHW0
+# echo 'test' >/dev/ttyHW0
+# echo 'test' >/dev/ttyHW0
+# echo 'test' >/dev/ttyHW0
+# echo 'test' >/dev/ttyHW0
+# echo 'test' >/dev/ttyHW0
+# echo 'test' >/dev/ttyHW0
+# echo 'test' >/dev/ttyHW0
+# echo 'test' >/dev/ttyHW0
+# echo "hello" > /dev/ttyHW0
+# echo "hello" > /dev/ttyHW0
+# echo "hello" > /dev/ttyHW0
+# echo "hello" > /dev/ttyHW0
+# exit
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --transport hdc --device $Device --output-dir $Out --state-dir $State --json `
+>>   deploy --target all --verify-hashes *> "$Evidence\DEV-04-deploy-first.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Copy-Item "$Out\deployment-manifest.json" "$Evidence\DEV-04-manifest-first.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --transport hdc --device $Device --output-dir $Out --state-dir $State --json `
+>>   deploy --target all --verify-hashes *> "$Evidence\DEV-04-deploy-second.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Copy-Item "$Out\deployment-manifest.json" "$Evidence\DEV-04-manifest-second.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell /data/local/tmp/avs/bin/avs-device-agent --version `
+>>   *> "$Evidence\DEV-04-agent-version.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --transport hdc --device $Device --pc-serial $PcSerial `
+>>   --output-dir $Out --state-dir $State --json `
+>>   golden cpu --profile cpu_mixed_big4 --runs 10 --known-good --board-id $BoardId `
+>>   *> "$Evidence\QUAL-01-cpu-golden.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $LASTEXITCODE
+5
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --transport hdc --device $Device --pc-serial $PcSerial `
+>>   --output-dir $Out --state-dir $State --json `
+>>   golden gpu --profile gpu_vulkan_mixed --runs 10 --known-good --board-id $BoardId `
+>>   --readback-name gpu-golden.rgba *> "$Evidence\QUAL-02-gpu-golden.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $LASTEXITCODE
+5
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, OSArchitecture | Format-List *> "$Evidence\DEBUG-pc-os.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $PSVersionTable.PSVersion | Out-File "$Evidence\DEBUG-powershell-version.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Get-FileHash $Exe -Algorithm SHA256 | Format-List *> "$Evidence\DEBUG-exe-hash.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Get-Item $Exe | Select-Object Name, Length | Format-List | Out-File "$Evidence\DEBUG-exe-info.txt" -Append
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Get-WmiObject Win32_PnPSignedDriver | Where-Object { $_.DeviceClass -eq 'PORTS' } | Format-List *> "$Evidence\DEBUG-pc-com-ports.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell cat /etc/system/build.prop *> "$Evidence\DEBUG-device-build-prop.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell uname -a *> "$Evidence\DEBUG-device-kernel.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell which python3 *> "$Evidence\DEBUG-device-python3-missing.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell which python *> "$Evidence\DEBUG-device-python-missing.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell ls -l /dev/ttyHW0 *> "$Evidence\DEBUG-device-uart-nodes.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell stty -a -F /dev/ttyHW0 *> "$Evidence\DEBUG-device-uart-stty.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell sh -c 'echo "UART_RAW_TEST_123" > /dev/ttyHW0'
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $port = New-Object System.IO.Ports.SerialPort COM6,9600,None,8,1
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $port.Open()
+使用“0”个参数调用“Open”时发生异常:“对端口“COM6”的访问被拒绝。”
+所在位置 行:1 字符: 1
++ $port.Open()
++ ~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [], MethodInvocationException
+    + FullyQualifiedErrorId : UnauthorizedAccessException
+
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $port.Open()
+使用“0”个参数调用“Open”时发生异常:“对端口“COM6”的访问被拒绝。”
+所在位置 行:1 字符: 1
++ $port.Open()
++ ~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [], MethodInvocationException
+    + FullyQualifiedErrorId : UnauthorizedAccessException
