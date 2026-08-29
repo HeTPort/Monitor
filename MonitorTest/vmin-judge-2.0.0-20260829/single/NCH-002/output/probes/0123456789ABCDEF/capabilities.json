@@ -1,0 +1,899 @@
+{
+  "capabilities": {
+    "cpu.frequency": {
+      "available": true,
+      "candidate_paths": [
+        "/sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq",
+        "/sys/devices/system/cpu/cpufreq/policy*/scaling_cur_freq"
+      ],
+      "derivation": null,
+      "name": "cpu.frequency",
+      "paths": [
+        "/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq",
+        "/sys/devices/system/cpu/cpufreq/policy1/scaling_cur_freq",
+        "/sys/devices/system/cpu/cpufreq/policy2/scaling_cur_freq",
+        "/sys/devices/system/cpu/cpufreq/policy3/scaling_cur_freq"
+      ],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": true,
+      "required": true,
+      "unit": "kHz",
+      "unreadable_paths": [],
+      "values": {
+        "/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq": 418000,
+        "/sys/devices/system/cpu/cpufreq/policy1/scaling_cur_freq": 740000,
+        "/sys/devices/system/cpu/cpufreq/policy2/scaling_cur_freq": 1200000,
+        "/sys/devices/system/cpu/cpufreq/policy3/scaling_cur_freq": 1200000
+      }
+    },
+    "cpu.governor": {
+      "available": true,
+      "candidate_paths": [
+        "/sys/devices/system/cpu/cpu*/cpufreq/scaling_governor",
+        "/sys/devices/system/cpu/cpufreq/policy*/scaling_governor"
+      ],
+      "derivation": null,
+      "name": "cpu.governor",
+      "paths": [
+        "/sys/devices/system/cpu/cpufreq/policy0/scaling_governor",
+        "/sys/devices/system/cpu/cpufreq/policy1/scaling_governor",
+        "/sys/devices/system/cpu/cpufreq/policy2/scaling_governor",
+        "/sys/devices/system/cpu/cpufreq/policy3/scaling_governor"
+      ],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": true,
+      "required": true,
+      "unit": null,
+      "unreadable_paths": [],
+      "values": {
+        "/sys/devices/system/cpu/cpufreq/policy0/scaling_governor": "misc",
+        "/sys/devices/system/cpu/cpufreq/policy1/scaling_governor": "misc",
+        "/sys/devices/system/cpu/cpufreq/policy2/scaling_governor": "misc",
+        "/sys/devices/system/cpu/cpufreq/policy3/scaling_governor": "misc"
+      }
+    },
+    "cpu.idle_residency": {
+      "available": true,
+      "candidate_paths": [
+        "/sys/devices/system/cpu/cpu*/cpuidle/state*/time"
+      ],
+      "derivation": null,
+      "name": "cpu.idle_residency",
+      "paths": [
+        "/sys/devices/system/cpu/cpu0/cpuidle/state0/time",
+        "/sys/devices/system/cpu/cpu0/cpuidle/state1/time",
+        "/sys/devices/system/cpu/cpu0/cpuidle/state2/time",
+        "/sys/devices/system/cpu/cpu1/cpuidle/state0/time",
+        "/sys/devices/system/cpu/cpu1/cpuidle/state1/time",
+        "/sys/devices/system/cpu/cpu1/cpuidle/state2/time",
+        "/sys/devices/system/cpu/cpu10/cpuidle/state0/time",
+        "/sys/devices/system/cpu/cpu10/cpuidle/state1/time",
+        "/sys/devices/system/cpu/cpu10/cpuidle/state2/time",
+        "/sys/devices/system/cpu/cpu11/cpuidle/state0/time",
+        "/sys/devices/system/cpu/cpu11/cpuidle/state1/time",
+        "/sys/devices/system/cpu/cpu11/cpuidle/state2/time",
+        "/sys/devices/system/cpu/cpu12/cpuidle/state0/time",
+        "/sys/devices/system/cpu/cpu12/cpuidle/state1/time",
+        "/sys/devices/system/cpu/cpu12/cpuidle/state2/time",
+        "/sys/devices/system/cpu/cpu13/cpuidle/state0/time",
+        "/sys/devices/system/cpu/cpu13/cpuidle/state1/time",
+        "/sys/devices/system/cpu/cpu13/cpuidle/state2/time",
+        "/sys/devices/system/cpu/cpu2/cpuidle/state0/time",
+        "/sys/devices/system/cpu/cpu2/cpuidle/state1/time",
+        "/sys/devices/system/cpu/cpu2/cpuidle/state2/time",
+        "/sys/devices/system/cpu/cpu3/cpuidle/state0/time",
+        "/sys/devices/system/cpu/cpu3/cpuidle/state1/time",
+        "/sys/devices/system/cpu/cpu3/cpuidle/state2/time",
+        "/sys/devices/system/cpu/cpu4/cpuidle/state0/time",
+        "/sys/devices/system/cpu/cpu4/cpuidle/state1/time",
+        "/sys/devices/system/cpu/cpu4/cpuidle/state2/time",
+        "/sys/devices/system/cpu/cpu5/cpuidle/state0/time",
+        "/sys/devices/system/cpu/cpu5/cpuidle/state1/time",
+        "/sys/devices/system/cpu/cpu5/cpuidle/state2/time",
+        "/sys/devices/system/cpu/cpu6/cpuidle/state0/time",
+        "/sys/devices/system/cpu/cpu6/cpuidle/state1/time",
+        "/sys/devices/system/cpu/cpu6/cpuidle/state2/time",
+        "/sys/devices/system/cpu/cpu7/cpuidle/state0/time",
+        "/sys/devices/system/cpu/cpu7/cpuidle/state1/time",
+        "/sys/devices/system/cpu/cpu7/cpuidle/state2/time",
+        "/sys/devices/system/cpu/cpu8/cpuidle/state0/time",
+        "/sys/devices/system/cpu/cpu8/cpuidle/state1/time",
+        "/sys/devices/system/cpu/cpu8/cpuidle/state2/time",
+        "/sys/devices/system/cpu/cpu9/cpuidle/state0/time",
+        "/sys/devices/system/cpu/cpu9/cpuidle/state1/time",
+        "/sys/devices/system/cpu/cpu9/cpuidle/state2/time"
+      ],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": true,
+      "required": false,
+      "unit": "us",
+      "unreadable_paths": [],
+      "values": {
+        "/sys/devices/system/cpu/cpu0/cpuidle/state0/time": 172177513309,
+        "/sys/devices/system/cpu/cpu0/cpuidle/state1/time": 0,
+        "/sys/devices/system/cpu/cpu0/cpuidle/state2/time": 594905366766,
+        "/sys/devices/system/cpu/cpu1/cpuidle/state0/time": 180543998737,
+        "/sys/devices/system/cpu/cpu1/cpuidle/state1/time": 0,
+        "/sys/devices/system/cpu/cpu1/cpuidle/state2/time": 578167322654,
+        "/sys/devices/system/cpu/cpu10/cpuidle/state0/time": 197734485,
+        "/sys/devices/system/cpu/cpu10/cpuidle/state1/time": 40296007,
+        "/sys/devices/system/cpu/cpu10/cpuidle/state2/time": 956242577886,
+        "/sys/devices/system/cpu/cpu11/cpuidle/state0/time": 162203128,
+        "/sys/devices/system/cpu/cpu11/cpuidle/state1/time": 29860957,
+        "/sys/devices/system/cpu/cpu11/cpuidle/state2/time": 956432760026,
+        "/sys/devices/system/cpu/cpu12/cpuidle/state0/time": 36844878,
+        "/sys/devices/system/cpu/cpu12/cpuidle/state1/time": 0,
+        "/sys/devices/system/cpu/cpu12/cpuidle/state2/time": 955540304706,
+        "/sys/devices/system/cpu/cpu13/cpuidle/state0/time": 7706677,
+        "/sys/devices/system/cpu/cpu13/cpuidle/state1/time": 0,
+        "/sys/devices/system/cpu/cpu13/cpuidle/state2/time": 956929468088,
+        "/sys/devices/system/cpu/cpu2/cpuidle/state0/time": 10728188650,
+        "/sys/devices/system/cpu/cpu2/cpuidle/state1/time": 12894771501,
+        "/sys/devices/system/cpu/cpu2/cpuidle/state2/time": 873239283692,
+        "/sys/devices/system/cpu/cpu3/cpuidle/state0/time": 13544907736,
+        "/sys/devices/system/cpu/cpu3/cpuidle/state1/time": 4040365252,
+        "/sys/devices/system/cpu/cpu3/cpuidle/state2/time": 917105427321,
+        "/sys/devices/system/cpu/cpu4/cpuidle/state0/time": 12487004989,
+        "/sys/devices/system/cpu/cpu4/cpuidle/state1/time": 3906193871,
+        "/sys/devices/system/cpu/cpu4/cpuidle/state2/time": 923329335106,
+        "/sys/devices/system/cpu/cpu5/cpuidle/state0/time": 11063768740,
+        "/sys/devices/system/cpu/cpu5/cpuidle/state1/time": 3478003840,
+        "/sys/devices/system/cpu/cpu5/cpuidle/state2/time": 928177226616,
+        "/sys/devices/system/cpu/cpu6/cpuidle/state0/time": 8939337547,
+        "/sys/devices/system/cpu/cpu6/cpuidle/state1/time": 3552136716,
+        "/sys/devices/system/cpu/cpu6/cpuidle/state2/time": 936381593522,
+        "/sys/devices/system/cpu/cpu7/cpuidle/state0/time": 7731685293,
+        "/sys/devices/system/cpu/cpu7/cpuidle/state1/time": 3114428340,
+        "/sys/devices/system/cpu/cpu7/cpuidle/state2/time": 938876071725,
+        "/sys/devices/system/cpu/cpu8/cpuidle/state0/time": 7708073633,
+        "/sys/devices/system/cpu/cpu8/cpuidle/state1/time": 2893729389,
+        "/sys/devices/system/cpu/cpu8/cpuidle/state2/time": 939932730074,
+        "/sys/devices/system/cpu/cpu9/cpuidle/state0/time": 7225314331,
+        "/sys/devices/system/cpu/cpu9/cpuidle/state1/time": 2788246237,
+        "/sys/devices/system/cpu/cpu9/cpuidle/state2/time": 940589937004
+      }
+    },
+    "cpu.maximum_frequency": {
+      "available": true,
+      "candidate_paths": [
+        "/sys/devices/system/cpu/cpu*/cpufreq/scaling_max_freq",
+        "/sys/devices/system/cpu/cpufreq/policy*/scaling_max_freq"
+      ],
+      "derivation": null,
+      "name": "cpu.maximum_frequency",
+      "paths": [
+        "/sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq",
+        "/sys/devices/system/cpu/cpufreq/policy1/scaling_max_freq",
+        "/sys/devices/system/cpu/cpufreq/policy2/scaling_max_freq",
+        "/sys/devices/system/cpu/cpufreq/policy3/scaling_max_freq"
+      ],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": true,
+      "required": true,
+      "unit": "kHz",
+      "unreadable_paths": [],
+      "values": {
+        "/sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq": 1550000,
+        "/sys/devices/system/cpu/cpufreq/policy1/scaling_max_freq": 2050000,
+        "/sys/devices/system/cpu/cpufreq/policy2/scaling_max_freq": 2094000,
+        "/sys/devices/system/cpu/cpufreq/policy3/scaling_max_freq": 2508000
+      }
+    },
+    "cpu.minimum_frequency": {
+      "available": true,
+      "candidate_paths": [
+        "/sys/devices/system/cpu/cpu*/cpufreq/scaling_min_freq",
+        "/sys/devices/system/cpu/cpufreq/policy*/scaling_min_freq"
+      ],
+      "derivation": null,
+      "name": "cpu.minimum_frequency",
+      "paths": [
+        "/sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq",
+        "/sys/devices/system/cpu/cpufreq/policy1/scaling_min_freq",
+        "/sys/devices/system/cpu/cpufreq/policy2/scaling_min_freq",
+        "/sys/devices/system/cpu/cpufreq/policy3/scaling_min_freq"
+      ],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": true,
+      "required": true,
+      "unit": "kHz",
+      "unreadable_paths": [],
+      "values": {
+        "/sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq": 418000,
+        "/sys/devices/system/cpu/cpufreq/policy1/scaling_min_freq": 418000,
+        "/sys/devices/system/cpu/cpufreq/policy2/scaling_min_freq": 1200000,
+        "/sys/devices/system/cpu/cpufreq/policy3/scaling_min_freq": 1200000
+      }
+    },
+    "cpu.online": {
+      "available": true,
+      "candidate_paths": [
+        "/sys/devices/system/cpu/cpu*/online"
+      ],
+      "derivation": null,
+      "name": "cpu.online",
+      "paths": [
+        "/sys/devices/system/cpu/cpu0/online",
+        "/sys/devices/system/cpu/cpu1/online",
+        "/sys/devices/system/cpu/cpu10/online",
+        "/sys/devices/system/cpu/cpu11/online",
+        "/sys/devices/system/cpu/cpu12/online",
+        "/sys/devices/system/cpu/cpu13/online",
+        "/sys/devices/system/cpu/cpu2/online",
+        "/sys/devices/system/cpu/cpu3/online",
+        "/sys/devices/system/cpu/cpu4/online",
+        "/sys/devices/system/cpu/cpu5/online",
+        "/sys/devices/system/cpu/cpu6/online",
+        "/sys/devices/system/cpu/cpu7/online",
+        "/sys/devices/system/cpu/cpu8/online",
+        "/sys/devices/system/cpu/cpu9/online"
+      ],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": true,
+      "required": true,
+      "unit": null,
+      "unreadable_paths": [],
+      "values": {
+        "/sys/devices/system/cpu/cpu0/online": "1",
+        "/sys/devices/system/cpu/cpu1/online": "1",
+        "/sys/devices/system/cpu/cpu10/online": "1",
+        "/sys/devices/system/cpu/cpu11/online": "1",
+        "/sys/devices/system/cpu/cpu12/online": "1",
+        "/sys/devices/system/cpu/cpu13/online": "1",
+        "/sys/devices/system/cpu/cpu2/online": "1",
+        "/sys/devices/system/cpu/cpu3/online": "1",
+        "/sys/devices/system/cpu/cpu4/online": "1",
+        "/sys/devices/system/cpu/cpu5/online": "1",
+        "/sys/devices/system/cpu/cpu6/online": "1",
+        "/sys/devices/system/cpu/cpu7/online": "1",
+        "/sys/devices/system/cpu/cpu8/online": "1",
+        "/sys/devices/system/cpu/cpu9/online": "1"
+      }
+    },
+    "cpu.temperature": {
+      "available": true,
+      "name": "cpu.temperature",
+      "paths": [
+        "/sys/class/thermal/thermal_zone0/temp",
+        "/sys/class/thermal/thermal_zone2/temp",
+        "/sys/class/thermal/thermal_zone3/temp",
+        "/sys/class/thermal/thermal_zone4/temp",
+        "/sys/class/thermal/thermal_zone5/temp"
+      ],
+      "provenance": "thermal-zone-type-probe",
+      "readable": true,
+      "required": true,
+      "unit": "celsius",
+      "values": {
+        "/sys/class/thermal/thermal_zone0/temp": 31.074,
+        "/sys/class/thermal/thermal_zone2/temp": 0.03,
+        "/sys/class/thermal/thermal_zone3/temp": 0.03,
+        "/sys/class/thermal/thermal_zone4/temp": 0.03,
+        "/sys/class/thermal/thermal_zone5/temp": 0.03
+      }
+    },
+    "cpu.throttle": {
+      "available": false,
+      "candidate_paths": [
+        "/sys/devices/system/cpu/cpu*/thermal_throttle/core_throttle_count",
+        "/sys/devices/system/cpu/cpu*/thermal_throttle/package_throttle_count"
+      ],
+      "derivation": null,
+      "name": "cpu.throttle",
+      "paths": [],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": false,
+      "required": false,
+      "unit": "count",
+      "unreadable_paths": [],
+      "values": {}
+    },
+    "cpu.utilization": {
+      "available": true,
+      "candidate_paths": [
+        "/proc/stat"
+      ],
+      "derivation": "delta_busy_over_delta_total",
+      "name": "cpu.utilization",
+      "paths": [
+        "/proc/stat"
+      ],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": true,
+      "required": true,
+      "unit": "percent",
+      "unreadable_paths": [],
+      "values": {
+        "/proc/stat": "cpu  16216714 23834 31595141 1290287611 162519 1532946 0 0 0 0\ncpu0 6165266 5572 11758787 77007396 54980 709344 0 0 0 0\ncpu1 6886027 7466 12573045 76102607 59848 72350 0 0 0 0\ncpu2 435013 897 2316624 92211170 2905 734734 0 0 0 0\ncpu3 680517 2497 1355942 93652729 6255 3403 0 0 0 0\ncpu4 546497 1919 1028442 94116561 5107 2817 0 0 0 0\ncpu5 459574 1488 841706 94389685 6449 2440 0 0 0 0\ncpu6 287303 1352 445647 94956645 8657 1740 0 0 0 0\ncpu7 260835 999 397645 95034368 5977 1519 0 0 0 0\ncpu8 230575 870 348946 95114444 4496 2012 0 0 0 0\ncpu9 233188 757 347821 95112268 5646 1663 0 0 0 0\ncpu10 12079 15 28527 95658371 1949 402 0 0 0 0\ncpu11 9243 7 20993 95670557 169 375 0 0 0 0\ncpu12 9509 1 128618 95563051 79 86 0 0 0 0\ncpu13 1094 1 2404 95697767 10 66 0 0 0 0\nintr 1272181620\nctxt 28254139810\nbtime 0\nprocesses 239413\nprocs_running 1\nprocs_blocked 156\nsoftirq 0 0 0 0 0 0 0 0 0 0 0"
+      }
+    },
+    "cpu.voltage": {
+      "available": true,
+      "candidate_paths": [
+        "/sys/kernel/debug/lpmcu_debug/cluster_volt"
+      ],
+      "derivation": null,
+      "name": "cpu.voltage",
+      "paths": [
+        "/sys/kernel/debug/lpmcu_debug/cluster_volt"
+      ],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": true,
+      "required": false,
+      "unit": "platform_text",
+      "unreadable_paths": [],
+      "values": {
+        "/sys/kernel/debug/lpmcu_debug/cluster_volt": ""
+      }
+    },
+    "device.dmesg": {
+      "available": true,
+      "provenance": "runtime-command",
+      "required": false,
+      "version": "usage: dmesg [-Cc] [-r|-t|-T] [-n LEVEL] [-s SIZE] [-w|-W]"
+    },
+    "device.sha256sum": {
+      "available": true,
+      "provenance": "runtime-command",
+      "required": true,
+      "version": "usage: ???sum [-bcs] [FILE]..."
+    },
+    "device.shell": {
+      "available": true,
+      "provenance": "runtime-command",
+      "required": true,
+      "version": null
+    },
+    "device.taskset": {
+      "available": true,
+      "provenance": "runtime-command",
+      "required": false,
+      "version": "usage: taskset [-ap] [mask] [PID | cmd [args...]]"
+    },
+    "gpu.frequency": {
+      "available": true,
+      "candidate_paths": [
+        "/sys/class/devfreq/gpufreq/cur_freq",
+        "/sys/devices/platform/gpufreq/devfreq/gpufreq/cur_freq",
+        "/sys/kernel/debug/hvgr0/freq"
+      ],
+      "derivation": null,
+      "name": "gpu.frequency",
+      "paths": [
+        "/sys/class/devfreq/gpufreq/cur_freq",
+        "/sys/devices/platform/gpufreq/devfreq/gpufreq/cur_freq"
+      ],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": true,
+      "required": true,
+      "unit": "Hz",
+      "unreadable_paths": [],
+      "values": {
+        "/sys/class/devfreq/gpufreq/cur_freq": 750000000,
+        "/sys/devices/platform/gpufreq/devfreq/gpufreq/cur_freq": 750000000
+      }
+    },
+    "gpu.governor": {
+      "available": true,
+      "candidate_paths": [
+        "/sys/class/devfreq/gpufreq/governor",
+        "/sys/devices/platform/gpufreq/devfreq/gpufreq/governor"
+      ],
+      "derivation": null,
+      "name": "gpu.governor",
+      "paths": [
+        "/sys/class/devfreq/gpufreq/governor",
+        "/sys/devices/platform/gpufreq/devfreq/gpufreq/governor"
+      ],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": true,
+      "required": true,
+      "unit": null,
+      "unreadable_paths": [],
+      "values": {
+        "/sys/class/devfreq/gpufreq/governor": "gpu_scene_aware",
+        "/sys/devices/platform/gpufreq/devfreq/gpufreq/governor": "gpu_scene_aware"
+      }
+    },
+    "gpu.hang_count": {
+      "available": false,
+      "candidate_paths": [
+        "/sys/module/hvgr_kmd_v350/parameters/gpu_hang_count"
+      ],
+      "derivation": null,
+      "name": "gpu.hang_count",
+      "paths": [],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": false,
+      "required": true,
+      "unit": "count",
+      "unreadable_paths": [],
+      "values": {}
+    },
+    "gpu.maximum_frequency": {
+      "available": true,
+      "candidate_paths": [
+        "/sys/class/devfreq/gpufreq/max_freq",
+        "/sys/devices/platform/gpufreq/devfreq/gpufreq/max_freq"
+      ],
+      "derivation": null,
+      "name": "gpu.maximum_frequency",
+      "paths": [
+        "/sys/class/devfreq/gpufreq/max_freq",
+        "/sys/devices/platform/gpufreq/devfreq/gpufreq/max_freq"
+      ],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": true,
+      "required": true,
+      "unit": "Hz",
+      "unreadable_paths": [],
+      "values": {
+        "/sys/class/devfreq/gpufreq/max_freq": 750000000,
+        "/sys/devices/platform/gpufreq/devfreq/gpufreq/max_freq": 750000000
+      }
+    },
+    "gpu.minimum_frequency": {
+      "available": true,
+      "candidate_paths": [
+        "/sys/class/devfreq/gpufreq/min_freq",
+        "/sys/devices/platform/gpufreq/devfreq/gpufreq/min_freq"
+      ],
+      "derivation": null,
+      "name": "gpu.minimum_frequency",
+      "paths": [
+        "/sys/class/devfreq/gpufreq/min_freq",
+        "/sys/devices/platform/gpufreq/devfreq/gpufreq/min_freq"
+      ],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": true,
+      "required": true,
+      "unit": "Hz",
+      "unreadable_paths": [],
+      "values": {
+        "/sys/class/devfreq/gpufreq/min_freq": 750000000,
+        "/sys/devices/platform/gpufreq/devfreq/gpufreq/min_freq": 750000000
+      }
+    },
+    "gpu.power_policy": {
+      "available": true,
+      "candidate_paths": [
+        "/sys/devices/platform/e2ec0000.hvgr/power_policy"
+      ],
+      "derivation": null,
+      "name": "gpu.power_policy",
+      "paths": [
+        "/sys/devices/platform/e2ec0000.hvgr/power_policy"
+      ],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": true,
+      "required": true,
+      "unit": null,
+      "unreadable_paths": [],
+      "values": {
+        "/sys/devices/platform/e2ec0000.hvgr/power_policy": "[always_on] job_demand"
+      }
+    },
+    "gpu.temperature": {
+      "available": true,
+      "name": "gpu.temperature",
+      "paths": [
+        "/sys/class/thermal/thermal_zone6/temp"
+      ],
+      "provenance": "thermal-zone-type-probe",
+      "readable": true,
+      "required": true,
+      "unit": "celsius",
+      "values": {
+        "/sys/class/thermal/thermal_zone6/temp": 0.03
+      }
+    },
+    "gpu.throttle": {
+      "available": true,
+      "candidate_paths": [
+        "/sys/kernel/debug/hvgr0/pm/gpu_throttle"
+      ],
+      "derivation": null,
+      "name": "gpu.throttle",
+      "paths": [
+        "/sys/kernel/debug/hvgr0/pm/gpu_throttle"
+      ],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": true,
+      "required": false,
+      "unit": "platform_text",
+      "unreadable_paths": [],
+      "values": {
+        "/sys/kernel/debug/hvgr0/pm/gpu_throttle": "Status: enable\nCur thro freq: 0\nPre thro freq: 717000000"
+      }
+    },
+    "gpu.utilization": {
+      "available": true,
+      "candidate_paths": [
+        "/sys/devices/platform/e2ec0000.hvgr/gpu_utilisation"
+      ],
+      "derivation": null,
+      "name": "gpu.utilization",
+      "paths": [
+        "/sys/devices/platform/e2ec0000.hvgr/gpu_utilisation"
+      ],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": true,
+      "required": true,
+      "unit": "percent",
+      "unreadable_paths": [],
+      "values": {
+        "/sys/devices/platform/e2ec0000.hvgr/gpu_utilisation": "Gpu utilisation : 0"
+      }
+    },
+    "gpu.voltage": {
+      "available": true,
+      "candidate_paths": [
+        "/sys/kernel/debug/lpmcu_debug/cluster_volt"
+      ],
+      "derivation": null,
+      "name": "gpu.voltage",
+      "paths": [
+        "/sys/kernel/debug/lpmcu_debug/cluster_volt"
+      ],
+      "provenance": "platform-profile+runtime-probe",
+      "readable": true,
+      "required": false,
+      "unit": "platform_text",
+      "unreadable_paths": [],
+      "values": {
+        "/sys/kernel/debug/lpmcu_debug/cluster_volt": ""
+      }
+    }
+  },
+  "cpu_topology": {
+    "core_count": 14,
+    "cores": [
+      {
+        "cpu": 0,
+        "online": true,
+        "path": "/sys/devices/system/cpu/cpu0"
+      },
+      {
+        "cpu": 1,
+        "online": true,
+        "path": "/sys/devices/system/cpu/cpu1"
+      },
+      {
+        "cpu": 2,
+        "online": true,
+        "path": "/sys/devices/system/cpu/cpu2"
+      },
+      {
+        "cpu": 3,
+        "online": true,
+        "path": "/sys/devices/system/cpu/cpu3"
+      },
+      {
+        "cpu": 4,
+        "online": true,
+        "path": "/sys/devices/system/cpu/cpu4"
+      },
+      {
+        "cpu": 5,
+        "online": true,
+        "path": "/sys/devices/system/cpu/cpu5"
+      },
+      {
+        "cpu": 6,
+        "online": true,
+        "path": "/sys/devices/system/cpu/cpu6"
+      },
+      {
+        "cpu": 7,
+        "online": true,
+        "path": "/sys/devices/system/cpu/cpu7"
+      },
+      {
+        "cpu": 8,
+        "online": true,
+        "path": "/sys/devices/system/cpu/cpu8"
+      },
+      {
+        "cpu": 9,
+        "online": true,
+        "path": "/sys/devices/system/cpu/cpu9"
+      },
+      {
+        "cpu": 10,
+        "online": true,
+        "path": "/sys/devices/system/cpu/cpu10"
+      },
+      {
+        "cpu": 11,
+        "online": true,
+        "path": "/sys/devices/system/cpu/cpu11"
+      },
+      {
+        "cpu": 12,
+        "online": true,
+        "path": "/sys/devices/system/cpu/cpu12"
+      },
+      {
+        "cpu": 13,
+        "online": true,
+        "path": "/sys/devices/system/cpu/cpu13"
+      }
+    ],
+    "source": "/sys/devices/system/cpu/cpu[0-9]*",
+    "source_glob": "/sys/devices/system/cpu/cpu[0-9]*"
+  },
+  "device": {
+    "properties": {},
+    "serial": "0123456789ABCDEF",
+    "state": "device",
+    "transport": "hdc"
+  },
+  "platform": "kirin9020",
+  "platform_fingerprint": "f5769412f9f311f583e901c3c1e038ecf5e8c59dd62c5cbae21c9a873af67e12",
+  "producer": {
+    "component": "PlatformProbe",
+    "name": "vmin_judge"
+  },
+  "required_missing": [
+    "gpu.hang_count"
+  ],
+  "schema_version": 1,
+  "supported": false,
+  "thermal_zones": {
+    "cpu": {
+      "available": true,
+      "name": "cpu.temperature",
+      "paths": [
+        "/sys/class/thermal/thermal_zone0/temp",
+        "/sys/class/thermal/thermal_zone2/temp",
+        "/sys/class/thermal/thermal_zone3/temp",
+        "/sys/class/thermal/thermal_zone4/temp",
+        "/sys/class/thermal/thermal_zone5/temp"
+      ],
+      "provenance": "thermal-zone-type-probe",
+      "readable": true,
+      "required": true,
+      "unit": "celsius",
+      "values": {
+        "/sys/class/thermal/thermal_zone0/temp": 31.074,
+        "/sys/class/thermal/thermal_zone2/temp": 0.03,
+        "/sys/class/thermal/thermal_zone3/temp": 0.03,
+        "/sys/class/thermal/thermal_zone4/temp": 0.03,
+        "/sys/class/thermal/thermal_zone5/temp": 0.03
+      }
+    },
+    "gpu": {
+      "available": true,
+      "name": "gpu.temperature",
+      "paths": [
+        "/sys/class/thermal/thermal_zone6/temp"
+      ],
+      "provenance": "thermal-zone-type-probe",
+      "readable": true,
+      "required": true,
+      "unit": "celsius",
+      "values": {
+        "/sys/class/thermal/thermal_zone6/temp": 0.03
+      }
+    },
+    "source_glob": "/sys/class/thermal/thermal_zone*",
+    "zones": {
+      "cpu": [
+        {
+          "path": "/sys/class/thermal/thermal_zone0/temp",
+          "temperature_c": 31.074,
+          "type": "soc_thermal",
+          "zone": "/sys/class/thermal/thermal_zone0"
+        },
+        {
+          "path": "/sys/class/thermal/thermal_zone2/temp",
+          "temperature_c": 0.03,
+          "type": "cluster0",
+          "zone": "/sys/class/thermal/thermal_zone2"
+        },
+        {
+          "path": "/sys/class/thermal/thermal_zone3/temp",
+          "temperature_c": 0.03,
+          "type": "cluster1",
+          "zone": "/sys/class/thermal/thermal_zone3"
+        },
+        {
+          "path": "/sys/class/thermal/thermal_zone4/temp",
+          "temperature_c": 0.03,
+          "type": "cluster2",
+          "zone": "/sys/class/thermal/thermal_zone4"
+        },
+        {
+          "path": "/sys/class/thermal/thermal_zone5/temp",
+          "temperature_c": 0.03,
+          "type": "cluster3",
+          "zone": "/sys/class/thermal/thermal_zone5"
+        }
+      ],
+      "gpu": [
+        {
+          "path": "/sys/class/thermal/thermal_zone6/temp",
+          "temperature_c": 0.03,
+          "type": "gpu",
+          "zone": "/sys/class/thermal/thermal_zone6"
+        }
+      ],
+      "other": [
+        {
+          "path": "/sys/class/thermal/thermal_zone1/temp",
+          "temperature_c": 28.717,
+          "type": "board_thermal",
+          "zone": "/sys/class/thermal/thermal_zone1"
+        },
+        {
+          "path": "/sys/class/thermal/thermal_zone10/temp",
+          "temperature_c": -0.04,
+          "type": "ddr",
+          "zone": "/sys/class/thermal/thermal_zone10"
+        },
+        {
+          "path": "/sys/class/thermal/thermal_zone11/temp",
+          "temperature_c": 0.028,
+          "type": "isp",
+          "zone": "/sys/class/thermal/thermal_zone11"
+        },
+        {
+          "path": "/sys/class/thermal/thermal_zone12/temp",
+          "temperature_c": 0.03,
+          "type": "hc",
+          "zone": "/sys/class/thermal/thermal_zone12"
+        },
+        {
+          "path": "/sys/class/thermal/thermal_zone13/temp",
+          "temperature_c": 28.7,
+          "type": "system_h",
+          "zone": "/sys/class/thermal/thermal_zone13"
+        },
+        {
+          "path": "/sys/class/thermal/thermal_zone14/temp",
+          "temperature_c": 28.35,
+          "type": "charger",
+          "zone": "/sys/class/thermal/thermal_zone14"
+        },
+        {
+          "path": "/sys/class/thermal/thermal_zone15/temp",
+          "temperature_c": 25.545,
+          "type": "pa_0",
+          "zone": "/sys/class/thermal/thermal_zone15"
+        },
+        {
+          "path": "/sys/class/thermal/thermal_zone16/temp",
+          "temperature_c": 25.227,
+          "type": "pa_1",
+          "zone": "/sys/class/thermal/thermal_zone16"
+        },
+        {
+          "path": "/sys/class/thermal/thermal_zone17/temp",
+          "temperature_c": 27.33,
+          "type": "dcxo0",
+          "zone": "/sys/class/thermal/thermal_zone17"
+        },
+        {
+          "path": "/sys/class/thermal/thermal_zone18/temp",
+          "temperature_c": 27.809,
+          "type": "rfboard",
+          "zone": "/sys/class/thermal/thermal_zone18"
+        },
+        {
+          "path": "/sys/class/thermal/thermal_zone19/temp",
+          "temperature_c": 29.142,
+          "type": "ir",
+          "zone": "/sys/class/thermal/thermal_zone19"
+        },
+        {
+          "path": "/sys/class/thermal/thermal_zone20/temp",
+          "temperature_c": 21.952,
+          "type": "pa_2",
+          "zone": "/sys/class/thermal/thermal_zone20"
+        },
+        {
+          "path": "/sys/class/thermal/thermal_zone21/temp",
+          "temperature_c": 25.0,
+          "type": "shell_frame",
+          "zone": "/sys/class/thermal/thermal_zone21"
+        },
+        {
+          "path": "/sys/class/thermal/thermal_zone22/temp",
+          "temperature_c": 25.0,
+          "type": "shell_front",
+          "zone": "/sys/class/thermal/thermal_zone22"
+        },
+        {
+          "path": "/sys/class/thermal/thermal_zone23/temp",
+          "temperature_c": 25.0,
+          "type": "shell_back",
+          "zone": "/sys/class/thermal/thermal_zone23"
+        },
+        {
+          "path": "/sys/class/thermal/thermal_zone24/temp",
+          "temperature_c": 0.0,
+          "type": "shell_level",
+          "zone": "/sys/class/thermal/thermal_zone24"
+        },
+        {
+          "path": "/sys/class/thermal/thermal_zone25/temp",
+          "temperature_c": 25.0,
+          "type": "shell_pre",
+          "zone": "/sys/class/thermal/thermal_zone25"
+        },
+        {
+          "path": "/sys/class/thermal/thermal_zone26/temp",
+          "temperature_c": 30.0,
+          "type": "npu_thermal",
+          "zone": "/sys/class/thermal/thermal_zone26"
+        },
+        {
+          "error": "/bin/sh: cat: /sys/class/thermal/thermal_zone27/temp: Invalid argument\n",
+          "path": "/sys/class/thermal/thermal_zone27/temp",
+          "type": "margin_thermal",
+          "zone": "/sys/class/thermal/thermal_zone27"
+        },
+        {
+          "path": "/sys/class/thermal/thermal_zone28/temp",
+          "temperature_c": 25.0,
+          "type": "Battery",
+          "zone": "/sys/class/thermal/thermal_zone28"
+        },
+        {
+          "path": "/sys/class/thermal/thermal_zone29/temp",
+          "temperature_c": 25.0,
+          "type": "battery_gauge",
+          "zone": "/sys/class/thermal/thermal_zone29"
+        },
+        {
+          "path": "/sys/class/thermal/thermal_zone30/temp",
+          "temperature_c": 0.0,
+          "type": "bat_raw_temp",
+          "zone": "/sys/class/thermal/thermal_zone30"
+        },
+        {
+          "path": "/sys/class/thermal/thermal_zone31/temp",
+          "temperature_c": 25.0,
+          "type": "bat0_raw_temp",
+          "zone": "/sys/class/thermal/thermal_zone31"
+        },
+        {
+          "path": "/sys/class/thermal/thermal_zone32/temp",
+          "temperature_c": 0.0,
+          "type": "bat1_raw_temp",
+          "zone": "/sys/class/thermal/thermal_zone32"
+        },
+        {
+          "path": "/sys/class/thermal/thermal_zone33/temp",
+          "temperature_c": 0.0,
+          "type": "supply_avg",
+          "zone": "/sys/class/thermal/thermal_zone33"
+        },
+        {
+          "path": "/sys/class/thermal/thermal_zone34/temp",
+          "temperature_c": 0.0,
+          "type": "supply_peak",
+          "zone": "/sys/class/thermal/thermal_zone34"
+        },
+        {
+          "path": "/sys/class/thermal/thermal_zone7/temp",
+          "temperature_c": 0.03,
+          "type": "modem",
+          "zone": "/sys/class/thermal/thermal_zone7"
+        },
+        {
+          "path": "/sys/class/thermal/thermal_zone8/temp",
+          "temperature_c": 0.03,
+          "type": "npu",
+          "zone": "/sys/class/thermal/thermal_zone8"
+        },
+        {
+          "path": "/sys/class/thermal/thermal_zone9/temp",
+          "temperature_c": 0.03,
+          "type": "peri",
+          "zone": "/sys/class/thermal/thermal_zone9"
+        }
+      ]
+    }
+  }
+}
