@@ -40,7 +40,17 @@ class PathResolverTests(unittest.TestCase):
             (self.cwd, "cwd"),
         ):
             (directory / "same.yaml").write_text(value, encoding="utf-8")
-        self.assertEqual(self.resolver.resolve_input("same.yaml").read_text(encoding="utf-8"), "cwd")
+        self.assertEqual(self.resolver.resolve_input("same.yaml").read_text(encoding="utf-8"), "config")
+
+    def test_config_override_accepts_mirrored_or_direct_config_root(self) -> None:
+        direct = self.config / "platforms" / "kirin9020.yaml"
+        direct.parent.mkdir()
+        direct.write_text("direct", encoding="utf-8")
+        bundled = self.bundle / "config" / "platforms" / "kirin9020.yaml"
+        bundled.parent.mkdir(parents=True)
+        bundled.write_text("bundle", encoding="utf-8")
+        resolved = self.resolver.resolve_input("config/platforms/kirin9020.yaml")
+        self.assertEqual(resolved, direct.resolve())
 
     def test_owner_relative_reference_precedes_global_roots(self) -> None:
         owner_dir = self.config / "profiles"

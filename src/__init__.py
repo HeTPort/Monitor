@@ -12,7 +12,7 @@ Testing Strategy:
 - See docs/TESTING_STRATEGY.md for details
 """
 
-__version__ = "2.0.0"
+__version__ = "2.0.1"
 __author__ = "Vmin Judge Tool Development"
 
 from .channel_manager import (
@@ -24,25 +24,6 @@ from .channel_manager import (
     ChannelHealth,
     InvokeResult,
     create_channel_manager
-)
-
-from .serial_monitor import (
-    SerialMonitor,
-    SerialMonitorError,
-    SerialPortNotFoundError,
-    SerialReadError,
-    SerialConfig,
-    MockSerialMonitor,
-    list_available_ports
-)
-
-from .log_parser import (
-    LogParser,
-    ParsedLine,
-    ParseConfig,
-    StreamingLogParser,
-    DMESG_TIMESTAMP_PATTERN,
-    WORKLOAD_PATTERNS
 )
 
 from .serial_port_manager import (
@@ -64,29 +45,6 @@ from .serial_port_manager import (
     create_serial_port_manager
 )
 
-from .workload_profiles import (
-    WorkloadProfile,
-    WorkloadProfileLoader,
-    WorkloadProfileRegistry,
-    get_default_config_path
-)
-
-from .workload_builder import (
-    SerialRedirectCommandBuilder,
-    WorkloadCommandBuilder,
-    WorkloadCommandConfig,
-    create_workload_command_builder
-)
-
-from .test_orchestrator import (
-    TestOrchestratorConfig,
-    TestSession,
-    PrepareResult,
-    ExecutionResult,
-    RunMode,
-    LogChannel,
-    create_test_orchestrator
-)
 from .artifact_store import ArtifactStore
 from .baselines import Baseline, BaselineRegistry
 from .config_loader import PlatformConfig, ProfileConfig
@@ -111,20 +69,6 @@ __all__ = [
     "ChannelHealth",
     "InvokeResult",
     "create_channel_manager",
-    # L2: Ingestion
-    "SerialMonitor",
-    "SerialMonitorError",
-    "SerialPortNotFoundError",
-    "SerialReadError",
-    "SerialConfig",
-    "MockSerialMonitor",
-    "list_available_ports",
-    "LogParser",
-    "ParsedLine",
-    "ParseConfig",
-    "StreamingLogParser",
-    "DMESG_TIMESTAMP_PATTERN",
-    "WORKLOAD_PATTERNS",
     # L1-L2: Serial Port Management
     "PCSerialPort",
     "DeviceSerialPort",
@@ -142,22 +86,6 @@ __all__ = [
     "RealSerialPairingEngine",
     "MockSerialPairingEngine",
     "create_serial_port_manager",
-    # Stage 4: Workload Profiles & Orchestration
-    "WorkloadProfile",
-    "WorkloadProfileLoader",
-    "WorkloadProfileRegistry",
-    "get_default_config_path",
-    "SerialRedirectCommandBuilder",
-    "WorkloadCommandBuilder",
-    "WorkloadCommandConfig",
-    "create_workload_command_builder",
-    "TestOrchestratorConfig",
-    "TestSession",
-    "PrepareResult",
-    "ExecutionResult",
-    "RunMode",
-    "LogChannel",
-    "create_test_orchestrator",
     # V2 target contracts
     "PathResolver",
     "PlatformConfig",

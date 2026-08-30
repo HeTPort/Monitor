@@ -101,6 +101,20 @@ class PlatformProbeTests(unittest.TestCase):
         self.assertIn("gpu.frequency", result["platform_required_missing"])
         self.assertEqual(result["required_scope"]["name"], "profile:cpu-test")
 
+    def test_domain_scoped_probe_does_not_scan_unrelated_target(self) -> None:
+        files = {
+            "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq": "2100000\n",
+            "/sys/devices/system/cpu/cpu0/online": "1\n",
+            "/sys/class/devfreq/gpu/cur_freq": "700000000\n",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            result = PlatformProbe(self.platform(Path(tmp)), MappingProbeBackend(files)).probe(
+                full=True, domains=("cpu",)
+            )
+        self.assertEqual(result["probe_domains"], ["cpu"])
+        self.assertIn("cpu.frequency", result["capabilities"])
+        self.assertNotIn("gpu.frequency", result["capabilities"])
+
     def test_auto_temperature_unit_preserves_raw_and_handles_mixed_scales(self) -> None:
         files = {
             "/sys/class/thermal/thermal_zone0/type": "cpu-soc\n",

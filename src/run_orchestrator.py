@@ -144,7 +144,7 @@ class RunManifestBuilder:
 
         manifest: dict[str, Any] = {
             "schema_version": 1,
-            "producer": {"name": "vmin_judge", "component": "RunManifestBuilder", "version": "2.0.0"},
+            "producer": {"name": "vmin_judge", "component": "RunManifestBuilder", "version": "2.0.1"},
             "run_id": resolved_run_id,
             "profile": {"id": profile.name, "sha256": profile.fingerprint},
             "baseline": {"id": baseline.id, "sha256": baseline.sha256},
@@ -297,7 +297,7 @@ class RunManifestBuilder:
 
     @staticmethod
     def _instance_suffix(path: str) -> str:
-        for pattern in (r"/cpu(\d+)/", r"gpu(?:freq)?(\d+)"):
+        for pattern in (r"/cpufreq/policy(\d+)(?:/|$)", r"/cpu(\d+)/", r"gpu(?:freq)?(\d+)"):
             match = re.search(pattern, path)
             if match:
                 return match.group(1)
@@ -381,40 +381,66 @@ class RunOrchestrator:
         policy = PolicyEngine(self._limits(manifest))
         event_count = 0
         started = clock()
-        last_heartbeat = started
+        last_workload_activity = started
         overall_timeout = float(manifest.get("overall_timeout_s", manifest.get("timeout_s", 300)))
         heartbeat_timeout = float(manifest.get("heartbeat_timeout_s", 45))
         timed_out = False
         final_seen = False
+        agent_started = False
+        workload_completed = False
+        protocol_failed = False
         try:
             for chunk in chunks:
                 now = clock()
-                if now - started > overall_timeout or (event_count > 0 and now - last_heartbeat > heartbeat_timeout):
+                heartbeat_expired = (
+                    agent_started
+                    and not workload_completed
+                    and not protocol_failed
+                    and now - last_workload_activity > heartbeat_timeout
+                )
+                if now - started > overall_timeout or heartbeat_expired:
                     timed_out = True
                     break
                 if not chunk:
                     continue
                 if save_raw:
                     store.append_raw_serial(chunk)
+                if protocol_failed:
+                    continue
                 try:
                     events = decoder.feed(chunk)
                 except EventProtocolError as exc:
                     policy.protocol_failure(exc)
-                    break
+                    protocol_failed = True
+                    continue
                 for event in events:
                     event_count += 1
                     store.append_event(event)
                     policy.process(event)
-                    if event.type in {"agent_start", "start", "heartbeat", "batch", "telemetry"}:
-                        last_heartbeat = now
+                    if event.type == "agent_start":
+                        agent_started = True
+                        last_workload_activity = now
+                    if event.source.endswith("-workload") and event.type in {
+                        "start",
+                        "heartbeat",
+                        "batch",
+                        "verify",
+                        "golden",
+                        "summary",
+                        "error",
+                        "violation",
+                    }:
+                        agent_started = True
+                        last_workload_activity = now
                     if event.type == "summary":
+                        workload_completed = True
                         store.write_json("workload-summary.json", event.payload)
                     if event.type == "agent_final":
                         final_seen = True
                         break
                 if final_seen:
                     break
-            if not timed_out and not final_seen:
+            if not timed_out and not final_seen and not protocol_failed:
                 try:
                     decoder.finish()
                 except EventProtocolError as exc:
@@ -423,7 +449,7 @@ class RunOrchestrator:
             baseline_info = manifest.get("baseline") or {}
             result_document = {
                 "schema_version": 1,
-                "producer": {"name": "vmin_judge", "component": "RunOrchestrator", "version": "2.0.0"},
+                "producer": {"name": "vmin_judge", "component": "RunOrchestrator", "version": "2.0.1"},
                 "run_id": run_id,
                 "profile_id": manifest.get("profile", {}).get("id"),
                 "baseline_id": baseline_info.get("id"),
@@ -453,29 +479,41 @@ class RunOrchestrator:
         except ImportError as exc:
             raise RunError("pyserial is required for a hardware run; install requirements.txt") from exc
         stop = threading.Event()
-
-        def serial_chunks() -> Iterator[bytes]:
-            with serial.Serial(port=pc_serial, baudrate=baudrate, timeout=0.1) as stream:
-                while not stop.is_set():
-                    yield bytes(stream.read(4096))
-
         timeout = float(manifest.get("overall_timeout_s", 300)) + 30.0
-        with ThreadPoolExecutor(max_workers=1, thread_name_prefix="device-agent") as executor:
-            future: Future[CommandResult] = executor.submit(transport.invoke, agent_argv, timeout)
-            try:
-                execution = self.evaluate_stream(
-                    manifest,
-                    serial_chunks(),
-                    capabilities=capabilities,
-                    deployment=deployment,
-                    save_raw=True,
-                )
-            finally:
-                stop.set()
-            try:
-                launch_result = future.result(timeout=10.0)
-            except TimeoutError as exc:
-                raise RunError("device-agent transport command did not finish") from exc
+        with serial.Serial(port=pc_serial, baudrate=baudrate, timeout=0.1) as stream:
+            if hasattr(stream, "reset_input_buffer"):
+                stream.reset_input_buffer()
+            with ThreadPoolExecutor(max_workers=1, thread_name_prefix="device-agent") as executor:
+                future: Future[CommandResult] = executor.submit(transport.invoke, agent_argv, timeout)
+
+                def serial_chunks() -> Iterator[bytes]:
+                    empty_reads_after_agent = 0
+                    while not stop.is_set():
+                        chunk = bytes(stream.read(4096))
+                        if chunk:
+                            empty_reads_after_agent = 0
+                        elif future.done():
+                            empty_reads_after_agent += 1
+                            if empty_reads_after_agent >= 3:
+                                break
+                        yield chunk
+
+                try:
+                    execution = self.evaluate_stream(
+                        manifest,
+                        serial_chunks(),
+                        capabilities=capabilities,
+                        deployment=deployment,
+                        save_raw=True,
+                    )
+                finally:
+                    stop.set()
+                try:
+                    launch_result = future.result(timeout=10.0)
+                except TimeoutError as exc:
+                    raise RunError("device-agent transport command did not finish") from exc
+            if hasattr(stream, "reset_input_buffer"):
+                stream.reset_input_buffer()
             execution.launch_result = launch_result
             expected_exit = execution.result.workload_exit_code
             launch_invalid = (

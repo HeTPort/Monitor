@@ -6,7 +6,6 @@ import csv
 import json
 import re
 import shutil
-import tempfile
 import time
 from argparse import Namespace
 from dataclasses import replace
@@ -35,7 +34,7 @@ from .transport import ADBTransport, HDCTransport, Transport, TransportError, Tr
 from .transport_probe import TransportProbeBackend
 
 
-CLI_VERSION = "2.0.0"
+CLI_VERSION = "2.0.1"
 
 
 class CommandError(RuntimeError):
@@ -63,6 +62,34 @@ def print_command_result(args: Namespace, data: Mapping[str, Any]) -> None:
             print(f"{key}: {json.dumps(value, ensure_ascii=False)}")
         else:
             print(f"{key}: {value}")
+
+
+def _concise_reason(reason: Mapping[str, Any]) -> dict[str, Any]:
+    """Keep CMD failure output actionable without duplicating complete artifacts."""
+    concise: dict[str, Any] = {
+        key: reason[key]
+        for key in ("scope", "code", "message", "seq")
+        if key in reason
+    }
+    evidence = reason.get("evidence")
+    if isinstance(evidence, Mapping):
+        for key in (
+            "phase",
+            "path",
+            "requested",
+            "actual",
+            "required",
+            "metric",
+            "value",
+            "min",
+            "max",
+            "exit_code",
+            "error_code",
+            "line",
+        ):
+            if key in evidence:
+                concise[key] = evidence[key]
+    return concise
 
 
 def command_boundary(handler):
@@ -137,8 +164,17 @@ def _probe(args: Namespace, paths: PathResolver, transport: Transport, profile: 
     identity = transport.connect()
     probe = PlatformProbe(platform, TransportProbeBackend(transport, identity))
     result = probe.probe(
-        full=bool(getattr(args, "full", False) or profile is not None)
+        full=bool(getattr(args, "full", False) or profile is not None),
+        domains=(profile.target,) if profile is not None else None,
     )
+    result["platform_config"] = {
+        "path": str(platform.source_path),
+        "sha256": platform.fingerprint,
+        "external_override": bool(
+            paths.config_dir is not None
+            and (platform.source_path == paths.config_dir or paths.config_dir in platform.source_path.parents)
+        ),
+    }
     required = list(getattr(args, "require", []) or [])
     if profile is not None:
         required.extend(profile.telemetry.get("required", []))
@@ -395,6 +431,26 @@ def _verify_existing_assets(transport: Transport, assets: Iterable[AssetSpec]) -
     }
 
 
+def _cleanup_device_spool_after_pass(
+    paths: PathResolver,
+    transport: Transport,
+    *,
+    run_id: str,
+    spool_dir: str,
+    keep: bool,
+) -> tuple[str, str | None]:
+    if keep:
+        return "retained", None
+    remote_spool = PurePosixPath(spool_dir)
+    expected_spool = paths.remote(PurePosixPath("runs") / run_id / "spool")
+    if remote_spool != expected_spool:
+        return "retained", f"refusing to remove unexpected device spool path: {remote_spool}"
+    removal = transport.invoke(("rm", "-rf", str(remote_spool)), timeout_s=30.0)
+    if not removal.success:
+        return "retained", removal.stderr or removal.stdout or "device spool cleanup failed"
+    return "removed-after-pass", None
+
+
 def _apply_saved_pairing(args: Namespace, paths: PathResolver) -> None:
     pairing_path = paths.resolve_state("pairing.conf")
     if not pairing_path.exists():
@@ -473,13 +529,6 @@ def _execute_live_qualification(
             for record in deployment["assets"]
             if record.get("remote_sha256")
         ]
-        remote_manifest = paths.remote(PurePosixPath("runs") / run_id / "run-manifest.json")
-        with tempfile.TemporaryDirectory() as tmp:
-            local_manifest = Path(tmp) / "run-manifest.json"
-            atomic_write_json(local_manifest, manifest)
-            DeploymentManager(transport).deploy(
-                [AssetSpec(local_manifest, remote_manifest, kind="run-manifest")], verify_hashes=True
-            )
         execution = RunOrchestrator(paths.output_root).run_serial(
             manifest,
             transport=transport,
@@ -804,13 +853,6 @@ def cmd_run(args: Namespace) -> int:
             for record in deployment["assets"]
             if record.get("remote_sha256")
         ]
-        remote_manifest = paths.remote(PurePosixPath("runs") / run_id / "run-manifest.json")
-        with tempfile.TemporaryDirectory() as tmp:
-            local_manifest = Path(tmp) / "run-manifest.json"
-            atomic_write_json(local_manifest, manifest)
-            DeploymentManager(transport).deploy(
-                [AssetSpec(local_manifest, remote_manifest, kind="run-manifest")], verify_hashes=True
-            )
         agent_argv = _shell_agent_argv(agent_remote, manifest, args.baudrate)
         execution = RunOrchestrator(paths.output_root).run_serial(
             manifest,
@@ -822,14 +864,34 @@ def cmd_run(args: Namespace) -> int:
             deployment=deployment,
         )
         final_exit = max(final_exit, execution.result.exit_code)
-        results.append(
-            {
-                "run_id": run_id,
-                "verdict": execution.result.verdict,
-                "exit_code": execution.result.exit_code,
-                "result": str(execution.result_path),
-            }
-        )
+        spool_status = "retained"
+        spool_error = None
+        if execution.result.verdict == "PASS":
+            spool_status, spool_error = _cleanup_device_spool_after_pass(
+                paths,
+                transport,
+                run_id=run_id,
+                spool_dir=str(manifest["spool_dir"]),
+                keep=bool(getattr(args, "keep_device_spool", False)),
+            )
+        run_result: dict[str, Any] = {
+            "run_id": run_id,
+            "verdict": execution.result.verdict,
+            "exit_code": execution.result.exit_code,
+            "result": str(execution.result_path),
+        }
+        if execution.result.verdict != "PASS":
+            run_result["errors"] = [
+                _concise_reason(reason)
+                for reason in [
+                    *execution.result.infrastructure_reasons,
+                    *execution.result.dut_reasons,
+                ]
+            ]
+            run_result["device_spool"] = spool_status
+        if spool_error:
+            run_result["spool_cleanup_error"] = spool_error
+        results.append(run_result)
     print_command_result(args, {"repeat": args.repeat, "exit_code": final_exit, "runs": results})
     return final_exit
 
@@ -1082,20 +1144,32 @@ def cmd_validate_v2(args: Namespace) -> int:
     paths = make_paths(args)
     errors: list[str] = []
     checked: list[str] = []
+    resolved_configs: list[dict[str, Any]] = []
     profile_names: list[str] = []
     validate_all = bool(args.all or args.package or not (args.profile or args.baseline or args.package))
     if args.profile:
         profile_names.append(args.profile)
     elif validate_all:
-        profile_root = paths.resolve_resource("config/profiles", required=False)
+        profile_root = paths.resolve_input("config/profiles", required=False)
         if profile_root.exists():
             profile_names.extend(path.stem for path in sorted(profile_root.glob("*.yaml")))
     for name in profile_names:
         try:
             profile = load_profile(paths, name)
             checked.append(f"profile:{profile.name}")
-            load_platform(paths, profile.platform)
+            resolved_configs.append(
+                {"kind": "profile", "name": profile.name, "path": str(profile.source_path), "sha256": profile.fingerprint}
+            )
+            platform = load_platform(paths, profile.platform)
             checked.append(f"platform:{profile.platform}")
+            platform_record = {
+                "kind": "platform",
+                "name": platform.name,
+                "path": str(platform.source_path),
+                "sha256": platform.fingerprint,
+            }
+            if platform_record not in resolved_configs:
+                resolved_configs.append(platform_record)
             if profile.workload.get("config"):
                 paths.resolve_input(str(profile.workload["config"]), owner=profile.source_path)
                 checked.append(f"workload-config:{profile.name}")
@@ -1124,7 +1198,13 @@ def cmd_validate_v2(args: Namespace) -> int:
                 checked.append(f"resource:{resource}")
             except PathResolutionError as exc:
                 errors.append(str(exc))
-    report = {"valid": not errors, "checked": checked, "errors": errors, "offline": bool(args.offline)}
+    report = {
+        "valid": not errors,
+        "checked": checked,
+        "resolved_configs": resolved_configs,
+        "errors": errors,
+        "offline": bool(args.offline),
+    }
     print_command_result(args, report)
     return 0 if not errors else int(RunExitCode.INVALID_CONFIGURATION)
 
@@ -1132,7 +1212,7 @@ def cmd_validate_v2(args: Namespace) -> int:
 @command_boundary
 def cmd_list_profiles_v2(args: Namespace) -> int:
     paths = make_paths(args)
-    root = paths.resolve_resource("config/profiles")
+    root = paths.resolve_input("config/profiles")
     records: list[dict[str, Any]] = []
     for path in sorted(root.glob("*.yaml")) + sorted(root.glob("*.json")):
         profile = ProfileConfig.from_file(path)

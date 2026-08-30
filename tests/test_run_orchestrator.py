@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 from pathlib import Path, PurePosixPath
 
 from src.baselines import Baseline
@@ -10,6 +12,7 @@ from src.config_loader import ProfileConfig
 from src.events import build_event, encode_event
 from src.path_resolver import PathResolver
 from src.run_orchestrator import RunManifestBuilder, RunOrchestrator
+from src.transport import CommandResult
 
 
 def profile(source: Path) -> ProfileConfig:
@@ -131,6 +134,49 @@ class RunManifestTests(unittest.TestCase):
             self.assertEqual(qualification["qualification"]["mode"], "golden")
             self.assertIn("--generate-golden", qualification["workload"]["argv"])
 
+    def test_policy_paths_keep_per_policy_platform_maxima(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = PathResolver(
+                bundle_root=root,
+                exe_root=root,
+                state_root=root / "state",
+                output_root=root / "output",
+                cwd=root,
+            )
+            current_profile = ProfileConfig.from_mapping(
+                {
+                    "schema_version": 1,
+                    "name": "cpu-policy-test",
+                    "target": "cpu",
+                    "platform": "kirin9020",
+                    "workload": {"binary": "workload", "config": "workload.json"},
+                    "environment": {"frequency_khz": "platform_max"},
+                    "telemetry": {"required": [], "optional": []},
+                    "kernel_monitor": "off",
+                },
+                source_path=root / "profile.json",
+            )
+            values = {
+                "/sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq": 1550000,
+                "/sys/devices/system/cpu/cpufreq/policy1/scaling_max_freq": 2050000,
+                "/sys/devices/system/cpu/cpufreq/policy2/scaling_max_freq": 2094000,
+                "/sys/devices/system/cpu/cpufreq/policy3/scaling_max_freq": 2508000,
+            }
+            capabilities = {
+                "capabilities": {
+                    "cpu.maximum_frequency": {"paths": list(values), "values": values},
+                    "cpu.minimum_frequency": {
+                        "paths": [path.replace("scaling_max_freq", "scaling_min_freq") for path in values]
+                    },
+                }
+            }
+            actions = RunManifestBuilder(paths)._environment_actions(current_profile, capabilities)
+            requested = {action["path"]: int(action["value"]) for action in actions}
+            for maximum_path, value in values.items():
+                self.assertEqual(requested[maximum_path], value)
+                self.assertEqual(requested[maximum_path.replace("scaling_max_freq", "scaling_min_freq")], value)
+
 
 class RunOrchestratorTests(unittest.TestCase):
     def test_complete_stream_produces_pass_artifacts(self) -> None:
@@ -198,6 +244,109 @@ class RunOrchestratorTests(unittest.TestCase):
             execution = RunOrchestrator(Path(tmp)).evaluate_stream(manifest, [encode_event(record)])
             self.assertEqual(execution.result.verdict, "INFRA_ERROR")
             self.assertTrue(any(reason["scope"] == "protocol" for reason in execution.result.infrastructure_reasons))
+
+    def test_protocol_failure_still_captures_later_serial_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = {
+                "schema_version": 1,
+                "run_id": "run-drain",
+                "overall_timeout_s": 10,
+                "heartbeat_timeout_s": 5,
+                "policy": {"thresholds": {}, "required_telemetry": []},
+            }
+            first = b"not-json\n"
+            later = encode_event(
+                build_event(
+                    run_id="run-drain",
+                    seq=1,
+                    timestamp_ms=1,
+                    source="agent",
+                    event_type="agent_final",
+                    payload={"workload_exit_code": 3, "restoration_ok": True, "spool_complete": True},
+                )
+            )
+            execution = RunOrchestrator(Path(tmp)).evaluate_stream(manifest, [first, later])
+            self.assertEqual(execution.result.verdict, "INFRA_ERROR")
+            self.assertEqual((execution.result_path.parent / "serial.raw").read_bytes(), first + later)
+
+    def test_telemetry_does_not_mask_workload_heartbeat_timeout(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = {
+                "schema_version": 1,
+                "run_id": "run-heartbeat-timeout",
+                "overall_timeout_s": 100,
+                "heartbeat_timeout_s": 5,
+                "policy": {"thresholds": {}, "required_telemetry": []},
+            }
+            records = [
+                build_event(run_id=manifest["run_id"], seq=1, timestamp_ms=0, source="agent", event_type="agent_start", payload={}),
+                build_event(run_id=manifest["run_id"], seq=2, timestamp_ms=1, source="cpu-telemetry", event_type="telemetry", payload={"metric": "cpu.temperature", "value": 30}),
+                build_event(run_id=manifest["run_id"], seq=3, timestamp_ms=2, source="cpu-telemetry", event_type="telemetry", payload={"metric": "cpu.temperature", "value": 31}),
+            ]
+            ticks = iter([0.0, 0.0, 3.0, 6.0])
+            execution = RunOrchestrator(Path(tmp)).evaluate_stream(
+                manifest,
+                [encode_event(record) for record in records],
+                clock=lambda: next(ticks),
+            )
+            self.assertEqual(execution.result.verdict, "INFRA_ERROR")
+            self.assertTrue(any(reason["code"] == "HEARTBEAT_OR_SUMMARY_TIMEOUT" for reason in execution.result.dut_reasons))
+
+    def test_hardware_run_opens_and_clears_serial_before_agent_launch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = {
+                "schema_version": 1,
+                "run_id": "run-serial-order",
+                "overall_timeout_s": 10,
+                "heartbeat_timeout_s": 5,
+                "policy": {"thresholds": {}, "required_telemetry": []},
+            }
+            records = [
+                build_event(run_id=manifest["run_id"], seq=1, timestamp_ms=0, source="agent", event_type="agent_start", payload={}),
+                build_event(run_id=manifest["run_id"], seq=2, timestamp_ms=1, source="cpu-workload", event_type="summary", payload={"result": "PASS", "exit_code": 0}),
+                build_event(run_id=manifest["run_id"], seq=3, timestamp_ms=2, source="agent", event_type="agent_final", payload={"workload_exit_code": 0, "restoration_ok": True, "spool_complete": True}),
+            ]
+            wire = bytearray(b"".join(encode_event(record) for record in records))
+
+            class FakeSerial:
+                opened = False
+                resets = 0
+
+                def __init__(self, **_kwargs):
+                    FakeSerial.opened = True
+
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *_args):
+                    FakeSerial.opened = False
+
+                def reset_input_buffer(self):
+                    FakeSerial.resets += 1
+
+                def read(self, size):
+                    chunk = bytes(wire[:size])
+                    del wire[:size]
+                    return chunk
+
+            class FakeTransport:
+                def invoke(self, argv, timeout_s):
+                    self.argv = argv
+                    self.timeout_s = timeout_s
+                    if not FakeSerial.opened or FakeSerial.resets < 1:
+                        raise AssertionError("agent launched before serial was opened and cleared")
+                    return CommandResult(tuple(argv), 0, "", "", 0.0)
+
+            with patch.dict("sys.modules", {"serial": SimpleNamespace(Serial=FakeSerial)}):
+                execution = RunOrchestrator(Path(tmp)).run_serial(
+                    manifest,
+                    transport=FakeTransport(),
+                    agent_argv=["agent"],
+                    pc_serial="COM-test",
+                    baudrate=9600,
+                )
+            self.assertEqual(execution.result.verdict, "PASS")
+            self.assertGreaterEqual(FakeSerial.resets, 2)
 
 
 if __name__ == "__main__":

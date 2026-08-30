@@ -1,6 +1,8 @@
 # Vmin Judge 打包与设备验收测试文档
 
-状态：适用于 `vmin_judge 2.0.0`、配置/事件/清单/基线/结果 schema v1
+状态：适用于 `vmin_judge 2.0.1`、`avs-device-agent 0.1.1 protocol 1`、配置/事件/清单/基线/结果 schema v1
+
+最后更新：2026-08-30。本文把 2026-08-29 第二批现场记录暴露的问题和本次修复后的验证点纳入主流程；其中“已通过离线回归”与“仍需真机确认”严格分开。
 
 对象：发布工程师、设备测试工程师、CPU/GPU workload 工程师、Monitor 维护者
 
@@ -24,7 +26,7 @@ Monitor 进程退出码：
 | 0 | PASS | 完整事件流、workload PASS、策略通过、`agent_final` 和产物哈希完整。 |
 | 1 | DUT_FAIL | checksum/golden、性能、温度、频率、关键内核事件等失败。 |
 | 2 | SILENT_FAILURE | 在监控链路仍有效时 heartbeat/summary 消失。 |
-| 3 | INFRA_ERROR | 串口断开、CRC/序号错误、代理异常、收集/恢复/哈希失败。 |
+| 3 | INFRA_ERROR | 串口断开、JSON/run ID/序号错误、输入帧 CRC（若提供）错误、代理异常、收集/恢复/哈希失败。 |
 | 4 | INVALID_CONFIGURATION | 参数、配置、schema、路径、基线或 fingerprint 错误。 |
 | 5 | UNSUPPORTED | 必需设备接口、工具或兼容基线缺失。 |
 | 6 | USER_ABORT | 用户中止，仍应尝试清理和恢复。 |
@@ -38,7 +40,7 @@ Monitor 进程退出码：
 | P0 | 发布包 | 独立 EXE、版本/schema、资源完整、非源码目录运行、只读安装目录、稳定退出码。 |
 | P0 | 设备探测 | HDC/ADB、CPU/GPU/sysfs/debugfs/thermal、POSIX Shell、SHA-256、`dmesg`、`taskset`。 |
 | P0 | 部署 | 推送、权限、远端 SHA-256、重复部署幂等、受控清理。 |
-| P0 | 串口协议 | 单写者、JSONL、run ID、连续序号、CRC、heartbeat、summary、`agent_final`。 |
+| P0 | 串口协议 | 单写者、JSONL、run ID、连续序号、可选输入 CRC、heartbeat、summary、`agent_final`；PC 落盘 CRC 可验证。 |
 | P0 | CPU/GPU | golden、校准、基线审批、批量 PASS、原生失败结果保留。 |
 | P0 | 状态安全 | PASS、FAIL、超时、中止和控制链路异常后的 governor/frequency/online 状态恢复。 |
 | P1 | 故障注入 | checksum/golden mismatch、超时、遥测违规、关键内核事件、串口损坏。 |
@@ -65,13 +67,15 @@ Monitor 进程退出码：
 
 ```powershell
 $Exe = 'D:\release\vmin_judge.exe'
-$PackageId = 'vmin-judge-2.0.0-YYYYMMDD'
+$PackageId = 'vmin-judge-2.0.1-YYYYMMDD'
 $Device = 'DEVICE_ID'
 $BoardId = 'BOARD_001'
 $Framework = 'single'       # single 或 dual
 $PcSerial = '<PC_UART_PORT>'
 $DeviceUart = '<DEVICE_UART_PATH>' # 以板端/BSP 确认的业务 UART 为准，不要使用控制台
 $Baudrate = 9600                 # Kirin9020 配置值；其他平台按其配置填写
+$ApprovedConfig = 'D:\approved-config'
+$RemoteRoot = '/data/local/tmp/avs'
 $Out = "D:\MonitorTest\$PackageId\$Framework\$BoardId\output"
 $State = "D:\MonitorTest\$PackageId\$Framework\$BoardId\state"
 $Evidence = "D:\MonitorTest\$PackageId\$Framework\$BoardId\evidence"
@@ -79,6 +83,35 @@ New-Item -ItemType Directory -Force -Path $Out, $State, $Evidence | Out-Null
 ```
 
 本文以 HDC 为例。ADB 环境将 `--transport hdc` 改为 `--transport adb`。有多个设备时必须传 `--device`，不得依赖自动选择。
+
+每条命令执行后立即保存退出码，不能在运行其他命令后再读取 `$LASTEXITCODE`：
+
+```powershell
+# 示例：标准输出与错误输出合并留证；CMD 仍只看到本命令的最终对象/错误。
+& $Exe --version *> "$Evidence\00-version.txt"
+$VersionExit = $LASTEXITCODE
+Set-Content -Encoding ascii "$Evidence\00-version.exit.txt" $VersionExit
+```
+
+若需要把 stdout/stderr 分开，使用 `1>` 和 `2>`；不得只保存截图。测试命令中的 `<...>`、`RUN_ID`、`DEVICE_ID` 都是占位符，执行前必须替换。
+
+### 3.3 明日现场建议顺序（P0 快速路线）
+
+按下面顺序执行；某一步未满足通过标准时先保存证据，再决定是否继续。不要跳过配置来源核对直接跑 golden。
+
+| 顺序 | 用例 | 执行目标 | 继续条件 |
+|---:|---|---|---|
+| 1 | REL-03/REL-04 | 记录 EXE 版本、SHA-256，离线验证内置包和批准配置 | `2.0.1`；批准配置路径/hash 正确 |
+| 2 | DEV-INFO | 一次性采集设备身份、UART、CPU、GPU、thermal、工具和权限 | 采集文件完整；不要求所有接口都存在 |
+| 3 | DEV-02 | 用同一个 `--config-dir` 做 full probe | v500 hang 路径和值、profile 所需接口明确 |
+| 4 | DEV-03 | 显式 UART/COM/baud 配对 | `SUCCESS` 且 verify 成功 |
+| 5 | DEV-04 | 两次部署并检查 agent 版本 | 第一次 pushed、第二次 unchanged、agent 0.1.1 |
+| 6 | QUAL-00 | CPU/GPU 各 1 次 live smoke | 每次 individual run 有完整 `result.json` |
+| 7 | QUAL-01/02 | 预热后做正式 CPU/GPU golden | 每次 PASS，CPU checksum/GPU readback 一致 |
+| 8 | RUN-01 | 有批准 baseline 后执行 normal run | UART 有完整事件，CMD 仅最终结果/错误 |
+| 9 | RUN-03/第 13 节 | 收集失败 spool，打包现场证据 | hash 验证成功，反馈包可离线分析 |
+
+若尚无批准 baseline，本次现场工作的终点是 QUAL-01/QUAL-02 和完整证据，不应把 `run --baseline auto` 的配置失败记成产品运行失败。CPU 和 GPU 分开推进：CPU smoke/golden 不应被 GPU-only `gpu.hang_count` 阻断。
 
 ## 4. 打包前和发布包测试
 
@@ -132,7 +165,7 @@ Pop-Location
 通过标准：
 
 - 四个退出码都为 0。
-- 版本为 `vmin_judge 2.0.0`，并报告 `config=1 event=1 manifest=1 baseline=1 result=1`。
+- 版本为 `vmin_judge 2.0.1`，并报告 `config=1 event=1 manifest=1 baseline=1 result=1`。
 - `validate` 的 `valid=true`、`errors=[]`，并检查到两个 profile、平台、workload 配置/二进制、GPU shader、设备代理和 kernel rule。
 - `list-profiles` 至少包含 `cpu_mixed_big4` 和 `gpu_vulkan_mixed`。
 - 当前工作目录保持不变；所有可写内容仅进入 `$Out` 或 `$State`。
@@ -147,7 +180,7 @@ Pop-Location
   --output-dir $Out --state-dir $State --json validate --all --package --offline
 ```
 
-通过标准：EXE/临时 bundle 目录无写入；外部配置按“绝对路径、当前目录、`--config-dir`、EXE 外部覆盖、内置资源”的顺序解析；相对输出只写入 `$Out`。
+通过标准：EXE/临时 bundle 目录无写入；输入按“绝对路径、声明文件 owner 相对路径、`--config-dir`（兼容带/不带 `config` 的两种根）、当前目录、EXE 外部资源、内置资源”的顺序解析；相对输出只写入 `$Out`。对本次批准配置，`--config-dir` 必须先于当前目录/内置同名平台文件生效。
 
 ### REL-05：错误边界
 
@@ -185,12 +218,126 @@ avs-device-agent --version
 
 ## 6. 设备基础与接口探测
 
+若使用外部批准配置，先固定一个根目录，并在后续所有 `validate`、`probe`、`golden`、`calibrate`、`run` 命令的子命令之前传入同一个全局参数：
+
+```powershell
+$ApprovedConfig = 'D:\approved-config'
+& $Exe --config-dir $ApprovedConfig --output-dir $Out --state-dir $State --json `
+  validate --profile gpu_vulkan_mixed --offline `
+  *> "$Evidence\DEV-00-approved-config.json"
+```
+
+目录既可以是 `$ApprovedConfig\config\platforms\kirin9020.yaml`，也可以让根目录直接从 `$ApprovedConfig\platforms\kirin9020.yaml` 开始。通过标准不是只有 `valid=true`：必须核对 `resolved_configs` 中的实际绝对路径和 SHA-256 指向修改后的文件。
+
+先记录文件自身 hash，再与 `validate` 输出交叉确认：
+
+```powershell
+$PlatformConfig = @(
+  "$ApprovedConfig\config\platforms\kirin9020.yaml",
+  "$ApprovedConfig\platforms\kirin9020.yaml"
+) | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+if (-not $PlatformConfig) { throw 'approved kirin9020.yaml not found' }
+Get-Item $PlatformConfig | Format-List FullName,Length,LastWriteTime `
+  *> "$Evidence\DEV-00-platform-file.txt"
+Get-FileHash $PlatformConfig -Algorithm SHA256 | Format-List `
+  *> "$Evidence\DEV-00-platform-sha256.txt"
+Select-String -Path $PlatformConfig -Pattern 'hvgr_kmd_v500','gpu_hang_count' `
+  *> "$Evidence\DEV-00-platform-v500-lines.txt"
+```
+
+预期结果：三个文件都非空；`validate` 的 platform `path` 与 `$PlatformConfig` 完全一致，`sha256` 与 `Get-FileHash` 一致。这里验证的是 PC 端配置选择；后续 `deploy` 不会把平台 YAML 推到设备，不能用部署清单证明配置覆盖成功。
+
+### DEV-INFO：设备深度信息采集（单独执行，一块板一次）
+
+这一组命令只读，目的是在 probe/golden 异常时保留原始设备事实。允许某些文件不存在，但每条命令的输出和错误都必须保留。不要因为 probe 已生成 `capabilities.json` 就省略原始采集。
+
+1. 身份、镜像、内核和存储：
+
+```powershell
+hdc -t $Device shell getprop *> "$Evidence\DEV-INFO-01-getprop.txt"
+hdc -t $Device shell uname -a *> "$Evidence\DEV-INFO-01-uname.txt"
+hdc -t $Device shell cat /proc/cmdline *> "$Evidence\DEV-INFO-01-cmdline.txt"
+hdc -t $Device shell cat /proc/cpuinfo *> "$Evidence\DEV-INFO-01-cpuinfo.txt"
+hdc -t $Device shell id *> "$Evidence\DEV-INFO-01-id.txt"
+hdc -t $Device shell mount *> "$Evidence\DEV-INFO-01-mount.txt"
+hdc -t $Device shell df -h /data/local/tmp *> "$Evidence\DEV-INFO-01-storage.txt"
+```
+
+2. UART 与控制台占用。这里仅做读操作，不修改设备端波特率：
+
+```powershell
+hdc -t $Device shell ls -l $DeviceUart *> "$Evidence\DEV-INFO-02-uart-path.txt"
+hdc -t $Device shell cat /proc/consoles *> "$Evidence\DEV-INFO-02-consoles.txt"
+hdc -t $Device shell sh -c 'ls -l /dev/tty* 2>&1' `
+  *> "$Evidence\DEV-INFO-02-all-tty.txt"
+hdc -t $Device shell sh -c "stty -a < '$DeviceUart' 2>&1 || toybox stty -a < '$DeviceUart' 2>&1" `
+  *> "$Evidence\DEV-INFO-02-stty.txt"
+hdc -t $Device shell cat /proc/tty/driver/serial `
+  *> "$Evidence\DEV-INFO-02-serial-driver.txt"
+```
+
+预期至少能确认 `$DeviceUart` 存在、权限和 owner/group；若它出现在 `/proc/consoles`，必须先由 BSP 负责人确认可否作为业务 UART。`stty` 不可用不是 Monitor 失败，但必须记录 BSP 侧真实 baud/data/parity/stop 配置。
+
+3. CPU topology 和每个 cpufreq policy 的真实值：
+
+```powershell
+hdc -t $Device shell cat /sys/devices/system/cpu/present `
+  *> "$Evidence\DEV-INFO-03-cpu-present.txt"
+hdc -t $Device shell cat /sys/devices/system/cpu/possible `
+  *> "$Evidence\DEV-INFO-03-cpu-possible.txt"
+hdc -t $Device shell sh -c 'for p in /sys/devices/system/cpu/cpufreq/policy*; do
+  [ -d "$p" ] || continue
+  echo "=== $p ==="
+  ls -ld "$p"
+  for f in affected_cpus related_cpus cpuinfo_min_freq cpuinfo_max_freq scaling_min_freq scaling_max_freq scaling_cur_freq scaling_governor scaling_available_governors scaling_available_frequencies; do
+    printf "%s=" "$f"; cat "$p/$f" 2>&1
+  done
+done' *> "$Evidence\DEV-INFO-03-cpufreq-policies.txt"
+```
+
+预期结果：每个 `policyN` 单独记录。重点确认 heterogeneous policy 的 `cpuinfo_max_freq`，不能把一个 cluster 的 2508000 套到所有 policy。把 policy、related CPU、max frequency 三列抄入 `reproduction-notes.md`。
+
+4. GPU 驱动、devfreq 和 hang/reset/fault 计数器：
+
+```powershell
+hdc -t $Device shell sh -c 'for p in
+  /sys/module/hvgr_kmd_v500/parameters/gpu_hang_count
+  /sys/module/hvgr_kmd_v350/parameters/gpu_hang_count; do
+  echo "=== $p ==="; ls -l "$p" 2>&1; cat "$p" 2>&1
+done' *> "$Evidence\DEV-INFO-04-gpu-hang.txt"
+hdc -t $Device shell sh -c 'find /sys/class/devfreq /sys/devices -maxdepth 6 -type f \( -name cur_freq -o -name min_freq -o -name max_freq -o -name governor -o -name available_governors -o -name load -o -name utilization -o -name power_policy \) 2>&1' `
+  *> "$Evidence\DEV-INFO-04-gpu-candidates.txt"
+hdc -t $Device shell sh -c 'ls -ld /sys/module/hvgr_kmd_v500 /sys/module/hvgr_kmd_v350 2>&1; dmesg 2>&1 | tail -n 300' `
+  *> "$Evidence\DEV-INFO-04-gpu-driver-dmesg-tail.txt"
+```
+
+预期结果：v500 设备的首个 hang 候选存在、可读、空闲值通常为数值 0；若不存在或不可读，记录 `ls`/`cat` 原始错误、驱动模块名、BSP/内核 build，不要直接把该 capability 改成 optional。`find` 不可用时用 `ls -lR /sys/class/devfreq` 替代并注明。
+
+5. Thermal 原始温标和工具能力：
+
+```powershell
+hdc -t $Device shell sh -c 'for z in /sys/class/thermal/thermal_zone*; do
+  [ -d "$z" ] || continue
+  printf "%s type=" "$z"; cat "$z/type" 2>&1
+  printf "%s temp=" "$z"; cat "$z/temp" 2>&1
+done' *> "$Evidence\DEV-INFO-05-thermal-zones.txt"
+hdc -t $Device shell sh -c 'for c in sh awk sed mkfifo sha256sum taskset dmesg timeout; do
+  printf "%s: " "$c"; command -v "$c" 2>&1 || true
+done
+toybox --help 2>&1 | head -n 20' *> "$Evidence\DEV-INFO-05-tools.txt"
+hdc -t $Device shell sh -c 'ps -ef 2>&1 | grep -E "avs-device-agent|avs-workload" | grep -v grep || true; ls -l /data/local/tmp/avs/runs 2>&1' `
+  *> "$Evidence\DEV-INFO-05-processes-runs.txt"
+```
+
+预期结果：每个 thermal zone 同时保留 `type` 与未经换算的 `temp`；工具缺失由后续 profile scope 判断，不能仅凭 `command -v` 的某一行给整个平台判 PASS。记录采集时间、设备时区和 PC 时区，便于对齐 UART/`dmesg` 时间。
+
 ### DEV-01：HDC/ADB 和板端工具
 
 先用原生命令确认控制链路，仅作辅助证据：
 
 ```powershell
-hdc -t $Device list targets
+hdc list targets
 hdc -t $Device shell sh -c 'echo shell-ok'
 hdc -t $Device shell mkfifo --help
 hdc -t $Device shell sha256sum --help
@@ -205,10 +352,11 @@ hdc -t $Device shell taskset --help
 在单框架和双框架镜像各执行一次：
 
 ```powershell
-& $Exe --transport hdc --device $Device --output-dir $Out --state-dir $State --json `
+& $Exe --config-dir $ApprovedConfig --transport hdc --device $Device --output-dir $Out --state-dir $State --json `
   probe --platform kirin9020 --full --refresh `
   *> "$Evidence\DEV-02-probe.json"
 $ProbeExit = $LASTEXITCODE
+Set-Content -Encoding ascii "$Evidence\DEV-02-probe.exit.txt" $ProbeExit
 Copy-Item "$Out\probes\$Device\capabilities.json" `
   "$Evidence\DEV-02-capabilities-$Framework.json"
 ```
@@ -217,11 +365,15 @@ Copy-Item "$Out\probes\$Device\capabilities.json" `
 
 - CPU：每核 frequency/min/max/governor/online、`/proc/stat` utilization、按 thermal `type` 匹配的温度。
 - GPU：frequency/min/max/governor/utilization/power policy/hang count、按 thermal `type` 匹配的温度。
+- Kirin9020 当前优先探测 `/sys/module/hvgr_kmd_v500/parameters/gpu_hang_count`，并保留 v350 作为旧 BSP 回退；`candidate_paths` 和实际 `paths` 必须与设备接口一致。
 - 工具：`device.shell`、`device.sha256sum` 可用；CPU profile 运行时 `device.taskset` 必需；kernel monitor 开启时 `device.dmesg` 必需。
 - 每个 metric 都有实际路径、单位、值和 provenance，不允许只有“可用”布尔值。温度还要核对 `raw_value`、配置/实际采用单位、归一化摄氏值、`valid` 和 `invalid_reason`。
 - 单/双框架可以使用不同真实路径，但语义、单位和必需能力必须等价。把两个 `capabilities.json` 做字段级 diff，并注明所有差异。
+- 顶层 `platform_config.path`/`sha256` 与 DEV-00 一致，并且 `external_override=true`。如果仍指向 EXE bundle，立即停止 golden 并提交 DEV-00/DEV-02 证据。
 
-`--full` 是平台全量清单，仍会报告所有平台级必需能力缺口。实际 CPU/GPU `run`、`golden`、`calibrate` 按所选 profile 的 required capability 重新判定：CPU profile 不因仅 GPU 所需的 `gpu.hang_count` 缺失而阻断；GPU profile 仍必须阻断并收集证据。输出中的 `platform_required_missing` 保留全量缺口，`required_missing` 表示当前执行范围。
+`--full` 是平台全量清单。实际 CPU/GPU `run`、`golden`、`calibrate` 只探测所选 profile 的目标域并按 required capability 判定：CPU profile 不再扫描或受 GPU-only `gpu.hang_count` 影响；GPU profile 仍必须探测并在缺失时阻断。
+
+当前实现每次都从设备实时读取，没有复用 PC 端 probe cache；`--refresh` 作为兼容参数保留，因此带或不带它都应得到本次设备事实。若两次结果不同，应按设备状态变化调查，而不是归因于旧缓存。
 
 缺少必需接口时预期退出码为 5。不要通过删除 profile 的 required 项来“通过”验收。
 
@@ -234,7 +386,9 @@ Copy-Item "$Out\probes\$Device\capabilities.json" `
   --device-port $DeviceUart --pc-port $PcSerial --baudrate $Baudrate --timeout 5 --verify `
   *> "$Evidence\DEV-03-pair.txt"
 $PairExit = $LASTEXITCODE
+Set-Content -Encoding ascii "$Evidence\DEV-03-pair.exit.txt" $PairExit
 Copy-Item "$State\pair-diagnostic.json" "$Evidence\DEV-03-pair-diagnostic.json"
+Get-Content "$State\pairing.conf" *> "$Evidence\DEV-03-pairing-conf.json"
 ```
 
 不传显式端口时，PC 端来自实际枚举，设备端来自实际扫描；只有传入 `--platform kirin9020` 时才把该平台的 `serial.uart_candidates` 用作扫描失败后的候选。通用配对层不猜测 `/dev/tty*` 或 `COM*`。算法先打开 PC 端、等待短暂稳定、清空旧输入，在一个总超时内最多发送 3 次唯一 marker，并持续匹配可分片到达的字节。
@@ -246,54 +400,117 @@ Copy-Item "$State\pair-diagnostic.json" "$Evidence\DEV-03-pair-diagnostic.json"
   monitor --save-raw --timeout 60
 ```
 
-通过标准：pair 退出码 0，`pair-diagnostic.json` 的最终记录为 `SUCCESS` 且 verification 成功；在帧生产者运行时，monitor 能识别连续事件。原始 pair marker 不是事件帧，不能用它单独判定 monitor。`monitor` 是诊断命令，结果必须是 `NOT_EVALUATED`，不能输出 DUT PASS。
+通过标准：pair 退出码 0，`pair-diagnostic.json` 的最终记录为 `SUCCESS` 且 verification 成功，`pairing.conf` 保存本次 device port/PC port/baud；在帧生产者运行时，monitor 能识别连续事件。原始 pair marker 不是事件帧，不能用它单独判定 monitor。`monitor` 是诊断命令，结果必须是 `NOT_EVALUATED`，不能输出 DUT PASS。
 
 Pair 只在 PC 端打开串口时设置 `$Baudrate`。设备 UART 应由 BSP 预先配置，程序不会自动执行 `stty` 修改设备端波特率，避免破坏控制台。失败码至少区分 `NO_DEVICE_PORTS`、`NO_PC_PORTS`、`PC_PORT_BUSY`、`PC_PORT_OPEN_FAILED`、`DEVICE_ECHO_FAILED`、`NO_RX_BYTES` 和 `MARKER_NOT_FOUND`。若失败，采集 `stty -a < $DeviceUart`（只读诊断）、BSP 配置及 `pair-diagnostic.json`；正常 marker 和串口正文不打印到控制台，诊断文件只保留有界十六进制预览。
 
 ### DEV-04：部署与幂等
 
 ```powershell
-& $Exe --transport hdc --device $Device --output-dir $Out --state-dir $State --json `
+& $Exe --config-dir $ApprovedConfig --transport hdc --device $Device --output-dir $Out --state-dir $State --json `
   deploy --target all --verify-hashes *> "$Evidence\DEV-04-deploy-first.json"
+$DeployFirstExit = $LASTEXITCODE
 Copy-Item "$Out\deployment-manifest.json" "$Evidence\DEV-04-manifest-first.json"
 
-& $Exe --transport hdc --device $Device --output-dir $Out --state-dir $State --json `
+& $Exe --config-dir $ApprovedConfig --transport hdc --device $Device --output-dir $Out --state-dir $State --json `
   deploy --target all --verify-hashes *> "$Evidence\DEV-04-deploy-second.json"
+$DeploySecondExit = $LASTEXITCODE
 Copy-Item "$Out\deployment-manifest.json" "$Evidence\DEV-04-manifest-second.json"
 
 hdc -t $Device shell /data/local/tmp/avs/bin/avs-device-agent --version `
   *> "$Evidence\DEV-04-agent-version.txt"
 ```
 
-通过标准：首次部署所有必需项为 `pushed` 且远端 hash 与本地一致；第二次部署为 `unchanged`，不重复传输；agent 报告 `0.1.0 protocol 1`。`--clean-stale` 只允许删除先前 manifest 记录且位于 `/data/local/tmp/avs` 内的文件，需要单独做一次安全边界测试。
+通过标准：两个部署退出码为 0；首次在空设备根上所有项应为 `pushed`，若设备已有相同 hash 则允许 `unchanged`，但本次发生变化的 agent/资产必须 `pushed`，且所有远端 hash 与本地一致；第二次所有项为 `unchanged`，不重复传输；agent 报告 `0.1.1 protocol 1`。`--clean-stale` 只允许删除先前 manifest 记录且位于 `/data/local/tmp/avs` 内的文件，需要单独做一次安全边界测试。
+
+部署清单应包含 agent、所选 workload/config/shader 等设备执行资产，但不包含 PC 侧 `config/platforms/kirin9020.yaml`。这是预期行为：平台 YAML 由 PC 在 `validate`/`probe`/manifest 构建阶段读取，设备 agent 只接收已解析的安全 argv；“平台 YAML 未部署”不能作为覆盖不生效的证据。
 
 ## 7. CPU/GPU 资格认证与基线
 
 当前 profile 中 `baseline: null`，所以不能直接执行生产 `run --baseline auto`。必须先生成 golden、完成多板校准并批准 baseline。
 
+### QUAL-00：live 事务烟测与现场观察点
+
+正式 10 次 golden 前，CPU/GPU 各执行 1 次。烟测产物只用于定位，不直接审批为生产 golden：
+
+```powershell
+$CpuSmokeId = "smoke-cpu-$Framework-$BoardId"
+& $Exe --config-dir $ApprovedConfig --transport hdc --device $Device `
+  --pc-serial $PcSerial --baudrate $Baudrate --output-dir $Out --state-dir $State --json `
+  golden cpu --profile cpu_mixed_big4 --runs 1 --known-good --board-id $BoardId `
+  --qualification-id $CpuSmokeId *> "$Evidence\QUAL-00-cpu-smoke.json"
+$CpuSmokeExit = $LASTEXITCODE
+
+$GpuSmokeId = "smoke-gpu-$Framework-$BoardId"
+& $Exe --config-dir $ApprovedConfig --transport hdc --device $Device `
+  --pc-serial $PcSerial --baudrate $Baudrate --output-dir $Out --state-dir $State --json `
+  golden gpu --profile gpu_vulkan_mixed --runs 1 --known-good --board-id $BoardId `
+  --qualification-id $GpuSmokeId --readback-name gpu-golden.rgba `
+  *> "$Evidence\QUAL-00-gpu-smoke.json"
+$GpuSmokeExit = $LASTEXITCODE
+```
+
+每条命令后的检查方法：
+
+```powershell
+$LatestCpuRun = Get-ChildItem $Out -Directory -Filter 'golden-cpu-*' |
+  Sort-Object LastWriteTime -Descending | Select-Object -First 1
+$LatestGpuRun = Get-ChildItem $Out -Directory -Filter 'golden-gpu-*' |
+  Sort-Object LastWriteTime -Descending | Select-Object -First 1
+
+foreach ($RunDir in @($LatestCpuRun, $LatestGpuRun) | Where-Object { $_ }) {
+  "=== $($RunDir.FullName) ==="
+  Get-Content "$($RunDir.FullName)\result.json" | ConvertFrom-Json |
+    Select-Object run_id,verdict,exit_code,event_count,workload_result,workload_exit_code,liveness
+  Select-String -Path "$($RunDir.FullName)\events.jsonl" `
+    -Pattern '"type":"environment"','"type":"error"','"type":"summary"','"type":"agent_final"'
+}
+```
+
+一次 live 事务的代码行为和预期顺序如下：
+
+1. PC 先解析批准 profile/platform 并做目标域 probe。CPU smoke 只要求 CPU 域，GPU smoke 才要求 `gpu.hang_count`。
+2. 资产做 SHA-256 部署/校验；平台 YAML 不部署。
+3. PC 先打开并清空 COM 输入缓冲，再通过 HDC 启动 agent，防止丢掉最早的 `agent_start`。
+4. agent 把环境 apply/readback 结果、workload 原生事件、5 秒遥测、过滤后的 kernel 事件、summary、restore 和 `agent_final` 保留在 UART/设备 spool。
+5. PC 的统一判断引擎消费 UART：workload heartbeat/summary 决定 workload liveness，telemetry 不能掩盖 workload 静默；最终生成 `result.json`。
+6. CMD 默认不复制 heartbeat、telemetry 或正常环境事件，只输出最终 JSON 对象；失败时额外给出精简错误。完整证据在 run 目录。
+
+通过标准：若环境温度已经在 35–60 °C，烟测应退出 0/PASS；若未预热或发现真实 DUT 问题，可以非 PASS，但必须有可读 `result.json`、`serial.raw` 和具体 reason，不能卡住且无产物。协议错误发生后仍应把 agent 结束前的后续原始字节保留在 `serial.raw`，最终分类为 INFRA_ERROR 而不是假 PASS。
+
+CPU 环境 readback 必须按 probe 返回的每个 `policyN` 使用自己的 platform max。当前已观察的 Kirin9020 示例为 1550000、2050000、2094000、2508000 kHz 四种 policy max；以 DEV-INFO 当天实测为准。若所有 policy 都被请求为 2508000，说明旧的路径映射问题仍存在，提交所有 `environment` 事件和 cpufreq policy 清单。
+
 ### QUAL-01：CPU golden
 
 ```powershell
-& $Exe --transport hdc --device $Device --pc-serial $PcSerial `
-  --output-dir $Out --state-dir $State --json `
+& $Exe --config-dir $ApprovedConfig --transport hdc --device $Device --pc-serial $PcSerial `
+  --baudrate $Baudrate --output-dir $Out --state-dir $State --json `
   golden cpu --profile cpu_mixed_big4 --runs 10 --known-good --board-id $BoardId `
   *> "$Evidence\QUAL-01-cpu-golden.json"
-$LASTEXITCODE
+$CpuGoldenExit = $LASTEXITCODE
+Set-Content -Encoding ascii "$Evidence\QUAL-01-cpu-golden.exit.txt" $CpuGoldenExit
 ```
 
 通过标准：10 次均为 PASS；每次恰有一个 `golden` 事件；checksum 完全一致；环境为 cores 4–7 online、performance governor、platform max frequency、35–60 °C；golden manifest 包含 workload/config/profile hash 和板号。正式审批前应使用已独立确认的 `--accept-checksum` 再做一次绑定检查。
 
+第二批现场记录中的真实温度约为 30–31.4 °C，低于当前 profile 的 35 °C 下限。完成环境/串口修复后，应先把板卡稳定预热到 35–60 °C 再执行正式 golden；不要通过放宽阈值来掩盖冷机条件。
+
+live golden 尚未全部通过时，每次运行目录直接位于 `$Out\golden-cpu-*`；只有全部 live run 通过并完成聚合后才创建 `$Out\qualification\<qualification-id>`。失败后不要把缺少 `qualification` 目录误判为输出丢失。
+
 ### QUAL-02：GPU golden
 
 ```powershell
-& $Exe --transport hdc --device $Device --pc-serial $PcSerial `
-  --output-dir $Out --state-dir $State --json `
+& $Exe --config-dir $ApprovedConfig --transport hdc --device $Device --pc-serial $PcSerial `
+  --baudrate $Baudrate --output-dir $Out --state-dir $State --json `
   golden gpu --profile gpu_vulkan_mixed --runs 10 --known-good --board-id $BoardId `
   --readback-name gpu-golden.rgba *> "$Evidence\QUAL-02-gpu-golden.json"
-$LASTEXITCODE
+$GpuGoldenExit = $LASTEXITCODE
+Set-Content -Encoding ascii "$Evidence\QUAL-02-gpu-golden.exit.txt" $GpuGoldenExit
 ```
 
-通过标准：10 次 raw readback 字节数和 SHA-256 完全一致；shader/workload/config hash、驱动/BSP/板号均被记录；`verify_mode` 不是 `none`；原始 `.rgba` 按二进制缓冲区保存，不当作图片解码。
+通过标准：运行前 DEV-02 中 `gpu.hang_count` 已解析到 v500（或有证据的兼容路径），值是可解析计数器；10 次 raw readback 字节数和 SHA-256 完全一致；shader/workload/config hash、驱动/BSP/板号均被记录；`verify_mode` 不是 `none`；原始 `.rgba` 按二进制缓冲区保存，不当作图片解码。
+
+若 GPU smoke/golden 在 capability 阶段退出 5，核对错误中缺失的是哪个 metric，并同时提交 `DEV-00-platform-*`、`DEV-02-probe.json`、`DEV-INFO-04-gpu-hang.txt`。若 probe 已看到正确 v500 路径但 live 仍缺失，属于 profile scope/manifest 构建缺陷；若 probe 顶层配置 path/hash 错误，属于批准配置选择问题。
 
 ### QUAL-03：多板校准
 
@@ -309,7 +526,7 @@ Get-ChildItem D:\samples\cpu\B2 -Directory | ForEach-Object {
 }
 $RunCount = $RunDirArgs.Count / 2
 
-& $Exe --output-dir $Out --state-dir $State --json calibrate cpu `
+& $Exe --config-dir $ApprovedConfig --output-dir $Out --state-dir $State --json calibrate cpu `
   --profile cpu_mixed_big4 --runs $RunCount --board-id COHORT `
   --temperature-range 35:60 --golden D:\golden\cpu-golden.json `
   --baseline-id kirin9020-cpu-mixed-big4-v1 @RunDirArgs
@@ -338,22 +555,26 @@ GPU 使用同样方式改成 `calibrate gpu`、GPU profile 和 GPU golden。
 ### RUN-01：CPU/GPU 基本 PASS
 
 ```powershell
-& $Exe --transport hdc --device $Device --pc-serial $PcSerial `
-  --output-dir $Out --state-dir $State --json run `
+& $Exe --config-dir $ApprovedConfig --transport hdc --device $Device --pc-serial $PcSerial `
+  --baudrate $Baudrate --output-dir $Out --state-dir $State --json run `
   --profile cpu_mixed_big4 --baseline kirin9020-cpu-mixed-big4-v1 `
   --repeat 3 --run-id "CPU-$Framework-$BoardId" --kernel-monitor critical `
   *> "$Evidence\RUN-01-cpu.json"
 $CpuExit = $LASTEXITCODE
 
-& $Exe --transport hdc --device $Device --pc-serial $PcSerial `
-  --output-dir $Out --state-dir $State --json run `
+& $Exe --config-dir $ApprovedConfig --transport hdc --device $Device --pc-serial $PcSerial `
+  --baudrate $Baudrate --output-dir $Out --state-dir $State --json run `
   --profile gpu_vulkan_mixed --baseline kirin9020-gpu-vulkan-mixed-v1 `
   --repeat 3 --run-id "GPU-$Framework-$BoardId" --kernel-monitor critical `
   *> "$Evidence\RUN-01-gpu.json"
 $GpuExit = $LASTEXITCODE
 ```
 
-通过标准：两个退出码均为 0；每次 run 的 verdict 为 PASS；无 DUT/infra reasons；summary 和 `agent_final` 都存在；required telemetry 每类至少有一个实例；环境 readback 匹配；退出后状态恢复。
+通过标准：两个退出码均为 0；每次 run 的 verdict 为 PASS；无 DUT/infra reasons；summary 和 `agent_final` 都存在；required telemetry 每类至少有一个实例；环境 readback 匹配；退出后状态恢复。`--repeat 3 --run-id NAME` 应生成 `NAME-001`、`NAME-002`、`NAME-003` 三个独立目录，任何一次旧 run ID/seq 混入都应为 INFRA_ERROR。
+
+正常 CMD 验收：`RUN-01-*.json` 是一个最终命令对象，包含 `repeat`、总 `exit_code`、每次 run 的 `run_id/verdict/exit_code/result`；正常时不应逐条打印 heartbeat、telemetry、environment 或 kernel 正文。失败的单次 run 还应出现 `errors`，环境问题至少带 `phase/path/requested/actual`，完整 reasons 仍以该 run 的 `result.json` 为准。
+
+设备 spool 规则：正常 `run` 的 PASS 默认只删除精确的 `$RemoteRoot/runs/<run-id>/spool`；DUT_FAIL/INFRA_ERROR 默认保留。要在 PASS 场景专门验证收集流程，可先做一次带 `--keep-device-spool` 的 `run --repeat 1`，收集后再删除。`golden`/`calibrate` 不接受这个开关，其 live 失败证据按各自 run 目录和设备 spool 保留情况收集。
 
 ### RUN-02：无部署运行与 fingerprint
 
@@ -370,6 +591,8 @@ $GpuExit = $LASTEXITCODE
 ```
 
 确认本地 hash 后，可再次执行不带 `--keep-remote` 的收集；只有 hash 验证成功后才允许删除该具体 run 的远端 spool。通过标准：`collection.json` 记录来源、目标、字节数、verified 和 remote_removed；路径必须限定在 `/data/local/tmp/avs/runs/<run-id>` 下。
+
+设备端 `artifact-hashes.json` 的结构应为 `{"schema_version":1,"sha256":{...}}`。若 hash 缺失/不匹配，`collect` 必须退出 3 且保留远端；不得手工删除后重跑来掩盖收集错误。
 
 ### RUN-04：报告与离线回放
 
@@ -420,7 +643,7 @@ $GpuExit = $LASTEXITCODE
 
 - 所有记录 run ID 相同、schema major 为 1。
 - `seq` 从第一条开始严格连续，无重复/倒序/缺口。
-- CRC 全部可验证；任何 CRC/UTF-8/JSON/截断错误必须是 INFRA_ERROR。
+- 当前 Shell agent 的 UART 原始行不携带 `crc32`；PC 接收后写入 `events.jsonl` 时补充可验证 CRC。因此线上完整性主要由 UTF-8/JSON、run ID、连续 seq 和 `agent_final` 保证，落盘事件的 CRC 必须可验证；若输入帧本身带 CRC，错误 CRC 必须是 INFRA_ERROR。
 - 结束时有 summary 和 `agent_final`；`agent_final.restoration_ok=true`、`spool_complete=true`。
 - `serial.raw` 不包含无过滤的持续 `dmesg` 流。
 
@@ -474,9 +697,9 @@ GPU 错误 golden 应以新文件名部署，例如 `gpu_vulkan_mixed.bad.rgba`�
 - 每个 framework/profile 先连续 `--repeat 30`；再选择 CPU 和 GPU 各做一次至少 30 分钟长稳。
 - `kernel-monitor=critical`、`off`、`full-local` 各执行一次。
 - `full-local` 应在设备 spool 产生 `dmesg.raw`，但 UART 仍只传过滤后的 kernel 事件。
-- 统计总字节、每秒峰值、heartbeat 最大间隔、telemetry 间隔、event 数、CRC/sequence 错误、丢失/重复记录、PC CPU/内存。
+- 统计总字节、每秒峰值、heartbeat 最大间隔、telemetry 间隔、event 数、JSON/run-ID/sequence 错误、丢失/重复记录、落盘 CRC 校验结果、PC CPU/内存。
 
-通过标准：无序号缺口、CRC/JSON/UTF-8 错误和 writer interleave；heartbeat 不超过 45 秒；正常 run 无退出码 2/3；UART 中无持续原始 dmesg；设备 spool hash 可验证。
+通过标准：无序号缺口、JSON/UTF-8/落盘 CRC 错误和 writer interleave；heartbeat 不超过 45 秒；正常 run 无退出码 2/3；UART 中无持续原始 dmesg；设备 spool hash 可验证。注意：落盘 CRC 证明 PC artifact 未被后续改写，不等同于 Shell UART 原始帧具有线级 CRC。
 
 ## 13. 必须反馈的日志与证据
 
@@ -507,7 +730,7 @@ feedback/<package-id>/<framework>/<board-id>/<case-id>/
 ```json
 {
   "case_id": "FI-05",
-  "package_version": "2.0.0",
+  "package_version": "2.0.1",
   "package_sha256": "...",
   "source_commit": "...",
   "framework": "single",
@@ -564,7 +787,204 @@ feedback/<package-id>/<framework>/<board-id>/<case-id>/
 - 至少一个批准 CPU baseline 和一个批准 GPU baseline 来自不少于两块已知良品板，校准 accepted sample 不少于 20。
 - 两种 framework 的 CPU/GPU 基本 PASS 各连续 30 次，无 INFRA_ERROR/SILENT_FAILURE。
 - FI-01～FI-13 的预期分类、原生退出码、恢复和产物均符合规则；未实现的用户中止/多板采样体验必须形成明确缺陷或改进项。
-- 30 分钟 UART 长稳无 CRC/seq/JSON 错误，raw dmesg 不进入 UART。
+- 30 分钟 UART 长稳无 JSON/run-ID/seq 错误，PC 落盘 CRC 全部可验证，raw dmesg 不进入 UART。
 - 每个 run 都有完整 `result.json` 和可验证 `artifact-hashes.json`；失败反馈包足以离线 `simulate` 和复现。
 
 任何缺少原始日志、缺少 package hash、缺少 exact command、缺少设备版本/能力信息或产物 hash 不一致的结果，都不能作为关闭代码问题的依据。
+
+## 附录 A：命令到代码行为的对应关系
+
+所有命令都由 `main.py` 解析；全局参数必须位于子命令前。表中“CMD 输出”指默认 `--log-level warning` 下的 stdout/stderr，不代表 UART 或产物内容被删除。
+
+| 命令 | 主要代码入口 | 实际行为 | CMD/产物预期 |
+|---|---|---|---|
+| `validate` | `src/cli_commands.py::cmd_validate_v2`、`src/path_resolver.py` | 只解析配置/schema/资源/baseline；`--offline` 不访问设备；记录 profile/platform 的绝对路径和 SHA-256。 | 最终 `valid/checked/resolved_configs/errors`；无 traceback。 |
+| `list-profiles` | `cmd_list_profiles_v2` | 从最终解析到的 profile 目录枚举配置。 | 最终列表包含 path，可用于发现错误配置根。 |
+| `probe` | `_probe`、`src/platform_probe.py::PlatformProbe` | 连接设备并实时读取接口；独立 `--full` 扫 CPU+GPU，live profile 只扫目标域；随后检查 Shell/hash/dmesg/taskset。 | 最终 probe 对象和 `capabilities.json`；含 `platform_config` provenance。 |
+| `pair` | `main.py::cmd_pair`、`src/serial_port_manager.py` | 显式参数优先；先打开/清空 PC COM，再经 HDC/ADB 多次写唯一 marker，接收可分片字节并验证，保存配对。不会自动改设备 `stty`。 | 成功/分类错误摘要；详细有界证据在 `pair-diagnostic.json`，正常 marker 不回显。 |
+| `deploy` | `cmd_deploy`、`src/deployment.py::DeploymentManager` | 规划 agent/workload/workload config/shader/golden，远端 hash 相同则跳过；可安全清理旧 manifest 中且限定根目录内的资产。 | 最终 manifest 路径；清单逐资产记录 pushed/unchanged/hash。平台 YAML 不部署。 |
+| `golden` | `cmd_golden`、`_execute_live_qualification`、`GoldenService` | 不足的 run 用统一 live 事务补齐；每次必须 PASS 且恰有一个 golden；随后聚合 checksum/readback 和 fingerprint。 | 成功时给 qualification ID/manifest/hash；首个 live 失败立即给具体 `result.json` 路径。 |
+| `calibrate` | `cmd_calibrate`、`CalibrationService` | 从已有 run 或 live run 构造样本，按温度/遥测/throttle/environment 拒绝不合格样本，生成 draft baseline。 | 最终 baseline ID/draft/proposal；不会自动批准。 |
+| `baseline` | `BaselineRegistry` | 创建后批准 evidence 不可变；批准/弃用状态与审计分离；导入导出校验 hash。 | 最终 ID/status/hash/bundle；篡改返回配置错误。 |
+| `run` / `execute` | `cmd_run`、`RunManifestBuilder`、`RunOrchestrator`、`PolicyEngine` | 两个名字进入同一 v2 事务；不会隐式 pair。依次解析配置/基线、profile probe、部署、建 manifest、COM-before-agent、UART 判断、落盘、PASS spool 清理。 | 仅最终批次对象；失败 run 增加精简 `errors`，完整 reasons 在 `result.json`。 |
+| `monitor` | `cmd_monitor_events` | 直接监听已存在的 JSONL 生产者，自动从第一帧识别 run ID，校验协议并存证；没有 manifest/baseline 策略上下文。 | `NOT_EVALUATED` 诊断结果，绝不签发 DUT PASS。 |
+| `collect` | `cmd_collect` | 拉取一个精确 run 的 spool；有且仅有一个 hash manifest 时逐文件验证；验证成功且未 `--keep-remote` 才删除远端。 | `collection.json`；hash/路径异常退出 3 并保留远端。 |
+| `report` | `cmd_report` | 从既有 `result.json` 重建 markdown/json/csv，不重跑判断。 | 新报告与原 result 一致，原 run 不变。 |
+| `simulate` | `cmd_simulate`、`RunOrchestrator.evaluate_stream` | 用保存的 framed events 或 raw serial 进入同一个事件解码/判断路径；可选 realtime 时间重放。 | 新 replay run 目录；协议/分类应可复现。 |
+
+### A.1 normal `run` 的实际事务边界
+
+```text
+profile/platform/baseline 解析
+  -> 目标域实时 probe + required tools
+  -> 资产 hash 部署或 --no-deploy 校验
+  -> 构建唯一 run manifest / agent argv
+  -> 打开并清空 PC COM
+  -> HDC/ADB 启动 Shell agent + workload
+  -> UART 事件进入 EventDecoder / PolicyEngine / ArtifactStore
+  -> summary + restore + agent_final
+  -> 最终 result.json 与 CMD 结果
+  -> 仅 PASS：精确 spool 自动删除（除非 --keep-device-spool）
+```
+
+不属于 normal `run` 的隐式行为：自动 pair、生成 golden、校准/批准 baseline、全平台无关域扫描、把 run manifest/platform YAML 推给 agent、把正常 UART 明细复制到 CMD。
+
+## 附录 B：接口、数据方向与判断行为
+
+### B.1 PC 配置与路径接口
+
+| 接口 | 方向 | 代码行为 | 现场检查 |
+|---|---|---|---|
+| `--config-dir` | PC 文件 -> PC | 优先于 cwd/EXE/bundle 同名输入；兼容 `<root>/config/...` 与 `<root>/...`。 | `validate.resolved_configs` 和 `probe.platform_config` 的 path/hash。 |
+| `--output-dir` | PC 写 | 所有 probe/qualification/run/report 产物写到该根。 | EXE/bundle 目录无新增文件。 |
+| `--state-dir` | PC 持久写 | 保存 `pairing.conf`、pair 诊断和 baseline registry。 | 换 `$State` 后不会意外复用旧 pairing/baseline。 |
+| `--device-root` | PC 规划 -> 设备路径 | 生成 POSIX remote path；默认 `/data/local/tmp/avs`。 | deploy/spool/cleanup 都在此根内。 |
+
+### B.2 HDC/ADB 和设备 agent 接口
+
+- Transport 把设备命令作为 argv 调用，并区分主机工具失败与远端 Shell 退出码；不能把 `/bin/sh: ... not found` 且 host return code 0 误报为 capability available。
+- PC 不要求设备解析 JSON manifest。`RunManifestBuilder` 把已经解析的环境、遥测、kernel rule、超时和 workload argv 转成 agent 参数，Shell agent 只消费固定选项和 `--` 后的 workload argv。
+- agent 只允许一个 `emit_event` 写者把同一 JSON 行依次追加到设备 `events.jsonl` 和 UART，workload/telemetry/kernel 逻辑不直接并发打开 UART。
+- workload stdout/stderr 必须是支持的原生 JSON 对象。无法识别 `type` 的行被转换为 `WORKLOAD_OUTPUT_INVALID`，错误事件中保留最多 256 字符的原始诊断，避免无原因失败。
+- `kernel-monitor=critical`/`full-local` 在设备侧先收集再按版本化规则过滤和去重；只有匹配事件进 UART。`full-local` 可保留 `kernel.raw`，不代表原始 `dmesg` 可进入 UART。
+
+### B.3 UART 事件类型
+
+UART 每行一个 UTF-8 JSON 对象，最低字段：
+
+```json
+{
+  "schema_version": 1,
+  "run_id": "unique-run-id",
+  "seq": 1,
+  "timestamp_ms": 0,
+  "source": "agent|cpu-workload|gpu-workload|cpu-telemetry|gpu-telemetry|kernel",
+  "type": "agent_start|environment|start|heartbeat|batch|verify|golden|telemetry|kernel|error|violation|summary|agent_final",
+  "payload": {}
+}
+```
+
+| 事件 | 设备侧行为 | PC 判断行为 | CMD 行为 |
+|---|---|---|---|
+| `agent_start` | 报 agent/protocol/baud，seq 从 1 开始。 | 标记 agent 已启动并开启 workload liveness。 | 正常不打印。 |
+| `environment` | 每个成功 readback/restore 报 path/requested/actual/required/success。 | 作为可审计环境证据保存。 | 正常不打印。 |
+| agent `error` | apply/readback/restore 失败报 phase/path/requested/actual/error_code。 | required 设置失败或恢复失败归基础设施原因。 | 最终失败对象复制精简字段。 |
+| workload `start/heartbeat/batch/verify/golden` | 原生 workload JSON 被包入统一 envelope。 | 这些 workload 事件刷新 workload activity；telemetry 不刷新。 | 正常不打印。 |
+| workload `error/violation` | 保留原生 error code/line。 | 归 DUT 或 workload reason，保留 workload exit。 | 最终失败对象显示精简原因。 |
+| `telemetry` | 每 5 秒按已解析 path 采样单 metric；温度按 parser 归一化。 | required presence、阈值、性能/环境策略；不掩盖 heartbeat 静默。 | 正常不打印。 |
+| `kernel` | 只发匹配并有界去重的规则事件。 | critical severity 可判 DUT_FAIL。 | 只在最终 reason 中摘要。 |
+| `summary` | workload 原生最终结果。 | 停止 workload heartbeat watchdog，保存 `workload-summary.json`。 | 不逐条打印，最终 verdict 汇总。 |
+| `agent_final` | 报 workload_exit、summary_seen、timed_out、restoration_ok、spool_complete。 | 必须存在并与 HDC/ADB agent 进程退出一致，否则 INFRA_ERROR。 | 只反映到最终结果。 |
+
+Shell agent 原始 UART 帧不含 `crc32`；PC 的 `ArtifactStore` 在规范化写入 `events.jsonl`、`telemetry.jsonl`、`kernel-events.jsonl` 时补计算 CRC。协议受损后，PC 保留已确定的 INFRA_ERROR，停止把后续字节当可信事件，但继续排空并保存原始串口，直到 agent 命令结束或排空窗口结束。
+
+### B.4 设备 sysfs 与环境行为
+
+| 语义接口 | 配置候选/来源 | agent/PC 行为 | 必查结果 |
+|---|---|---|---|
+| CPU policy max | `.../cpufreq/policy*/cpuinfo_max_freq` 或实际 probe 最大频率记录 | `RunManifestBuilder` 按 `policyN`/CPU suffix 把每个环境 action 绑定到自己的实例；不会用一个最大值覆盖所有 cluster。 | environment requested/actual 与 DEV-INFO policy 表一致。 |
+| CPU governor/online | probe 的实际 `scaling_governor`、`cpu*/online` | 写入前保存旧值，写后 readback，结束逐项 restore。 | readback/restore 事件齐全；CPU0 implicit online 不伪造可写路径。 |
+| GPU hang count | v500 优先、v350 回退 | 独立 full probe 扫描候选；GPU profile 设为 required，CPU profile 不触碰。 | path、权限、数值及运行前后计数。 |
+| Thermal | thermal zone `type` + `temp`，`temperature_unit:auto` | 每个读值独立判断 degree/millidegree，保留 probe raw/normalized/valid 信息；agent 接收最终 parser。 | `30` 约为 30 °C，`31074` 约为 31.074 °C，不得变成 0.03/31074 °C。 |
+| GPU power/frequency/utilization | `kirin9020.yaml` 当前候选 | probe 解析实际 path，live manifest 只携带已选择路径。 | capabilities path 与 UART telemetry path 一致。 |
+
+### B.5 产物和设备 spool
+
+PC run 目录是判定主记录；设备 spool 是 UART 丢失/控制链路异常时的后备记录。两者的 `events.jsonl` 语义相同但哈希清单独立：
+
+| 位置 | 产生者 | 生命周期 |
+|---|---|---|
+| `$Out/<run-id>/serial.raw` | PC 串口读取 | 总是尽量保存，包括协议错误后的原始尾部；不可编辑。 |
+| `$Out/<run-id>/events.jsonl` | PC ArtifactStore | 仅包含成功解码的规范化事件，带落盘 CRC。 |
+| `$Out/<run-id>/result.json` | PC PolicyEngine/RunOrchestrator | 最终 verdict、退出码、DUT/infra reasons、liveness、workload exit。 |
+| `$RemoteRoot/runs/<run-id>/spool/events.jsonl` | Shell agent | UART 同源备份；PASS normal run 默认删除，失败默认保留。 |
+| `.../spool/artifact-hashes.json` | Shell agent | 当前至少校验 device events 文件；`collect --verify-hashes` 逐项验证。 |
+
+## 附录 C：关键预期输出示例
+
+以下示例只说明字段关系；path、hash、run ID 和数值以现场为准。
+
+### C.1 批准配置被正确选中
+
+```json
+{
+  "valid": true,
+  "resolved_configs": [
+    {
+      "kind": "platform",
+      "name": "kirin9020",
+      "path": "D:\\approved-config\\platforms\\kirin9020.yaml",
+      "sha256": "same-as-Get-FileHash"
+    }
+  ],
+  "errors": []
+}
+```
+
+Probe 还应包含：
+
+```json
+{
+  "platform_config": {
+    "path": "D:\\approved-config\\platforms\\kirin9020.yaml",
+    "sha256": "same-as-validate",
+    "external_override": true
+  }
+}
+```
+
+### C.2 环境 readback 成功与失败
+
+```json
+{"type":"environment","payload":{"phase":"readback","path":"/sys/devices/system/cpu/cpufreq/policy4/scaling_max_freq","requested":"2050000","actual":"2050000","required":true,"success":true}}
+```
+
+```json
+{"type":"error","payload":{"origin":"agent","error_code":"ENVIRONMENT_READBACK_FAILED","phase":"readback","path":"/sys/.../scaling_max_freq","requested":"2050000","actual":"1800000","required":true}}
+```
+
+第二种情况的 CMD 最终对象应含精简 `errors`，至少保留 code/phase/path/requested/actual；完整 envelope、seq 和时间在 `events.jsonl`/`result.json`。
+
+### C.3 normal run 成功/失败 CMD
+
+成功示例：
+
+```json
+{
+  "exit_code": 0,
+  "repeat": 1,
+  "runs": [
+    {"exit_code": 0, "result": "...\\result.json", "run_id": "CPU-001", "verdict": "PASS"}
+  ]
+}
+```
+
+失败示例：
+
+```json
+{
+  "exit_code": 3,
+  "repeat": 1,
+  "runs": [
+    {
+      "run_id": "CPU-001",
+      "verdict": "INFRA_ERROR",
+      "exit_code": 3,
+      "result": "...\\result.json",
+      "device_spool": "retained",
+      "errors": [{"code": "ENVIRONMENT_READBACK_FAILED", "phase": "readback", "path": "/sys/...", "requested": "2050000", "actual": "1800000"}]
+    }
+  ]
+}
+```
+
+### C.4 当前两类问题的快速分流
+
+| 现场现象 | 先看什么 | 判定方向 | 必须回传 |
+|---|---|---|---|
+| 改了 approved-config 但仍识别不到 v500 | DEV-00 hash、validate path/hash、probe platform_config | path/hash 错是 PC 配置选择；正确但候选仍旧是配置/schema 缺陷 | 三份 JSON/text + 实际 YAML |
+| probe 有 v500，GPU golden 仍报 hang missing | full capabilities 和失败 run capabilities/manifest | profile scope 或 live manifest 构建缺陷 | 两份 capabilities、run manifest、CMD error |
+| golden 看似“卡住”，CMD 无进度 | 最新 `golden-*-*` 的 serial.raw/events/result、设备 spool、HDC agent 进程 | 无 UART 是链路/agent；只有 telemetry 无 workload 是 SILENT；协议损坏是 INFRA | 整个 run、spool、ps、精确时间 |
+| CPU environment requested 全是 2508000 | DEV-INFO cpufreq policy 表与 environment events | per-policy 映射回归 | policy 表、capabilities、events |
+| workload 失败但 CMD 没原因 | CMD JSON 与 result reasons/workload summary | 精简 reason 映射缺陷或原生输出无效 | stdout/stderr、result、summary、设备 workload log |
+| PASS 后设备存储持续增长 | CMD run ID、远端 runs/spool、`--keep-device-spool` 使用情况 | 自动清理/精确路径保护问题 | run 输出、远端目录、collection 记录 |

@@ -8,9 +8,15 @@ import unittest
 from argparse import Namespace
 from pathlib import Path
 
-from src.cli_commands import _apply_platform_serial, _apply_saved_pairing
+from src.cli_commands import (
+    _apply_platform_serial,
+    _apply_saved_pairing,
+    _cleanup_device_spool_after_pass,
+    _concise_reason,
+)
 from src.events import build_event, encode_event
 from src.path_resolver import PathResolver
+from src.transport import CommandResult
 
 
 ROOT = Path(__file__).parents[1]
@@ -52,6 +58,59 @@ class CLITests(unittest.TestCase):
             payload = json.loads(result.stdout)
             self.assertEqual(payload["count"], 0)
 
+    def test_validate_reports_resolved_override_path_and_fingerprint(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            override = Path(tmp)
+            platform_path = override / "platform.json"
+            platform_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "name": "override-platform",
+                        "transport": {},
+                        "serial": {},
+                        "cpu": {},
+                        "gpu": {},
+                        "thermal": {},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            workload = override / "workload.bin"
+            workload.write_bytes(b"workload")
+            workload_config = override / "workload.json"
+            workload_config.write_text("{}", encoding="utf-8")
+            profile_path = override / "profile.json"
+            profile_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "name": "override-profile",
+                        "target": "cpu",
+                        "platform": str(platform_path),
+                        "workload": {"binary": "workload.bin", "config": "workload.json"},
+                        "environment": {},
+                        "telemetry": {"required": [], "optional": []},
+                        "kernel_monitor": "off",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            result = self.run_cli(
+                "--config-dir",
+                str(override),
+                "--json",
+                "validate",
+                "--profile",
+                str(profile_path),
+                "--offline",
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            payload = json.loads(result.stdout)
+            platforms = [item for item in payload["resolved_configs"] if item["kind"] == "platform"]
+            self.assertEqual(Path(platforms[0]["path"]), platform_path.resolve())
+            self.assertEqual(len(platforms[0]["sha256"]), 64)
+
     def test_saved_pairing_fills_missing_baud_without_overwriting_explicit_pc_port(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -73,6 +132,58 @@ class CLITests(unittest.TestCase):
             self.assertEqual(args.pc_serial, "COM9")
             self.assertEqual(args.device_uart, "/dev/ttyHW0")
             self.assertEqual(args.baudrate, 9600)
+
+    def test_cmd_reason_keeps_actionable_environment_fields(self) -> None:
+        reason = _concise_reason(
+            {
+                "scope": "agent",
+                "code": "ENVIRONMENT_READBACK_FAILED",
+                "seq": 2,
+                "evidence": {
+                    "phase": "readback",
+                    "path": "/sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq",
+                    "requested": "1550000",
+                    "actual": "2508000",
+                    "unrelated_large_payload": {"ignored": True},
+                },
+            }
+        )
+        self.assertEqual(reason["requested"], "1550000")
+        self.assertEqual(reason["actual"], "2508000")
+        self.assertNotIn("unrelated_large_payload", reason)
+
+    def test_pass_spool_cleanup_is_scoped_to_exact_run(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = PathResolver(
+                bundle_root=root,
+                exe_root=root,
+                state_root=root / "state",
+                output_root=root / "output",
+                cwd=root,
+            )
+
+            class FakeTransport:
+                def __init__(self):
+                    self.calls = []
+
+                def invoke(self, argv, timeout_s):
+                    self.calls.append((tuple(argv), timeout_s))
+                    return CommandResult(tuple(argv), 0, "", "", 0.0)
+
+            transport = FakeTransport()
+            expected = str(paths.remote("runs/run-1/spool"))
+            status, error = _cleanup_device_spool_after_pass(
+                paths, transport, run_id="run-1", spool_dir=expected, keep=False
+            )
+            self.assertEqual((status, error), ("removed-after-pass", None))
+            self.assertEqual(transport.calls[0][0], ("rm", "-rf", expected))
+            status, error = _cleanup_device_spool_after_pass(
+                paths, transport, run_id="run-1", spool_dir=str(paths.remote("runs")), keep=False
+            )
+            self.assertEqual(status, "retained")
+            self.assertIn("refusing", error or "")
+            self.assertEqual(len(transport.calls), 1)
 
     def test_selected_platform_supplies_serial_settings_only_when_unresolved(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

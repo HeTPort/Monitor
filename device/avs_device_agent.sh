@@ -3,7 +3,7 @@
 # Fixed POSIX-shell device supervisor for targets without Python.
 # Normal workload/UART data is written only to the UART and local spool.
 
-AGENT_VERSION=0.1.0
+AGENT_VERSION=0.1.1
 PROTOCOL_VERSION=1
 
 if [ "${1:-}" = "--version" ]; then
@@ -113,6 +113,13 @@ restore_environment() {
         [ -n "$state_path" ] || continue
         if ! printf '%s\n' "$state_value" > "$state_path" 2>/dev/null; then
             restoration_ok=false
+            escaped_path=$(json_escape "$state_path")
+            escaped_value=$(json_escape "$state_value")
+            emit_event agent error "{\"origin\":\"restoration\",\"error_code\":\"ENVIRONMENT_RESTORE_FAILED\",\"phase\":\"restore\",\"path\":\"$escaped_path\",\"requested\":\"$escaped_value\"}"
+        else
+            escaped_path=$(json_escape "$state_path")
+            escaped_value=$(json_escape "$state_value")
+            emit_event agent environment "{\"phase\":\"restore\",\"path\":\"$escaped_path\",\"requested\":\"$escaped_value\",\"actual\":\"$escaped_value\",\"success\":true}"
         fi
     done < "$restore_file"
 }
@@ -129,17 +136,24 @@ apply_environment() {
     [ -n "$environment_specs" ] || return 0
     while IFS='|' read -r state_path state_value state_required; do
         [ -n "$state_path" ] || continue
+        required_json=false
+        [ "$state_required" = "1" ] && required_json=true
+        escaped_path=$(json_escape "$state_path")
+        escaped_requested=$(json_escape "$state_value")
         old_value=$(cat "$state_path" 2>/dev/null) || old_value=
         printf '%s|%s\n' "$state_path" "$old_value" >> "$restore_file"
         if ! printf '%s\n' "$state_value" > "$state_path" 2>/dev/null; then
-            emit_event agent error '{"origin":"agent","error_code":"ENVIRONMENT_APPLY_FAILED"}'
+            emit_event agent error "{\"origin\":\"agent\",\"error_code\":\"ENVIRONMENT_APPLY_FAILED\",\"phase\":\"apply\",\"path\":\"$escaped_path\",\"requested\":\"$escaped_requested\",\"actual\":null,\"required\":$required_json}"
             [ "$state_required" = "1" ] && return 1
             continue
         fi
         readback=$(cat "$state_path" 2>/dev/null) || readback=
+        escaped_actual=$(json_escape "$readback")
         if [ "$readback" != "$state_value" ]; then
-            emit_event agent error '{"origin":"agent","error_code":"ENVIRONMENT_READBACK_FAILED"}'
+            emit_event agent error "{\"origin\":\"agent\",\"error_code\":\"ENVIRONMENT_READBACK_FAILED\",\"phase\":\"readback\",\"path\":\"$escaped_path\",\"requested\":\"$escaped_requested\",\"actual\":\"$escaped_actual\",\"required\":$required_json}"
             [ "$state_required" = "1" ] && return 1
+        else
+            emit_event agent environment "{\"phase\":\"readback\",\"path\":\"$escaped_path\",\"requested\":\"$escaped_requested\",\"actual\":\"$escaped_actual\",\"required\":$required_json,\"success\":true}"
         fi
     done <<EOF
 $environment_specs
@@ -219,7 +233,9 @@ handle_workload_line() {
             [ "$event_type" = "summary" ] && summary_seen=true
             ;;
         *)
-            emit_event agent error '{"origin":"agent","error_code":"WORKLOAD_OUTPUT_INVALID"}'
+            diagnostic=$(printf '%s' "$native_line" | cut -c 1-256)
+            escaped=$(json_escape "$diagnostic")
+            emit_event "$target-workload" error "{\"origin\":\"workload\",\"error_code\":\"WORKLOAD_OUTPUT_INVALID\",\"line\":\"$escaped\"}"
             ;;
     esac
 }
@@ -305,7 +321,10 @@ restore_environment
 emit_event agent agent_final "{\"workload_exit_code\":$workload_exit,\"summary_seen\":$summary_seen,\"timed_out\":$timed_out,\"restoration_ok\":$restoration_ok,\"spool_complete\":true}"
 
 if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "$events_file" > "$spool_dir/artifact-hashes.sha256" 2>/dev/null || true
+    events_sha256=$(sha256sum "$events_file" 2>/dev/null | awk '{print $1}') || events_sha256=
+    if [ -n "$events_sha256" ]; then
+        printf '{"schema_version":1,"sha256":{"events.jsonl":"%s"}}\n' "$events_sha256" > "$spool_dir/artifact-hashes.json" 2>/dev/null || true
+    fi
 fi
 
 exit "$workload_exit"

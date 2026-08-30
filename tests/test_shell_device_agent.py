@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+import json
 from pathlib import Path
 
 from src.events import EventDecoder
@@ -31,7 +32,7 @@ class ShellDeviceAgentTests(unittest.TestCase):
             timeout=10,
         )
         self.assertEqual(version.returncode, 0, version.stderr)
-        self.assertEqual(version.stdout.strip(), "avs-device-agent 0.1.0 protocol 1")
+        self.assertEqual(version.stdout.strip(), "avs-device-agent 0.1.1 protocol 1")
 
         with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
             root = Path(tmp)
@@ -46,6 +47,7 @@ class ShellDeviceAgentTests(unittest.TestCase):
             workload = root / "workload.sh"
             workload.write_text(
                 "#!/bin/sh\n"
+                "echo 'driver setup diagnostic'\n"
                 "echo '{\"type\":\"heartbeat\",\"progress\":1}'\n"
                 "echo '{\"type\":\"summary\",\"result\":\"PASS\",\"exit_code\":0}'\n",
                 encoding="utf-8",
@@ -93,7 +95,14 @@ class ShellDeviceAgentTests(unittest.TestCase):
             events = decoder.feed(uart.read_bytes())
             decoder.finish()
             self.assertEqual(events[0].type, "agent_start")
+            environment = [event for event in events if event.type == "environment"]
+            self.assertTrue(any(event.payload.get("phase") == "readback" for event in environment))
+            self.assertTrue(any(event.payload.get("phase") == "restore" for event in environment))
+            self.assertTrue(all(event.payload.get("path") == shell_path(state) for event in environment))
             self.assertIn("summary", [event.type for event in events])
+            invalid_output = [event for event in events if event.type == "error"]
+            self.assertEqual(invalid_output[0].payload["error_code"], "WORKLOAD_OUTPUT_INVALID")
+            self.assertEqual(invalid_output[0].payload["line"], "driver setup diagnostic")
             self.assertEqual(events[-1].type, "agent_final")
             self.assertTrue(events[-1].payload["restoration_ok"])
             temperatures = {
@@ -104,6 +113,8 @@ class ShellDeviceAgentTests(unittest.TestCase):
             self.assertEqual(temperatures["cpu.temperature.0"], 31.074)
             self.assertEqual(temperatures["cpu.temperature.1"], 30.0)
             self.assertTrue((spool / "events.jsonl").exists())
+            hashes = json.loads((spool / "artifact-hashes.json").read_text(encoding="utf-8"))
+            self.assertEqual(len(hashes["sha256"]["events.jsonl"]), 64)
 
 
 if __name__ == "__main__":

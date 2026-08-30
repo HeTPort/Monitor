@@ -40,7 +40,7 @@ The design therefore retains the useful transport and workload contracts while r
 | Path, config, event, policy, artifact, baseline, and calibration services | Implemented | Covered by offline unit and integration tests. |
 | ADB/HDC transport and deployment | Implemented | Typed argv-only commands, SHA-256 verification, idempotency, and managed stale cleanup are fake-transport tested. |
 | PC qualification and production CLI | Implemented | `probe`, `deploy`, `golden`, `calibrate`, `baseline`, `run`, `collect`, `report`, `validate`, and `simulate` route through v2 services. |
-| Device agent | Bring-up implementation complete | Fixed Python script, single UART writer, telemetry/kernel producers, spool hashes, and restoration are offline tested. Confirm Python availability or replace it with the preferred native build for release images. |
+| Device agent | Shell bring-up implementation complete | Fixed POSIX Shell script, single UART writer, telemetry/kernel producers, spool hashes, and restoration are offline tested; device Python is not required. |
 | Packaging | Build definition complete | PyInstaller spec, bundled resources, hidden imports, build script, and frozen-path unit test exist. Build/smoke test still needs an environment with the packaging dependencies. |
 | UDP hardware qualification | Pending office execution | Probe both framework variants, validate permissions/interfaces, generate CPU/GPU goldens, calibrate a known-good cohort, approve baselines, and run deliberate-failure tests. |
 
@@ -105,11 +105,11 @@ Qualification is performed only when a baseline does not exist, is intentionally
 
 ```text
 load approved baseline
-  -> lightweight compatibility probe
+  -> target/profile-scoped compatibility probe
   -> verify or incrementally deploy assets
   -> verify environment
   -> execute workload and monitor events
-  -> collect device artifacts
+  -> retain device spool on failure; remove it after a complete PASS unless requested
   -> judge against baseline
   -> report and archive
 ```
@@ -265,7 +265,7 @@ Rationale: batch runs must never silently consume unreviewed or overwritten cali
 
 ### 7.8 `RunOrchestrator`
 
-Purpose: build a resolved run manifest, verify compatibility, deploy assets, control the device agent, receive events, enforce timeouts, collect artifacts, and restore state.
+Purpose: build a local resolved run manifest, verify compatibility, deploy/verify assets, open and clear the PC UART before agent launch, receive/drain events, enforce independent workload liveness, finalize artifacts, and restore state.
 
 Origin: replaces the duplicated `monitor` and `execute` loops plus the synchronous/background ambiguity in the current scheduler.
 
@@ -322,9 +322,10 @@ Rationale: each verdict must be reproducible from immutable evidence.
 
 ### 8.2 Responsibilities
 
-- Validate run manifest and deployed hashes.
+- Consume PC-resolved data-only arguments and execute verified deployed assets; the Shell backend does not parse a remote manifest.
 - Capture the original affinity, governor, frequency, and related mutable state.
 - Apply requested environment and verify readback.
+- Emit structured environment readback/restoration evidence with path, requested value, and actual value.
 - Launch the workload with stdout/stderr captured through a pipe.
 - Sample CPU/GPU telemetry at configured intervals.
 - Monitor filtered critical kernel events without clearing the kernel ring buffer.

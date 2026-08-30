@@ -6,7 +6,7 @@ import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
-from typing import Any, Mapping
+from typing import Any, Iterable, Mapping
 
 from .config_loader import PlatformConfig
 
@@ -84,9 +84,15 @@ class PlatformProbe:
         self.platform = platform
         self.backend = backend
 
-    def probe(self, *, full: bool = True) -> dict[str, Any]:
+    def probe(self, *, full: bool = True, domains: Iterable[str] | None = None) -> dict[str, Any]:
+        selected_domains = set(domains or ("cpu", "gpu"))
+        invalid_domains = selected_domains.difference({"cpu", "gpu"})
+        if invalid_domains:
+            raise ProbeError(f"unsupported probe domains: {', '.join(sorted(invalid_domains))}")
         capabilities: dict[str, Any] = {}
         for domain, section in (("cpu", self.platform.cpu), ("gpu", self.platform.gpu)):
+            if domain not in selected_domains:
+                continue
             interfaces = section.get("interfaces", {})
             if not isinstance(interfaces, dict):
                 raise ProbeError(f"platform {domain}.interfaces must be a mapping")
@@ -97,11 +103,15 @@ class PlatformProbe:
                     f"{domain}.{name}", definition, include_values=full
                 )
 
-        cpu_topology = self._probe_cpu_topology(include_values=full)
+        cpu_topology = (
+            self._probe_cpu_topology(include_values=full)
+            if "cpu" in selected_domains
+            else {"core_count": 0, "cores": [], "source": "not-requested"}
+        )
         thermal = self._probe_thermal(include_values=full)
-        if thermal.get("cpu", {}).get("paths"):
+        if "cpu" in selected_domains and thermal.get("cpu", {}).get("paths"):
             capabilities["cpu.temperature"] = thermal["cpu"]
-        if thermal.get("gpu", {}).get("paths"):
+        if "gpu" in selected_domains and thermal.get("gpu", {}).get("paths"):
             capabilities["gpu.temperature"] = thermal["gpu"]
 
         required_missing = sorted(
@@ -112,6 +122,7 @@ class PlatformProbe:
             "producer": {"name": "vmin_judge", "component": "PlatformProbe"},
             "platform": self.platform.name,
             "platform_fingerprint": self.platform.fingerprint,
+            "probe_domains": sorted(selected_domains),
             "device": dict(self.backend.identity()),
             "cpu_topology": cpu_topology,
             "thermal_zones": thermal,

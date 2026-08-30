@@ -82,7 +82,7 @@ vmin_judge.exe [global-options] <command> [command-options]
 
 | Parameter | Purpose | Default/behavior |
 |---|---|---|
-| `--config-dir PATH` | External platform/profile/rule override root. | Optional. |
+| `--config-dir PATH` | Explicit external configuration override root. It may contain `config/platforms/...` or start directly at `platforms/...`. | Optional; overrides caller, executable, and bundled configuration. |
 | `--output-dir PATH` | Root for qualification and run artifacts. | Current directory or configured writable state. |
 | `--state-dir PATH` | Persistent pairing, baseline registry, and cache. | User-local application state. |
 | `--transport auto\|adb\|hdc` | Device control transport. | `auto`. |
@@ -93,14 +93,16 @@ vmin_judge.exe [global-options] <command> [command-options]
 | `--pc-serial PORT` | Actual PC-side UART enumerated by the host. | Saved pairing or command-specific requirement. |
 | `--device-uart POSIX_PATH` | Device-side UART such as `/dev/ttyAMA0`. | Saved pairing or platform profile. |
 | `--baudrate INTEGER` | UART baud. | Saved/platform value; Kirin9020 uses `9600`. |
-| `--log-level LEVEL` | `debug`, `info`, `warning`, or `error`. | `info`. |
+| `--log-level LEVEL` | `debug`, `info`, `warning`, or `error`. | `warning`; routine `run` progress is not copied to CMD. |
 | `--json` | Print machine-readable command result. | Off. |
 | `--quiet` | Suppress progress output. | Off. |
 | `--version` | Print packaged version and schema support. | Exits immediately. |
 
-**Outputs:** Console status, a machine-readable command result when `--json` is used, command-specific artifacts, and a stable process exit code.
+**Outputs:** Normal `run` writes operational events to UART/artifacts and prints only its final result. A failed run additionally prints concise actionable reason fields; `--json` keeps the same contract in machine-readable form.
 
-**Errors:** Invalid configuration, ambiguous device, missing dependency/tool, unsupported device, transport failure, or command-specific failure. Detailed errors are written to the command/run result artifact.
+**Errors:** Invalid configuration, ambiguous device, missing dependency/tool, unsupported device, transport failure, or command-specific failure. CMD receives the concise error code plus useful path/requested/actual fields; complete evidence remains in `result.json`.
+
+`validate` and `probe` report the resolved platform/profile file path and SHA-256. Check those fields before trusting an override; deployment manifests do not prove platform-YAML selection because platform configuration is consumed on the PC and is not deployed to the device.
 
 ## 4. PC CLI command APIs
 
@@ -130,7 +132,7 @@ vmin_judge.exe `
 | `--refresh` | Ignore a cached capability record. |
 | `--require NAME` | Require a named capability; repeatable. |
 
-**Outputs:** `capabilities.json`, device identity, resolved interface provenance, units, permissions, and required/optional status. Thermal records retain the raw value, configured/applied unit, normalized Celsius value, and validity reason. Profile-driven commands gate only on that profile's required capabilities while retaining platform-wide gaps as `platform_required_missing`.
+**Outputs:** `capabilities.json`, the resolved platform config path/fingerprint, device identity, interface provenance, units, permissions, and required/optional status. Thermal records retain the raw value, configured/applied unit, normalized Celsius value, and validity reason. Standalone `probe --full` scans both domains; profile-driven commands probe only their target domain and gate on that profile's requirements.
 
 **Handoff:** Consumed by `deploy`, `golden`, `calibrate`, and `run`.
 
@@ -386,11 +388,12 @@ vmin_judge.exe `
 | `--repeat N` | Sequential repetitions. |
 | `--run-id ID` | Optional externally supplied unique run ID. |
 | `--no-deploy` | Require already matching device assets. |
+| `--keep-device-spool` | Retain the device spool after PASS. Failures are always retained. |
 | `--kernel-monitor critical\|off` | Filtered critical kernel policy. |
 | `--overall-timeout SEC` | PC-side transaction timeout. |
 | `--heartbeat-timeout SEC` | PC-side liveness timeout. |
 
-**Outputs:** Complete run artifact directory and final machine-readable result.
+**Outputs:** Complete PC run artifact directory and final machine-readable result. Routine events stay on UART/artifacts; CMD shows only the final verdict and, on failure, concise reasons. A PASS removes its device spool after the PC artifact is complete unless `--keep-device-spool` is set.
 
 **Handoff:** Result/report goes to batch automation; artifacts go to traceability storage.
 
@@ -569,13 +572,13 @@ Internal run parameters include run ID, target, UART, spool directory, timeout, 
 The agent does not change the device UART baud automatically. The BSP/console owns that setup; `9600` configures the PC endpoint and records the expected link rate.
 | `--version` | Print agent/protocol version. |
 
-**Inputs:** Run manifest, deployed workload/assets, platform interfaces, kernel filter rules.
+**Inputs:** PC-resolved run parameters, deployed workload/assets, platform interfaces, and kernel filter rules. The current Shell backend receives a safe flattened argv; it does not parse or require a remote JSON manifest.
 
 **Outputs:** UART JSONL events, local device spool, agent process exit status.
 
 **Errors:** Manifest/hash/config failure, environment apply/readback failure, workload failure, telemetry failure, UART failure, timeout, or restoration failure. Restoration failure is always reported even when the workload passed.
 
-**Implementation note:** Monitor deploys one version-controlled script and one resolved JSON manifest. It does not generate ad-hoc shell scripts per run. Only the agent opens the UART; workload, telemetry, and filtered kernel producers submit records through its queue.
+**Implementation note:** Monitor deploys one version-controlled Shell script and passes resolved data-only arguments. It does not deploy or generate a per-run script, and it no longer pushes an unused remote manifest. Only the agent writes the UART; workload, telemetry, and filtered kernel producers are framed through that writer.
 
 ## 6. Native CPU workload API
 
@@ -911,6 +914,7 @@ A baseline or event produced by one schema must not be accepted by an incompatib
 ## 14. Operational guidance
 
 - Use `validate --package --offline` before taking a new package to the office.
+- When using `--config-dir`, inspect `resolved_configs.path`/`sha256` from `validate` and `platform_config` from `probe`; do not infer selection from deploy output.
 - Use `probe --full` after a BSP/kernel/driver update.
 - Use `deploy --verify-hashes`; later runs can deploy incrementally.
 - Generate and calibrate only on representative known-good boards.

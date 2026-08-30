@@ -65,7 +65,8 @@ cpu:
 
 gpu:
   driver_family: hvgr
-  kernel_module: hvgr_kmd_v350
+  kernel_module: hvgr_kmd_v500
+  kernel_module_candidates: [hvgr_kmd_v500, hvgr_kmd_v350]
   device_node: /sys/devices/platform/e2ec0000.hvgr
   interfaces:
     governor:
@@ -104,7 +105,9 @@ gpu:
       unit: platform_text
       required: false
     hang_count:
-      candidates: [/sys/module/hvgr_kmd_v350/parameters/gpu_hang_count]
+      candidates:
+        - /sys/module/hvgr_kmd_v500/parameters/gpu_hang_count
+        - /sys/module/hvgr_kmd_v350/parameters/gpu_hang_count
       unit: count
       required: true
     voltage:

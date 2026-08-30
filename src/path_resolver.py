@@ -97,9 +97,11 @@ class PathResolver:
         if owner is not None:
             owner_path = _absolute(Path(owner))
             candidates.append(owner_path.parent / raw if owner_path.suffix else owner_path / raw)
-        candidates.append(self.cwd / raw)
         if self.config_dir is not None:
             candidates.append(self.config_dir / raw)
+            if raw.parts and raw.parts[0].lower() == "config" and len(raw.parts) > 1:
+                candidates.append(self.config_dir.joinpath(*raw.parts[1:]))
+        candidates.append(self.cwd / raw)
         candidates.extend((self.exe_root / raw, self.bundle_root / raw))
         return self._deduplicate(candidates)
 
