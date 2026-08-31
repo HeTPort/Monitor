@@ -1,0 +1,265 @@
+PS D:\h60106817\release> $Exe = 'D:\h60106817\release\vmin_judge.exe'
+PS D:\h60106817\release> $PackageId = 'vmin-judge-2.0.1-20260831'
+PS D:\h60106817\release> $Device = '0123456789ABCDEF'
+PS D:\h60106817\release> $BoardId = 'NCH-004'
+PS D:\h60106817\release> $Framework = 'single'
+PS D:\h60106817\release> $PcSerial = 'COM6'
+PS D:\h60106817\release> $DeviceUart = '/dev//ttyHW0'
+PS D:\h60106817\release> $Baudrate = 9600
+PS D:\h60106817\release> $ApprovedConfig = 'D:\approved-config'
+PS D:\h60106817\release> $RemoteRoot = '/data/local/tmp/avs'
+PS D:\h60106817\release> $Out = "D:\MonitorTest\$PackageId\$Framework\$BoardId\output"
+PS D:\h60106817\release> $State = "D:\MonitorTest\$PackageId\$Framework\$BoardId\state"
+PS D:\h60106817\release> $Evidence = "D:\MonitorTest\$PackageId\$Framework\$BoardId\evidence"
+PS D:\h60106817\release> New-Item -ItemType Directory -Force -Path $Out, $State, $Evidence | Out-Null
+PS D:\h60106817\release> Push-Location $env:TEMP
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --version *> "$Evidence\REL-03-version.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $VersionExit = $LASTEXITCODE
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $VersionExit
+0
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --help *> "$Evidence\REL-03-help.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $HelpExit = $LASTEXITCODE
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $HelpExit
+0
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --output-dir $Out --state-dir $State --json validate --all --package --offline `
+>>   *> "$Evidence\REL-03-validate.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $ValidateExit = $LASTEXITCODE
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $ValidateExit
+0
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --output-dir $Out --state-dir $State --json list-profiles `
+>>   *> "$Evidence\REL-03-profiles.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $ProfilesExit = $LASTEXITCODE
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $ProfilesExit
+0
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --config-dir D:\approved-config `
+>>   --output-dir $Out --state-dir $State --json validate --all --package --offline
+{
+  "checked": [
+    "profile:cpu_mixed_big4",
+    "platform:kirin9020",
+    "workload-config:cpu_mixed_big4",
+    "profile:gpu_vulkan_mixed",
+    "platform:kirin9020",
+    "workload-config:gpu_vulkan_mixed",
+    "resource:device/avs_device_agent.sh",
+    "resource:config/kernel/critical.conf"
+  ],
+  "errors": [
+    "input not found: ../../tools/cpu-avs-workload; searched: D:\\Tools\\cpu-avs-workload, C:\\Users\\p_BalongAVS\\AppData\\tools\\cpu-avs-workload, C:\\Users\\p_BalongAVS\\AppData\\Local\\tools\\cpu-avs-workload",
+    "input not found: ../../tools/gpu-avs-workload; searched: D:\\Tools\\gpu-avs-workload, C:\\Users\\p_BalongAVS\\AppData\\tools\\gpu-avs-workload, C:\\Users\\p_BalongAVS\\AppData\\Local\\tools\\gpu-avs-workload"
+  ],
+  "offline": true,
+  "resolved_configs": [
+    {
+      "kind": "profile",
+      "name": "cpu_mixed_big4",
+      "path": "D:\\approved-config\\profiles\\cpu_mixed_big4.yaml",
+      "sha256": "4ffa1fd881492b1c57cda65a9dd06de6531cd0e8c3c2b9c41f776edddfea54af"
+    },
+    {
+      "kind": "platform",
+      "name": "kirin9020",
+      "path": "D:\\approved-config\\platforms\\kirin9020.yaml",
+      "sha256": "29a4e09e9d4749f68cb88b55d386613895ee2c05347c7b253a88be009f3241fb"
+    },
+    {
+      "kind": "profile",
+      "name": "gpu_vulkan_mixed",
+      "path": "D:\\approved-config\\profiles\\gpu_vulkan_mixed.yaml",
+      "sha256": "7be7f13600324c2aef7251c69c63b1834a9ef86c3702b59a66c37406a2149036"
+    }
+  ],
+  "valid": false
+}
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --output-dir $Out --state-dir $State --json simulate --events does-not-exist.jsonl `
+>>   *> "$Evidence\REL-05-invalid-config.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $LASTEXITCODE
+4
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $ApprovedConfig = 'D:\approved-config'
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --config-dir $ApprovedConfig --output-dir $Out --state-dir $State --json `
+>>   validate --profile gpu_vulkan_mixed --offline `
+>>   *> "$Evidence\DEV-00-approved-config.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp>
+PS C:\Users\p_BalongAVS\AppData\Local\Temp>
+PS C:\Users\p_BalongAVS\AppData\Local\Temp>
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $LASTEXITCODE
+4
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $PlatformConfig = @(
+>>   "$ApprovedConfig\config\platforms\kirin9020.yaml",
+>>   "$ApprovedConfig\platforms\kirin9020.yaml"
+>> ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> if (-not $PlatformConfig) { throw 'approved kirin9020.yaml not found' }
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Get-Item $PlatformConfig | Format-List FullName,Length,LastWriteTime `
+>>   *> "$Evidence\DEV-00-platform-file.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Get-FileHash $PlatformConfig -Algorithm SHA256 | Format-List `
+>>   *> "$Evidence\DEV-00-platform-sha256.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Select-String -Path $PlatformConfig -Pattern 'hvgr_kmd_v500','gpu_hang_count' `
+>>   *> "$Evidence\DEV-00-platform-v500-lines.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell getprop *> "$Evidence\DEV-INFO-01-getprop.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell uname -a *> "$Evidence\DEV-INFO-01-uname.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell cat /proc/cmdline *> "$Evidence\DEV-INFO-01-cmdline.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell cat /proc/cpuinfo *> "$Evidence\DEV-INFO-01-cpuinfo.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell id *> "$Evidence\DEV-INFO-01-id.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell mount *> "$Evidence\DEV-INFO-01-mount.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell df -h /data/local/tmp *> "$Evidence\DEV-INFO-01-storage.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell ls -l $DeviceUart *> "$Evidence\DEV-INFO-02-uart-path.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell cat /proc/consoles *> "$Evidence\DEV-INFO-02-consoles.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell sh -c 'ls -l /dev/tty* 2>&1' `
+>>   *> "$Evidence\DEV-INFO-02-all-tty.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell sh -c "stty -a < '$DeviceUart' 2>&1 || toybox stty -a < '$DeviceUart' 2>&1" `
+>>   *> "$Evidence\DEV-INFO-02-stty.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell cat /proc/tty/driver/serial `
+>>   *> "$Evidence\DEV-INFO-02-serial-driver.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell cat /sys/devices/system/cpu/present `
+>>   *> "$Evidence\DEV-INFO-03-cpu-present.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell cat /sys/devices/system/cpu/possible `
+>>   *> "$Evidence\DEV-INFO-03-cpu-possible.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell sh -c 'for p in /sys/devices/system/cpu/cpufreq/policy*; do
+>>   [ -d "$p" ] || continue
+>>   echo "=== $p ==="
+>>   ls -ld "$p"
+>>   for f in affected_cpus related_cpus cpuinfo_min_freq cpuinfo_max_freq scaling_min_freq scaling_max_freq scaling_cur_freq scaling_governor scaling_available_governors scaling_available_frequencies; do
+>>     printf "%s=" "$f"; cat "$p/$f" 2>&1
+>>   done
+>> done' *> "$Evidence\DEV-INFO-03-cpufreq-policies.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell sh -c 'for p in /sys/devices/system/cpu/cpufreq/policy*; do [ -d "$p" ] || continue; echo "=== $p ==="; ls -ld "$p"; for f in affected_cpus related_cpus cpuinfo_min_freq cpuinfo_max_freq scaling_min_freq scaling_max_freq scaling_cur_freq scaling_governor scaling_available_governors scaling_available_frequencies; do printf "%s=" "$f"; cat "$p/$f" 2>&1; done; done' *> "$Evidence\DEV-INFO-03-cpufreq-policies.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell sh -c --% 'for p in /sys/devices/system/cpu/cpufreq/policy*; do [ -d "$p" ] || continue; echo "=== $p ==="; ls -ld "$p"; for f in affected_cpus related_cpus cpuinfo_min_freq cpuinfo_max_freq scaling_min_freq scaling_max_freq scaling_cur_freq scaling_governor scaling_available_governors scaling_available_frequencies; do printf "%s=" "$f"; cat "$p/$f" 2>&1; done; done' *> "$Evidence\DEV-INFO-03-cpufreq-policies.txt"
+>> ^C
+PS C:\Users\p_BalongAVS\AppData\Local\Temp>  $cmd = 'for p in /sys/devices/system/cpu/cpufreq/policy*; do [ -d \"$p\" ] || continue; echo \"=== $p ===\"; ls -ld \"$p\"; for f in affected_cpus related_cpus cpuinfo_min_freq cpuinfo_max_freq scaling_min_freq scaling_max_freq scaling_cur_freq scaling_governor scaling_available_governors scaling_available_frequencies; do printf \"%s=\" \"$f\"; cat \"$p/$f\" 2>&1; done; done'
+PS C:\Users\p_BalongAVS\AppData\Local\Temp>
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell sh -c $cmd *> "$Evidence\DEV-INFO-03-cpufreq-policies.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp>  $cmd = 'for p in /sys/devices/system/cpu/cpufreq/policy*; do [ -d $p ] || continue; echo === $p ===; ls -ld $p; for f in affected_cpus related_cpus cpuinfo_min_freq cpuinfo_max_freq scaling_min_freq scaling_max_freq scaling_cur_freq scaling_governor scaling_available_governors scaling_available_frequencies; do printf %s= $f; cat $p/$f 2>&1; done; done'
+PS C:\Users\p_BalongAVS\AppData\Local\Temp>
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell sh -c $cmd *> "$Evidence\DEV-INFO-03-cpufreq-policies.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell sh -c 'for p in
+>>   /sys/module/hvgr_kmd_v500/parameters/gpu_hang_count
+>>   /sys/module/hvgr_kmd_v350/parameters/gpu_hang_count; do
+>>   echo "=== $p ==="; ls -l "$p" 2>&1; cat "$p" 2>&1
+>> done' *> "$Evidence\DEV-INFO-04-gpu-hang.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell sh -c 'find /sys/class/devfreq /sys/devices -maxdepth 6 -type f \( -name cur_freq -o -name min_freq -o -name max_freq -o -name governor -o -name available_governors -o -name load -o -name utilization -o -name power_policy \) 2>&1' `
+>>   *> "$Evidence\DEV-INFO-04-gpu-candidates.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell sh -c 'ls -ld /sys/module/hvgr_kmd_v500 /sys/module/hvgr_kmd_v350 2>&1; dmesg 2>&1 | tail -n 300' `
+>>   *> "$Evidence\DEV-INFO-04-gpu-driver-dmesg-tail.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell sh -c 'for z in /sys/class/thermal/thermal_zone*; do
+>>   [ -d "$z" ] || continue
+>>   printf "%s type=" "$z"; cat "$z/type" 2>&1
+>>   printf "%s temp=" "$z"; cat "$z/temp" 2>&1
+>> done' *> "$Evidence\DEV-INFO-05-thermal-zones.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell sh -c 'for c in sh awk sed mkfifo sha256sum taskset dmesg timeout; do
+>>   printf "%s: " "$c"; command -v "$c" 2>&1 || true
+>> done
+>> toybox --help 2>&1 | head -n 20' *> "$Evidence\DEV-INFO-05-tools.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell sh -c 'ps -ef 2>&1 | grep -E "avs-device-agent|avs-workload" | grep -v grep || true; ls -l /data/local/tmp/avs/runs 2>&1' `
+>>   *> "$Evidence\DEV-INFO-05-processes-runs.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc list targets
+0123456789ABCDEF
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell sh -c 'echo shell-ok'
+shell-ok
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell mkfifo --help
+usage: mkfifo [NAME...]
+
+Create FIFOs (named pipes).
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell sha256sum --help
+usage: ???sum [-bcs] [FILE]...
+
+Calculate hash for each input file, reading from stdin if none, writing
+hexadecimal digits to stdout for each input file (md5=32 hex digits,
+sha1=40, sha224=56, sha256=64, sha384=96, sha512=128) followed by filename.
+
+-b      Brief (hash only, no filename)
+-c      Check each line of each FILE is the same hash+filename we'd output
+-s      No output, exit status 0 if all hashes match, 1 otherwise
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell dmesg --help
+usage: dmesg [-Cc] [-r|-t|-T] [-n LEVEL] [-s SIZE] [-w|-W]
+
+Print or control the kernel ring buffer.
+
+-C      Clear ring buffer without printing
+-c      Clear ring buffer after printing
+-n      Set kernel logging LEVEL (1-8)
+-r      Raw output (with <level markers>)
+-S      Use syslog(2) rather than /dev/kmsg
+-s      Show the last SIZE many bytes
+-T      Human readable timestamps
+-t      Don't print timestamps
+-w      Keep waiting for more output (aka --follow)
+-W      Wait for output, only printing new messages
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --config-dir $ApprovedConfig --transport hdc --device $Device --output-dir $Out --state-dir $State --json `
+>>   probe --platform kirin9020 --full --refresh `
+>>   *> "$Evidence\DEV-02-probe.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $ProbeExit = $LASTEXITCODE
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $ProbeExit
+0
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Set-Content -Encoding ascii "$Evidence\DEV-02-probe.exit.txt" $ProbeExit
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Copy-Item "$Out\probes\$Device\capabilities.json" `
+>>   "$Evidence\DEV-02-capabilities-$Framework.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --device $Device --state-dir $State pair --channel hdc --platform kirin9020 `
+>>   --device-port $DeviceUart --pc-port $PcSerial --baudrate $Baudrate --timeout 5 --verify `
+>>   *> "$Evidence\DEV-03-pair.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $PairExit = $LASTEXITCODE
+PS C:\Users\p_BalongAVS\AppData\Local\Temp>  $PairExit
+0
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Set-Content -Encoding ascii "$Evidence\DEV-03-pair.exit.txt" $PairExit
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Copy-Item "$State\pair-diagnostic.json" "$Evidence\DEV-03-pair-diagnostic.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Get-Content "$State\pairing.conf" *> "$Evidence\DEV-03-pairing-conf.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --config-dir $ApprovedConfig --transport hdc --device $Device --output-dir $Out --state-dir $State --json `
+>>   deploy --target all --verify-hashes *> "$Evidence\DEV-04-deploy-first.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $DeployFirstExit = $LASTEXITCODE
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $DeployFirstExit
+4
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Copy-Item "$Out\deployment-manifest.json" "$Evidence\DEV-04-manifest-first.json"
+Copy-Item : 找不到路径“D:\MonitorTest\vmin-judge-2.0.1-20260831\single\NCH-004\output\deployment-manifest.json”，因为该路径不存在。
+所在位置 行:1 字符: 1
++ Copy-Item "$Out\deployment-manifest.json" "$Evidence\DEV-04-manifest- ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (D:\MonitorTest\...t-manifest.json:String) [Copy-Item], ItemNotFoundException
+    + FullyQualifiedErrorId : PathNotFound,Microsoft.PowerShell.Commands.CopyItemCommand
+
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --config-dir $ApprovedConfig --transport hdc --device $Device --output-dir $Out --state-dir $State --json `
+>>   deploy --target all --verify-hashes *> "$Evidence\DEV-04-deploy-first.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $DeployFirstExit = $LASTEXITCODE
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $DeployFirstExit
+4
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Copy-Item "$Out\deployment-manifest.json" "$Evidence\DEV-04-manifest-first.json"
+Copy-Item : 找不到路径“D:\MonitorTest\vmin-judge-2.0.1-20260831\single\NCH-004\output\deployment-manifest.json”，因为该路径不存在。
+所在位置 行:1 字符: 1
++ Copy-Item "$Out\deployment-manifest.json" "$Evidence\DEV-04-manifest- ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (D:\MonitorTest\...t-manifest.json:String) [Copy-Item], ItemNotFoundException
+    + FullyQualifiedErrorId : PathNotFound,Microsoft.PowerShell.Commands.CopyItemCommand
+
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc shell
+# ls /data/local/tmp/avs
+bin  configs  runs  shaders
+# exit
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell find /sys/class/devfreq /sys/devices -maxdepth 6 -type f '\(' -name cur_freq -o -name min_freq -o -name max_freq -o -name governor -o -name available_governors -o -name load -o -name utilization -o -name power_policy '\)' *> "$Evidence\DEV-INFO-04-gpu-candidates.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --config-dir $ApprovedConfig --transport hdc --device $Device --output-dir $Out --state-dir $State --json `
+>>   deploy --target all --verify-hashes *> "$Evidence\DEV-04-deploy-second.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $DeploySecondExit = $LASTEXITCODE
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $DeploySecondExit
+4
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Copy-Item "$Out\deployment-manifest.json" "$Evidence\DEV-04-manifest-second.json"
+Copy-Item : 找不到路径“D:\MonitorTest\vmin-judge-2.0.1-20260831\single\NCH-004\output\deployment-manifest.json”，因为该路径不存在。
+所在位置 行:1 字符: 1
++ Copy-Item "$Out\deployment-manifest.json" "$Evidence\DEV-04-manifest- ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (D:\MonitorTest\...t-manifest.json:String) [Copy-Item], ItemNotFoundException
+    + FullyQualifiedErrorId : PathNotFound,Microsoft.PowerShell.Commands.CopyItemCommand
+
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell /data/local/tmp/avs/bin/avs-device-agent --version `
+>>   *> "$Evidence\DEV-04-agent-version.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $CpuSmokeId = "smoke-cpu-$Framework-$BoardId"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --config-dir $ApprovedConfig --transport hdc --device $Device `
+>>   --pc-serial $PcSerial --baudrate $Baudrate --output-dir $Out --state-dir $State --json `
+>>   golden cpu --profile cpu_mixed_big4 --runs 1 --known-good --board-id $BoardId `
+>>   --qualification-id $CpuSmokeId *> "$Evidence\QUAL-00-cpu-smoke.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $CpuSmokeExit = $LASTEXITCODE
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $CpuSmokeExit
+4
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $LatestCpuRun = Get-ChildItem $Out -Directory -Filter 'golden-cpu-*' |
+>>   Sort-Object LastWriteTime -Descending | Select-Object -First 1
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $LatestCpuRun
+PS C:\Users\p_BalongAVS\AppData\Local\Temp>
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --transport hdc --device $Device --output-dir $Out --state-dir $State --json `
+>>   collect --run-id RUN_ID --verify-hashes --keep-remote `
+>>   *> "$Evidence\RUN-03-collect-keep.json"
