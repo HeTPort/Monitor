@@ -1,0 +1,276 @@
+PS D:\h60106817\release> $Exe = 'D:\h60106817\release\vmin_judge.exe'
+PS D:\h60106817\release> $PackageId = 'vmin-judge-2.0.1-20260831_A'
+PS D:\h60106817\release> $Device = '0123456789ABCDEF'
+PS D:\h60106817\release> $BoardId = 'NCH-005'
+PS D:\h60106817\release> $Framework = 'single'
+PS D:\h60106817\release> $Platform = 'kirin9030'
+PS D:\h60106817\release> $PcSerial = 'COM6'
+PS D:\h60106817\release> $DeviceUart = '/dev/ttyHW0'
+PS D:\h60106817\release> $Baudrate = 9600
+PS D:\h60106817\release> $ApprovedConfig = 'D:\approved-config'
+PS D:\h60106817\release> $RemoteRoot = '/data/local/tmp/avs'
+PS D:\h60106817\release> $Out = "D:\MonitorTest\$PackageId\$Framework\$BoardId\output"
+PS D:\h60106817\release> $State = "D:\MonitorTest\$PackageId\$Framework\$BoardId\state"
+PS D:\h60106817\release> $Evidence = "D:\MonitorTest\$PackageId\$Framework\$BoardId\evidence"
+PS D:\h60106817\release> New-Item -ItemType Directory -Force -Path $Out, $State, $Evidence | Out-Null
+PS D:\h60106817\release> Push-Location $env:TEMP
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --version *> "$Evidence\REL-03-version.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $VersionExit = $LASTEXITCODE
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $VersionExit
+0
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --help *> "$Evidence\REL-03-help.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $HelpExit = $LASTEXITCODE
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $HelpExit
+0
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --output-dir $Out --state-dir $State --json validate --all --package --offline `
+>>   *> "$Evidence\REL-03-validate.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $ValidateExit = $LASTEXITCODE
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $ValidateExit
+0
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --output-dir $Out --state-dir $State --json list-profiles `
+>>   *> "$Evidence\REL-03-profiles.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $ProfilesExit = $LASTEXITCODE
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $ProfilesExit \
+所在位置 行:1 字符: 15
++ $ProfilesExit \
++               ~
+表达式或语句中包含意外的标记“\”。
+    + CategoryInfo          : ParserError: (:) [], ParentContainsErrorRecordException
+    + FullyQualifiedErrorId : UnexpectedToken
+
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $ProfilesExit
+0
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --config-dir D:\approved-config `
+>>   --output-dir $Out --state-dir $State --json validate --all --package --offline
+{
+  "checked": [
+    "profile:cpu_mixed_big4",
+    "platform:kirin9020",
+    "workload-config:cpu_mixed_big4",
+    "workload-binary:cpu_mixed_big4",
+    "profile:gpu_vulkan_mixed",
+    "platform:kirin9020",
+    "workload-config:gpu_vulkan_mixed",
+    "workload-binary:gpu_vulkan_mixed",
+    "workload-asset:gpu_vulkan_mixed:shaders/vulkan/fullscreen.vert.spv",
+    "workload-asset:gpu_vulkan_mixed:shaders/vulkan/workload.frag.spv",
+    "resource:device/avs_device_agent.sh",
+    "resource:config/kernel/critical.conf"
+  ],
+  "errors": [],
+  "offline": true,
+  "resolved_configs": [
+    {
+      "kind": "profile",
+      "name": "cpu_mixed_big4",
+      "path": "D:\\approved-config\\profiles\\cpu_mixed_big4.yaml",
+      "sha256": "4ffa1fd881492b1c57cda65a9dd06de6531cd0e8c3c2b9c41f776edddfea54af"
+    },
+    {
+      "kind": "platform",
+      "name": "kirin9020",
+      "path": "D:\\approved-config\\platforms\\kirin9020.yaml",
+      "sha256": "29a4e09e9d4749f68cb88b55d386613895ee2c05347c7b253a88be009f3241fb"
+    },
+    {
+      "kind": "profile",
+      "name": "gpu_vulkan_mixed",
+      "path": "D:\\approved-config\\profiles\\gpu_vulkan_mixed.yaml",
+      "sha256": "7be7f13600324c2aef7251c69c63b1834a9ef86c3702b59a66c37406a2149036"
+    }
+  ],
+  "valid": true
+}
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --output-dir $Out --state-dir $State --json simulate --events does-not-exist.jsonl `
+>>   *> "$Evidence\REL-05-invalid-config.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $LASTEXITCODE
+4
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $ApprovedConfig = 'D:\approved-config'
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --config-dir $ApprovedConfig --output-dir $Out --state-dir $State --json `
+>>   validate --profile gpu_vulkan_mixed --offline `
+>>   *> "$Evidence\DEV-00-approved-config.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $PlatformConfig = @(
+>>   "$ApprovedConfig\config\platforms\kirin9020.yaml",
+>>   "$ApprovedConfig\platforms\kirin9020.yaml"
+>> ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> if (-not $PlatformConfig) { throw 'approved kirin9020.yaml not found' }
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Get-Item $PlatformConfig | Format-List FullName,Length,LastWriteTime `
+>>   *> "$Evidence\DEV-00-platform-file.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Get-FileHash $PlatformConfig -Algorithm SHA256 | Format-List `
+>>   *> "$Evidence\DEV-00-platform-sha256.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Select-String -Path $PlatformConfig -Pattern 'hvgr_kmd_v500','gpu_hang_count' `
+>>   *> "$Evidence\DEV-00-platform-v500-lines.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell getprop *> "$Evidence\DEV-INFO-01-getprop.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell uname -a *> "$Evidence\DEV-INFO-01-uname.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell cat /proc/cmdline *> "$Evidence\DEV-INFO-01-cmdline.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell cat /proc/cpuinfo *> "$Evidence\DEV-INFO-01-cpuinfo.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell id *> "$Evidence\DEV-INFO-01-id.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell mount *> "$Evidence\DEV-INFO-01-mount.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell df -h /data/local/tmp *> "$Evidence\DEV-INFO-01-storage.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell ls -l $DeviceUart *> "$Evidence\DEV-INFO-02-uart-path.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell cat /proc/consoles *> "$Evidence\DEV-INFO-02-consoles.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell sh -c 'ls -l /dev/tty* 2>&1' `
+>>   *> "$Evidence\DEV-INFO-02-all-tty.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell sh -c "stty -a < '$DeviceUart' 2>&1 || toybox stty -a < '$DeviceUart' 2>&1" `
+>>   *> "$Evidence\DEV-INFO-02-stty.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell cat /proc/tty/driver/serial `
+>>   *> "$Evidence\DEV-INFO-02-serial-driver.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell cat /sys/devices/system/cpu/present `
+>>   *> "$Evidence\DEV-INFO-03-cpu-present.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell cat /sys/devices/system/cpu/possible `
+>>   *> "$Evidence\DEV-INFO-03-cpu-possible.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell sh -c 'for p in /sys/devices/system/cpu/cpufreq/policy*; do
+>>   [ -d "$p" ] || continue
+>>   echo "=== $p ==="
+>>   ls -ld "$p"
+>>   for f in affected_cpus related_cpus cpuinfo_min_freq cpuinfo_max_freq scaling_min_freq scaling_max_freq scaling_cur_freq scaling_governor scaling_available_governors scaling_available_frequencies; do
+>>     printf "%s=" "$f"; cat "$p/$f" 2>&1
+>>   done
+>> done' *> "$Evidence\DEV-INFO-03-cpufreq-policies.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --config-dir $ApprovedConfig --transport hdc --device $Device --output-dir $Out --state-dir $State --json `
+>>   probe --platform $Platform --full `
+>>   *> "$Evidence\DEV-02-probe.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $ProbeExit = $LASTEXITCODE
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $ProbeExit
+0
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Set-Content -Encoding ascii "$Evidence\DEV-02-probe.exit.txt" $ProbeExit
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Copy-Item "$Out\probes\$Device\capabilities.json" `
+>>   "$Evidence\DEV-02-capabilities-$Framework.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --device $Device --state-dir $State pair --channel hdc --platform $Platform `
+>>   --device-port $DeviceUart --pc-port $PcSerial --baudrate $Baudrate --timeout 5 --verify `
+>>   *> "$Evidence\DEV-03-pair.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $PairExit = $LASTEXITCODE
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $PairExit
+0
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Set-Content -Encoding ascii "$Evidence\DEV-03-pair.exit.txt" $PairExit
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Copy-Item "$State\pair-diagnostic.json" "$Evidence\DEV-03-pair-diagnostic.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Get-Content "$State\pairing.conf" *> "$Evidence\DEV-03-pairing-conf.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --config-dir $ApprovedConfig --transport hdc --device $Device --output-dir $Out --state-dir $State --json `
+>>   deploy --target all --verify-hashes *> "$Evidence\DEV-04-deploy-first.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $DeployFirstExit = $LASTEXITCODE
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $DeployFirstExit
+0
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Copy-Item "$Out\deployment-manifest.json" "$Evidence\DEV-04-manifest-first.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --config-dir $ApprovedConfig --transport hdc --device $Device --output-dir $Out --state-dir $State --json `
+>>   deploy --target all --verify-hashes *> "$Evidence\DEV-04-deploy-second.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $DeploySecondExit = $LASTEXITCODE
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $DeploySecondExit
+0
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Copy-Item "$Out\deployment-manifest.json" "$Evidence\DEV-04-manifest-second.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> hdc -t $Device shell /data/local/tmp/avs/bin/avs-device-agent --version `
+>>   *> "$Evidence\DEV-04-agent-version.txt"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $CpuSmokeId = "smoke-cpu-$Framework-$BoardId"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --config-dir $ApprovedConfig --transport hdc --device $Device `
+>>   --pc-serial $PcSerial --baudrate $Baudrate --output-dir $Out --state-dir $State --json `
+>>   smoke --profile cpu_smoke_kirin9030 --run-id $CpuSmokeId `
+>>   *> "$Evidence\QUAL-00-cpu-smoke.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $CpuSmokeExit = $LASTEXITCODE
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $CpuSmokeExit
+3
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Set-Content -Encoding ascii "$Evidence\QUAL-00-cpu-smoke.exit.txt" $CpuSmokeExit
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $LatestCpuRun = Get-Item "$Out\$CpuSmokeId"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $GpuSmokeId = "smoke-gpu-$Framework-$BoardId"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --config-dir $ApprovedConfig --transport hdc --device $Device `
+>>   --pc-serial $PcSerial --baudrate $Baudrate --output-dir $Out --state-dir $State --json `
+>>   smoke --profile gpu_smoke_kirin9030 --run-id $GpuSmokeId `
+>>   *> "$Evidence\QUAL-00-gpu-smoke.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $GpuSmokeExit = $LASTEXITCODE
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $GpuSmokeExit
+3
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Set-Content -Encoding ascii "$Evidence\QUAL-00-gpu-smoke.exit.txt" $GpuSmokeExit
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $LatestGpuRun = Get-Item "$Out\$GpuSmokeId"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> foreach ($RunDir in @($LatestCpuRun, $LatestGpuRun) | Where-Object { $_ }) {
+>>   "=== $($RunDir.FullName) ==="
+>>   Get-Content "$($RunDir.FullName)\result.json" | ConvertFrom-Json |
+>>     Select-Object run_id,verdict,exit_code,event_count,workload_result,workload_exit_code,liveness
+>>   Select-String -Path "$($RunDir.FullName)\events.jsonl" `
+>>     -Pattern '"type":"environment"','"type":"error"','"type":"summary"','"type":"agent_final"'
+>> }
+=== D:\MonitorTest\vmin-judge-2.0.1-20260831_A\single\NCH-005\output\smoke-cpu-single-NCH-005 ===
+
+
+run_id             : smoke-cpu-single-NCH-005
+verdict            : INFRA_ERROR
+exit_code          : 3
+event_count        : 0
+workload_result    :
+workload_exit_code :
+liveness           : @{agent_final_seen=False; timed_out=False}
+
+Select-String : 找不到路径“D:\MonitorTest\vmin-judge-2.0.1-20260831_A\single\NCH-005\output\smoke-cpu-single-NCH-005\e
+vents.jsonl”，因为该路径不存在。
+所在位置 行:5 字符: 3
++   Select-String -Path "$($RunDir.FullName)\events.jsonl" `
++   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (D:\MonitorTest\...05\events.jsonl:String) [Select-String], ItemNotFound
+   Exception
+    + FullyQualifiedErrorId : PathNotFound,Microsoft.PowerShell.Commands.SelectStringCommand
+
+=== D:\MonitorTest\vmin-judge-2.0.1-20260831_A\single\NCH-005\output\smoke-gpu-single-NCH-005 ===
+run_id             : smoke-gpu-single-NCH-005
+verdict            : INFRA_ERROR
+exit_code          : 3
+event_count        : 0
+workload_result    :
+workload_exit_code :
+liveness           : @{agent_final_seen=False; timed_out=False}
+
+Select-String : 找不到路径“D:\MonitorTest\vmin-judge-2.0.1-20260831_A\single\NCH-005\output\smoke-gpu-single-NCH-005\e
+vents.jsonl”，因为该路径不存在。
+所在位置 行:5 字符: 3
++   Select-String -Path "$($RunDir.FullName)\events.jsonl" `
++   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (D:\MonitorTest\...05\events.jsonl:String) [Select-String], ItemNotFound
+   Exception
+    + FullyQualifiedErrorId : PathNotFound,Microsoft.PowerShell.Commands.SelectStringCommand
+
+
+
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --config-dir $ApprovedConfig --transport hdc --device $Device --pc-serial $PcSerial `
+>>   --baudrate $Baudrate --output-dir $Out --state-dir $State --json `
+>>   golden cpu --profile cpu_mixed_big4 --runs 10 --known-good --board-id $BoardId `
+>>   *> "$Evidence\QUAL-01-cpu-golden.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $CpuGoldenExit = $LASTEXITCODE
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $CpuGoldenExit
+3
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Set-Content -Encoding ascii "$Evidence\QUAL-01-cpu-golden.exit.txt" $CpuGoldenExit
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --config-dir $ApprovedConfig --transport hdc --device $Device --pc-serial $PcSerial `
+>>   --baudrate $Baudrate --output-dir $Out --state-dir $State --json `
+>>   golden gpu --profile gpu_vulkan_mixed --runs 10 --known-good --board-id $BoardId `
+>>   --readback-name gpu-golden.rgba *> "$Evidence\QUAL-02-gpu-golden.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $GpuGoldenExit = $LASTEXITCODE
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> Set-Content -Encoding ascii "$Evidence\QUAL-02-gpu-golden.exit.txt" $GpuGoldenExit
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $GpuGoldenExit
+3
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --transport hdc --device $Device --output-dir $Out --state-dir $State --json `
+>>   collect --run-id RUN_ID --verify-hashes --keep-remote `
+>>   *> "$Evidence\RUN-03-collect-keep.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --output-dir $Out --state-dir $State --json report `
+>>   --run-dir "$Out\RUN_ID" --format markdown,json,csv
+{
+  "error": "result.json not found: D:\\MonitorTest\\vmin-judge-2.0.1-20260831_A\\single\\NCH-005\\output\\RUN_ID\\result.json",
+  "exit_code": 4
+}
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --output-dir "$Out\replay" --state-dir $State --json simulate `
+>>   --events "$Out\RUN_ID\events.jsonl" --profile cpu_mixed_big4 `
+>>   --baseline kirin9020-cpu-mixed-big4-v1
+{
+  "error": "input not found: D:\\MonitorTest\\vmin-judge-2.0.1-20260831_A\\single\\NCH-005\\output\\RUN_ID\\events.jsonl; searched: D:\\MonitorTest\\vmin-judge-2.0.1-20260831_A\\single\\NCH-005\\output\\RUN_ID\\events.jsonl",
+  "exit_code": 4
+}
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --config-dir $ApprovedConfig --transport hdc --device $Device --pc-serial $PcSerial `
+>>   --baudrate $Baudrate --output-dir $Out --state-dir $State --json run `
+>>   --profile cpu_mixed_big4 --baseline kirin9020-cpu-mixed-big4-v1 `
+>>   --repeat 3 --run-id "CPU-$Framework-$BoardId" --kernel-monitor critical `
+>>   *> "$Evidence\RUN-01-cpu.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $CpuExit = $LASTEXITCODE
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $CpuExit
+4
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> & $Exe --config-dir $ApprovedConfig --transport hdc --device $Device --pc-serial $PcSerial `
+>>   --baudrate $Baudrate --output-dir $Out --state-dir $State --json run `
+>>   --profile gpu_vulkan_mixed --baseline kirin9020-gpu-vulkan-mixed-v1 `
+>>   --repeat 3 --run-id "GPU-$Framework-$BoardId" --kernel-monitor critical `
+>>   *> "$Evidence\RUN-01-gpu.json"
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $GpuExit = $LASTEXITCODE
+PS C:\Users\p_BalongAVS\AppData\Local\Temp> $GpuExit
+4

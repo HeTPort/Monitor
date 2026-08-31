@@ -9,8 +9,8 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $projectRoot
 try {
     $requiredAssets = @(
-        "tools\cpu-avs-workload\cpu-avs-workload",
-        "tools\gpu-avs-workload\gpu-avs-workload",
+        "tools\cpu-avs-workload",
+        "tools\gpu-avs-workload",
         "tools\shaders\vulkan\fullscreen.vert.spv",
         "tools\shaders\vulkan\workload.frag.spv"
     )
