@@ -1,0 +1,18 @@
+schema_version: 1
+name: gpu_stress_kirin9030
+target: gpu
+platform: kirin9030
+workload:
+  binary: ../../tools/gpu-avs-workload
+  remote_binary: bin/gpu-avs-workload
+  config: ../workloads/gpu_stress.json
+  assets:
+    - {local: ../../tools/shaders/vulkan/fullscreen.vert.spv, remote: shaders/vulkan/fullscreen.vert.spv, kind: shader}
+    - {local: ../../tools/shaders/vulkan/workload.frag.spv, remote: shaders/vulkan/workload.frag.spv, kind: shader}
+scheduler_requirements: {}
+baseline: null
+telemetry:
+  interval_ms: 5000
+  required: [gpu.frequency, gpu.utilization, gpu.temperature, gpu.hang_count, gpu.power_policy]
+  optional: [gpu.throttle, gpu.voltage]
+kernel_monitor: off

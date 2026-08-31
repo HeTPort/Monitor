@@ -60,7 +60,7 @@ def baseline(current_profile: ProfileConfig) -> Baseline:
 
 
 class RunManifestTests(unittest.TestCase):
-    def test_builder_resolves_environment_telemetry_and_kernel_rules(self) -> None:
+    def test_builder_keeps_runtime_minimal_and_baseline_optional(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             paths = PathResolver(
@@ -71,63 +71,52 @@ class RunManifestTests(unittest.TestCase):
                 cwd=root,
             )
             current_profile = profile(root / "profile.json")
-            capabilities = {
-                "capabilities": {
-                    "cpu.governor": {"paths": ["/sys/cpu4/governor", "/sys/cpu5/governor"]},
-                    "cpu.online": {"paths": ["/sys/cpu4/online", "/sys/cpu5/online", "/sys/cpu6/online"]},
-                    "cpu.frequency": {"paths": ["/sys/cpu4/freq", "/sys/cpu5/freq"], "unit": "kHz"},
-                    "cpu.temperature": {
-                        "paths": [
-                            "/sys/class/thermal/thermal_zone0/temp",
-                            "/sys/class/thermal/thermal_zone2/temp",
-                        ],
-                        "unit": "celsius",
-                        "parser_by_path": {
-                            "/sys/class/thermal/thermal_zone0/temp": "millidegree_celsius",
-                            "/sys/class/thermal/thermal_zone2/temp": "degree_celsius",
-                        },
-                    },
-                }
-            }
-            rules = root / "rules.conf"
-            rules.write_text("[warn]\nicontains|thermal limit\n[fail]\niregex|gpu.*hang\n", encoding="utf-8")
             manifest = RunManifestBuilder(paths).build(
                 profile=current_profile,
                 baseline=baseline(current_profile),
-                capabilities=capabilities,
-                run_id="run-1",
-                kernel_rules_path=rules,
+                test_id="TEST-1",
+                attempt_id="ATTEMPT-1",
                 device_uart="/dev/ttyAMA0",
             )
-            self.assertEqual(manifest["workload"]["argv"][:3], ["taskset", "-c", "4-7"])
+            self.assertEqual(manifest["test_id"], "TEST-1")
+            self.assertEqual(manifest["run_id"], "ATTEMPT-1")
+            self.assertNotIn("taskset", manifest["workload"]["argv"])
             self.assertIn("--golden-checksum", manifest["workload"]["argv"])
-            self.assertEqual(len(manifest["environment"]["actions"]), 4)
-            self.assertEqual(len(manifest["telemetry"]["samplers"]), 3)
-            self.assertEqual(len(manifest["kernel"]["rules"]), 2)
-            self.assertFalse(manifest["kernel"]["raw_local"])
+            self.assertFalse(manifest["scheduler"]["managed_by_monitor"])
+            self.assertEqual(manifest["scheduler"]["requirements"]["governor"], "performance")
+            self.assertFalse(manifest["telemetry"]["enabled"])
+            self.assertNotIn("kernel", manifest)
             self.assertFalse(manifest["event_crc"])
             agent_argv = _shell_agent_argv(PurePosixPath("/data/local/tmp/avs/bin/avs-device-agent"), manifest, 9600)
             self.assertEqual(agent_argv[:2], ["sh", "/data/local/tmp/avs/bin/avs-device-agent"])
-            self.assertIn("--kernel-rule", agent_argv)
-            self.assertEqual(agent_argv[agent_argv.index("--telemetry-interval") + 1], "5")
+            self.assertIn("--test-id", agent_argv)
+            self.assertIn("--attempt-id", agent_argv)
+            self.assertNotIn("--environment", agent_argv)
+            self.assertNotIn("--telemetry-plan", agent_argv)
             self.assertEqual(agent_argv[agent_argv.index("--baudrate") + 1], "9600")
             self.assertIn("--", agent_argv)
-            telemetry_specs = [
-                agent_argv[index + 1]
-                for index, value in enumerate(agent_argv[:-1])
-                if value == "--telemetry"
-            ]
-            self.assertTrue(any("|millidegree_celsius|" in spec for spec in telemetry_specs))
-            self.assertTrue(any("|degree_celsius|" in spec for spec in telemetry_specs))
+
+            error_only = RunManifestBuilder(paths).build(
+                profile=current_profile,
+                baseline=None,
+                test_id="TEST-2",
+                attempt_id="ATTEMPT-2",
+                device_uart="/dev/ttyAMA0",
+                telemetry_enabled=True,
+            )
+            self.assertIsNone(error_only["baseline"])
+            self.assertEqual(error_only["validation_mode"], "error-only")
+            self.assertEqual(error_only["policy"]["required_telemetry"], [])
+            telemetry_argv = _shell_agent_argv(PurePosixPath("/agent"), error_only, 9600)
+            self.assertIn("--telemetry-plan", telemetry_argv)
 
             qualification = RunManifestBuilder(paths).build_qualification(
                 profile=current_profile,
                 golden={},
-                capabilities=capabilities,
+                capabilities=None,
                 mode="golden",
-                run_id="golden-1",
-                kernel_mode="critical",
-                kernel_rules_path=rules,
+                test_id="GOLDEN",
+                attempt_id="golden-1",
                 device_uart="/dev/ttyQualification7",
             )
             self.assertIsNone(qualification["baseline"])
@@ -137,20 +126,19 @@ class RunManifestTests(unittest.TestCase):
             smoke = RunManifestBuilder(paths).build_qualification(
                 profile=current_profile,
                 golden={},
-                capabilities=capabilities,
+                capabilities=None,
                 mode="smoke",
-                run_id="smoke-1",
-                kernel_mode="critical",
-                kernel_rules_path=rules,
+                test_id="SMOKE",
+                attempt_id="smoke-1",
                 device_uart="/dev/ttyQualification7",
             )
             self.assertIsNone(smoke["baseline"])
             self.assertEqual(smoke["qualification"]["mode"], "smoke")
             self.assertFalse(smoke["qualification"]["production_baseline_allowed"])
-            self.assertEqual(smoke["qualification"]["generated_reference_disposition"], "discard")
-            self.assertIn("--generate-golden", smoke["workload"]["argv"])
+            self.assertEqual(smoke["qualification"]["generated_reference_disposition"], "not-generated")
+            self.assertNotIn("--generate-golden", smoke["workload"]["argv"])
 
-    def test_policy_paths_keep_per_policy_platform_maxima(self) -> None:
+    def test_scheduler_requirements_are_recorded_but_never_applied(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             paths = PathResolver(
@@ -173,25 +161,16 @@ class RunManifestTests(unittest.TestCase):
                 },
                 source_path=root / "profile.json",
             )
-            values = {
-                "/sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq": 1550000,
-                "/sys/devices/system/cpu/cpufreq/policy1/scaling_max_freq": 2050000,
-                "/sys/devices/system/cpu/cpufreq/policy2/scaling_max_freq": 2094000,
-                "/sys/devices/system/cpu/cpufreq/policy3/scaling_max_freq": 2508000,
-            }
-            capabilities = {
-                "capabilities": {
-                    "cpu.maximum_frequency": {"paths": list(values), "values": values},
-                    "cpu.minimum_frequency": {
-                        "paths": [path.replace("scaling_max_freq", "scaling_min_freq") for path in values]
-                    },
-                }
-            }
-            actions = RunManifestBuilder(paths)._environment_actions(current_profile, capabilities)
-            requested = {action["path"]: int(action["value"]) for action in actions}
-            for maximum_path, value in values.items():
-                self.assertEqual(requested[maximum_path], value)
-                self.assertEqual(requested[maximum_path.replace("scaling_max_freq", "scaling_min_freq")], value)
+            manifest = RunManifestBuilder(paths).build(
+                profile=current_profile,
+                baseline=None,
+                test_id="NO-WRITES",
+                attempt_id="NO-WRITES-1",
+                device_uart="/dev/ttyHW0",
+            )
+            self.assertEqual(manifest["scheduler"]["requirements"]["frequency_khz"], "platform_max")
+            self.assertNotIn("environment", manifest)
+            self.assertNotIn("restoration_plan", manifest)
 
 
 class RunOrchestratorTests(unittest.TestCase):

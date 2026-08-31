@@ -41,6 +41,12 @@ class ArtifactStoreTests(unittest.TestCase):
             with self.assertRaisesRegex(ArtifactError, "already contains"):
                 ArtifactStore.create(Path(tmp), "same")
 
+    def test_groups_attempt_artifacts_below_test_id(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = ArtifactStore.create(Path(tmp), "attempt-002", test_id="TEST-0831")
+            self.assertEqual(store.run_dir, Path(tmp) / "TEST-0831" / "attempt-002")
+            self.assertTrue(store.run_dir.is_dir())
+
     def test_incomplete_result_is_explicit(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = ArtifactStore.create(Path(tmp), "run-2")

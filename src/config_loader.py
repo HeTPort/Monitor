@@ -121,10 +121,14 @@ class ProfileConfig:
             for field_name in ("required", "executable"):
                 if field_name in asset and not isinstance(asset[field_name], bool):
                     raise ConfigError(f"{asset_context}.{field_name}: expected a boolean")
-        environment = data.get("environment") or {}
+        scheduler_requirements = data.get("scheduler_requirements")
+        legacy_environment = data.get("environment")
+        if scheduler_requirements is not None and legacy_environment is not None:
+            raise ConfigError(f"{context}: use scheduler_requirements or legacy environment, not both")
+        environment = scheduler_requirements if scheduler_requirements is not None else (legacy_environment or {})
         telemetry = data.get("telemetry") or {}
         if not isinstance(environment, dict) or not isinstance(telemetry, dict):
-            raise ConfigError(f"{context}: environment and telemetry must be mappings")
+            raise ConfigError(f"{context}: scheduler_requirements/environment and telemetry must be mappings")
         required = telemetry.get("required", [])
         if not isinstance(required, list) or not all(isinstance(item, str) for item in required):
             raise ConfigError(f"{context}.telemetry.required: expected a list of strings")

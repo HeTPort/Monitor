@@ -12,6 +12,7 @@ from src.events import EventDecoder
 
 ROOT = Path(__file__).parents[1]
 AGENT = ROOT / "device" / "avs_device_agent.sh"
+TELEMETRY = ROOT / "device" / "avs_telemetry_agent.sh"
 
 
 def shell_path(path: Path) -> str:
@@ -32,24 +33,14 @@ class ShellDeviceAgentTests(unittest.TestCase):
             timeout=10,
         )
         self.assertEqual(version.returncode, 0, version.stderr)
-        self.assertEqual(version.stdout.strip(), "avs-device-agent 0.1.1 protocol 1")
+        self.assertEqual(version.stdout.strip(), "avs-device-agent 0.2.0 protocol 1")
 
         with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
             root = Path(tmp)
             uart = root / "uart.jsonl"
             spool = root / "spool"
-            state = root / "governor"
-            state.write_text("ondemand\n", encoding="utf-8")
-            temp_milli = root / "temp-milli"
-            temp_degree = root / "temp-degree"
-            temp_milli.write_text("31074\n", encoding="utf-8")
-            temp_degree.write_text("30\n", encoding="utf-8")
-            throttle = root / "gpu-throttle"
-            throttle.write_text(
-                'Status: "enable"\nPath: C:\\gpu\tready\n',
-                encoding="utf-8",
-                newline="\n",
-            )
+            spool.mkdir()
+            (spool / "workload.log").write_text("prior-attempt-marker\n", encoding="utf-8")
             workload = root / "workload.sh"
             workload.write_text(
                 "#!/bin/sh\n"
@@ -63,7 +54,9 @@ class ShellDeviceAgentTests(unittest.TestCase):
                 [
                     "sh",
                     shell_path(AGENT),
-                    "--run-id",
+                    "--test-id",
+                    "shell-test",
+                    "--attempt-id",
                     "shell-run",
                     "--target",
                     "cpu",
@@ -77,16 +70,6 @@ class ShellDeviceAgentTests(unittest.TestCase):
                     "9600",
                     "--timeout",
                     "5",
-                    "--kernel-mode",
-                    "off",
-                    "--environment",
-                    f"{shell_path(state)}|performance|1",
-                    "--telemetry",
-                    f"cpu.temperature.0|temperature_auto|{shell_path(temp_milli)}",
-                    "--telemetry",
-                    f"cpu.temperature.1|temperature_auto|{shell_path(temp_degree)}",
-                    "--telemetry",
-                    f"gpu.throttle|text|{shell_path(throttle)}",
                     "--",
                     "sh",
                     shell_path(workload),
@@ -98,41 +81,81 @@ class ShellDeviceAgentTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout, "")
-            self.assertEqual(state.read_text(encoding="utf-8").strip(), "ondemand")
             decoder = EventDecoder("shell-run")
             events = decoder.feed(uart.read_bytes())
             decoder.finish()
             self.assertEqual(events[0].type, "agent_start")
-            environment = [event for event in events if event.type == "environment"]
-            self.assertTrue(any(event.payload.get("phase") == "readback" for event in environment))
-            self.assertTrue(any(event.payload.get("phase") == "restore" for event in environment))
-            self.assertTrue(all(event.payload.get("path") == shell_path(state) for event in environment))
+            self.assertTrue(all(event.raw.get("test_id") == "shell-test" for event in events))
+            self.assertFalse(any(event.type == "environment" for event in events))
+            self.assertFalse(any(event.type == "telemetry" for event in events))
             self.assertIn("summary", [event.type for event in events])
             invalid_output = [event for event in events if event.type == "error"]
             self.assertEqual(invalid_output[0].payload["error_code"], "WORKLOAD_OUTPUT_INVALID")
             self.assertEqual(invalid_output[0].payload["line"], "driver setup diagnostic")
             self.assertEqual(events[-1].type, "agent_final")
-            self.assertTrue(events[-1].payload["restoration_ok"])
-            temperatures = {
-                event.payload["metric"]: event.payload["value"]
-                for event in events
-                if event.type == "telemetry" and "temperature" in event.payload.get("metric", "")
-            }
-            self.assertEqual(temperatures["cpu.temperature.0"], 31.074)
-            self.assertEqual(temperatures["cpu.temperature.1"], 30.0)
-            throttle_events = [
-                event for event in events
-                if event.type == "telemetry" and event.payload.get("metric") == "gpu.throttle"
-            ]
-            self.assertTrue(throttle_events)
-            self.assertEqual(
-                throttle_events[0].payload["value"],
-                'Status: "enable"\nPath: C:\\gpu\tready',
-            )
+            self.assertNotIn("restoration_ok", events[-1].payload)
             self.assertTrue(all(line.startswith(b"{") and line.endswith(b"}") for line in uart.read_bytes().splitlines()))
             self.assertTrue((spool / "events.jsonl").exists())
+            workload_log = (spool / "workload.log").read_text(encoding="utf-8")
+            self.assertTrue(workload_log.startswith("prior-attempt-marker\n"))
+            self.assertIn("driver setup diagnostic", workload_log)
+            final = json.loads((spool / "final.json").read_text(encoding="utf-8"))
+            self.assertEqual(final["test_id"], "shell-test")
+            self.assertEqual(final["attempt_id"], "shell-run")
             hashes = json.loads((spool / "artifact-hashes.json").read_text(encoding="utf-8"))
             self.assertEqual(len(hashes["sha256"]["events.jsonl"]), 64)
+
+    def test_standalone_telemetry_appends_device_local_jsonl(self) -> None:
+        version = subprocess.run(
+            ["sh", shell_path(TELEMETRY), "--version"],
+            text=True,
+            encoding="utf-8",
+            capture_output=True,
+            timeout=10,
+        )
+        self.assertEqual(version.returncode, 0, version.stderr)
+        with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
+            root = Path(tmp)
+            value = root / "temperature"
+            value.write_text("31074\n", encoding="utf-8")
+            plan = root / "telemetry.conf"
+            plan.write_text(
+                f"cpu.temperature|temperature_auto|{shell_path(value)}\n",
+                encoding="utf-8",
+            )
+            output = root / "device" / "telemetry.jsonl"
+            result = subprocess.run(
+                [
+                    "sh",
+                    shell_path(TELEMETRY),
+                    "--test-id",
+                    "telemetry-test",
+                    "--attempt-id",
+                    "telemetry-1",
+                    "--target",
+                    "cpu",
+                    "--output",
+                    shell_path(output),
+                    "--plan",
+                    shell_path(plan),
+                    "--interval",
+                    "1",
+                    "--duration",
+                    "0",
+                ],
+                text=True,
+                encoding="utf-8",
+                capture_output=True,
+                timeout=10,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            decoder = EventDecoder("telemetry-1")
+            events = decoder.feed(output.read_bytes())
+            decoder.finish()
+            self.assertEqual(len(events), 1)
+            self.assertEqual(events[0].raw["test_id"], "telemetry-test")
+            self.assertEqual(events[0].payload["metric"], "cpu.temperature")
+            self.assertEqual(events[0].payload["value"], 31.074)
 
 
 if __name__ == "__main__":

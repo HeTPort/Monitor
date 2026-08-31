@@ -1,0 +1,15 @@
+{
+  "profile": "mixed",
+  "api": "cpu",
+  "mode": "compute",
+  "backend": "mixed",
+  "duration": 60,
+  "warmup": 5,
+  "timeout": 75,
+  "iterations": 100000,
+  "threads": 4,
+  "working_set_kb": 256,
+  "verify_mode": "none",
+  "heartbeat_interval": 1,
+  "output_format": "jsonl"
+}

@@ -12,7 +12,7 @@ Testing Strategy:
 - See docs/TESTING_STRATEGY.md for details
 """
 
-__version__ = "2.0.1"
+__version__ = "2.1.0"
 __author__ = "Vmin Judge Tool Development"
 
 from .channel_manager import (

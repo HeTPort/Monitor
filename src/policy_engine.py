@@ -137,7 +137,7 @@ class PolicyEngine:
                         {"summary_exit_code": self.workload_exit_code, "agent_exit_code": agent_exit},
                         event,
                     )
-            if payload.get("restoration_ok") is not True:
+            if "restoration_ok" in payload and payload.get("restoration_ok") is not True:
                 self._infra("restoration", "RESTORATION_FAILED", payload, event)
             if payload.get("spool_complete") is False:
                 self._infra("artifact", "DEVICE_SPOOL_INCOMPLETE", payload, event)

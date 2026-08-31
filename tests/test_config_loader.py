@@ -43,6 +43,22 @@ class ConfigLoaderTests(unittest.TestCase):
         with self.assertRaisesRegex(ConfigError, "list of strings"):
             ProfileConfig.from_mapping(data, source_path=Path("profile.json"))
 
+    def test_scheduler_requirements_are_preferred_profile_metadata(self) -> None:
+        data = valid_profile()
+        data.pop("environment")
+        data["scheduler_requirements"] = {"governor": "performance", "affinity": "4-7"}
+        profile = ProfileConfig.from_mapping(data, source_path=Path("profile.json"))
+        self.assertEqual(
+            profile.environment,
+            {"governor": "performance", "affinity": "4-7"},
+        )
+
+    def test_rejects_scheduler_requirements_mixed_with_legacy_environment(self) -> None:
+        data = valid_profile()
+        data["scheduler_requirements"] = {}
+        with self.assertRaisesRegex(ConfigError, "use scheduler_requirements or legacy environment"):
+            ProfileConfig.from_mapping(data, source_path=Path("profile.json"))
+
     def test_rejects_empty_profile_platform(self) -> None:
         data = valid_profile()
         data["platform"] = " "

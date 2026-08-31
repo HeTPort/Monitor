@@ -1,973 +1,218 @@
-# Vmin Monitor User Guide and Public API Reference
+# Monitor 用户指南
 
-Status: Implemented v2 interface; hardware validation status is listed below
+版本 2.1，更新于 2026-08-31。
 
-Audience: Qualification engineers, batch-test operators, automation authors, and integration developers
+## 1. 先理解命令边界
 
-Design reference: [DEVELOPMENT_AND_DESIGN.md](DEVELOPMENT_AND_DESIGN.md)
+Monitor 把一次性准备和每次测试分开：
 
-## 1. Purpose of this guide
+| 阶段 | 命令 | 作用 |
+|---|---|---|
+| 本地检查 | `validate` | 检查配置、profile、baseline 和打包资源 |
+| 平台检查 | `probe` | 只读探测平台身份和能力 |
+| 串口配对 | `pair` | 保存设备 UART 与 PC 串口的对应关系 |
+| 部署 | `deploy` | 将 agent、workload、配置和 telemetry plan 部署到设备 |
+| 部署核验 | `verify-deployment` | 只读核对已部署文件的哈希 |
+| 核心测试 | `run` | 启动已部署 agent/workload，接收 UART 事件并判定 |
+| 短测试 | `smoke` | `run` 的短 profile、无 baseline 别名 |
+| 独立遥测 | `telemetry run` | 不启动 workload、不占用 UART，只向设备文件追加采样 |
+| 证据拉取 | `collect` | 按 test ID 拉取设备本地日志，默认保留设备文件 |
+| 资格化 | `golden` / `calibrate` / `baseline` | 基于明确提供的合格运行生成并管理基线 |
 
-This guide defines how users and automation interact with the refactored Vmin Monitor. It documents each public interface by its purpose, origin, rationale, usage, inputs, outputs, and failure behavior.
+`run` 不会隐式调用 `probe`、`deploy` 或 `verify-deployment`，也不会修改或恢复 governor、频率、CPU online、功耗策略和绑核状态。
 
-The v2 PC CLI, schemas, qualification services, baseline registry, policy engine, deployment layer, and fixed device-agent script are implemented. `--version` reports the supported schema majors, and `validate --package --offline` checks packaged resources and configuration without a board.
+## 2. 命令写法
 
-### 1.1 Current validation boundary
-
-- Offline unit, integration, protocol, simulation, and frozen-path tests are implemented and passing.
-- The checked-in device agent is a fixed POSIX Shell implementation. It does not require Python or `jq`; the PC resolves the run manifest and passes a safe argument vector to the agent.
-- Single-/dual-framework interface equivalence, actual sysfs/debugfs permissions, workload binary behavior, UART capacity, and CPU/GPU limit quality still require hardware-in-the-loop qualification on the office UDP boards.
-- `vmin_judge.spec` and `scripts/build.ps1` implement packaging. A release executable must still be built and smoke-tested in an environment containing PyInstaller, PyYAML, and pyserial.
-
-The APIs in scope are:
-
-- Packaged PC command-line interface.
-- Device-agent command-line interface.
-- CPU and GPU workload command-line interfaces retained from `D:\workload`.
-- Platform, profile, calibration, baseline, run-manifest, and kernel-rule configuration interfaces.
-- UART JSONL event interface.
-- Qualification and production artifact interfaces.
-
-Internal Python classes are described in the design document and are not a stable automation API unless later published separately.
-
-## 2. Workflow overview
-
-### 2.1 Baseline qualification
-
-Use this workflow only on a representative known-good cohort or when an existing baseline is invalidated:
+以下示例假设使用打包后的 `monitor.exe`。从源码运行时，把 `$MON` 替换为 `python main.py`。全局参数必须写在子命令前。
 
 ```powershell
-vmin_judge.exe --transport hdc --device DEVICE_ID probe --platform kirin9030 --full
-vmin_judge.exe deploy --target all --verify-hashes
-vmin_judge.exe golden cpu --profile cpu_mixed_big4 --runs 10 --known-good --board-id BOARD_001
-vmin_judge.exe calibrate cpu --profile cpu_mixed_big4 --runs 30 --board-id BOARD_001 --golden GOLDEN_MANIFEST.json
-vmin_judge.exe baseline approve BASELINE_ID --approver USER
+$MON = '.\dist\monitor.exe'
+$DEVICE = '<HDC设备序列号>'
+$PC_SERIAL = 'COM4'
+$DEVICE_UART = '/dev/ttyHW0'
 ```
 
-GPU qualification uses `golden gpu` and `calibrate gpu`.
-
-Before qualification, the baseline-free minimum closed loop can be checked independently:
+公共连接参数示例：
 
 ```powershell
-vmin_judge.exe --transport hdc --device DEVICE_ID --pc-serial COM6 smoke --profile cpu_smoke_kirin9030 --run-id smoke-cpu-001
-vmin_judge.exe --transport hdc --device DEVICE_ID --pc-serial COM6 smoke --profile gpu_smoke_kirin9030 --run-id smoke-gpu-001
+& $MON --transport hdc --device $DEVICE <子命令>
 ```
 
-`smoke` uses the normal live safety probe, deployment, device agent, workload, UART decoder, judgement, and artifact path. It does not require or create an approved baseline. Its generated correctness reference is disposable, and its device spool is retained for a later `collect` check.
-
-### 2.2 Batch testing
-
-Batch testing consumes an approved baseline directly:
+如果已经成功执行 `pair`，`run` 可以复用保存的串口关系；也可以每次显式提供：
 
 ```powershell
-vmin_judge.exe `
-  --pc-serial '<PC_UART_PORT>' `
-  --baudrate 9600 `
-  --output-dir D:\avs-results `
-  run `
-  --profile cpu_mixed_big4 `
-  --baseline auto
+& $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART <子命令>
 ```
 
-The tool performs a lightweight compatibility check, incrementally deploys missing/changed assets, verifies the environment, runs and monitors the workload, collects evidence, and reports the result. It does not regenerate golden data or recalibrate limits.
+## 3. 每个平台/BSP 只做一次的准备
 
-## 3. Packaged executable and global API
+### 3.1 本地检查
 
-### API: `vmin_judge.exe`
+```powershell
+& $MON validate --package
+```
 
-**Purpose:** Provide the stable PC entry point for qualification, deployment, batch execution, monitoring, collection, validation, and reporting.
+`--package` 会检查 workload、agent 和 shader 等发布资源。源码树没有放入真实板端二进制时，此项失败是资源尚未就绪，不代表 `run` 编排代码失败。
 
-**Origin:** Extends the current Python `vmin_judge` CLI, which already exposes `pair`, `monitor`, `execute`, `simulate`, `list-profiles`, and `validate`.
+### 3.2 只读平台探测
 
-**Rationale:** Operators and automation require one packaged interface with stable exit codes and no dependency on the source-tree working directory.
+```powershell
+& $MON --transport hdc --device $DEVICE probe --platform kirin9030 --full
+```
 
-The operator normally starts this agent through `smoke`, `run`, `golden`, or `calibrate`; the PC has already resolved the JSON manifest and supplies a safe argument vector. The supported direct health check is:
+探测结果用于确认平台身份、sysfs 路径和 telemetry 能力。缺少可选路径应记录为 capability 缺失；平台身份无法可靠确认时必须失败关闭。探测不会写 sysfs。
+
+### 3.3 串口配对
+
+已知两端端口时建议显式配对：
+
+```powershell
+& $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART pair --platform kirin9030 --verify
+```
+
+### 3.4 部署和核验
+
+普通 CPU/GPU 压力测试使用无 baseline 的 profile：
+
+```powershell
+& $MON --transport hdc --device $DEVICE deploy --profile cpu_stress_kirin9030
+& $MON --transport hdc --device $DEVICE deploy --profile gpu_stress_kirin9030
+& $MON --transport hdc --device $DEVICE verify-deployment --profile cpu_stress_kirin9030
+& $MON --transport hdc --device $DEVICE verify-deployment --profile gpu_stress_kirin9030
+```
+
+部署内容不是只封装在 PC 端 exe 内。exe 内携带资源，`deploy` 明确地把资源释放并复制到设备的 `/data/local/tmp/avs`；之后 `run` 只调用已经部署的文件。这样部署失败与运行失败可以分别诊断。
+
+## 4. 最小闭环：无 baseline 的错误判定
+
+CPU：
+
+```powershell
+& $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART run --profile cpu_stress_kirin9030 --test-id 0831-CPU-01
+```
+
+GPU：
+
+```powershell
+& $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART run --profile gpu_stress_kirin9030 --test-id 0831-GPU-01
+```
+
+此时 `validation_mode` 为 `error-only`。agent 启动 workload，把合法 workload 事件转发到指定 UART；PC 侧校验事件协议、test/attempt ID、序号、心跳、workload 结果和 agent 最终状态。退出码为 0 且 verdict 为 `PASS` 即闭环通过。
+
+`smoke` 没有另一套执行逻辑，只是强制不使用 baseline；该兼容别名已弃用。新命令直接使用短 profile：
+
+```powershell
+& $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART run --profile cpu_smoke_kirin9030 --test-id 0831-SMOKE-01
+```
+
+旧 `smoke` 命令暂时仍可调用并输出弃用提示，但不会生成 golden，也不会自动部署。`execute` 已删除。
+
+## 5. test ID、attempt ID 和证据位置
+
+- `test_id`：操作者定义的一组测试，例如 `0831-CPU-01`。
+- `attempt_id`：一次具体尝试；未提供时自动生成。
+- `--repeat N`：同一 test ID 下生成 N 个独立 attempt。
+- `--attempt-id` 与 `--repeat` 在命令行中互斥。
+
+设备证据位置：
 
 ```text
-vmin_judge.exe [global-options] <command> [command-options]
+/data/local/tmp/avs/tests/<test_id>/<attempt_id>/
+  events.jsonl
+  workload.log
+  final.json
+  artifact-hashes.json
+  spool/telemetry.jsonl       # 启用 telemetry 时
 ```
 
-### Global parameters
+这些文件按 attempt 隔离，并以追加方式写入。PASS 或 FAIL 后都不会自动删除。
 
-| Parameter | Purpose | Default/behavior |
-|---|---|---|
-| `--config-dir PATH` | Explicit external configuration override root. It may contain `config/platforms/...` or start directly at `platforms/...`. | Optional; overrides caller, executable, and bundled configuration. |
-
-An external profile may override configuration only. Relative workload and shader references first resolve beside that external profile, then fall back to the equivalent executable and bundled `config` layout. Operators do not need to copy packaged workload binaries out of the one-file executable merely to use `--config-dir`.
-| `--output-dir PATH` | Root for qualification and run artifacts. | Current directory or configured writable state. |
-| `--state-dir PATH` | Persistent pairing, baseline registry, and cache. | User-local application state. |
-| `--transport auto\|adb\|hdc` | Device control transport. | `auto`. |
-| `--device SERIAL` | ADB/HDC target identifier. | Auto-select only when unambiguous. |
-| `--adb-bin PATH` | Explicit ADB executable. | Config, packaged tool, then `PATH`. |
-| `--hdc-bin PATH` | Explicit HDC executable. | Config, packaged tool, then `PATH`. |
-| `--device-root POSIX_PATH` | Remote deployment root. | `/data/local/tmp/avs`. |
-| `--pc-serial PORT` | Actual PC-side UART enumerated by the host. | Saved pairing or command-specific requirement. |
-| `--device-uart POSIX_PATH` | Device-side UART such as `/dev/ttyAMA0`. | Saved pairing or platform profile. |
-| `--baudrate INTEGER` | UART baud. | Saved/platform value; Kirin9020 uses `9600`. |
-| `--log-level LEVEL` | `debug`, `info`, `warning`, or `error`. | `warning`; routine `run` progress is not copied to CMD. |
-| `--json` | Print machine-readable command result. | Off. |
-| `--quiet` | Suppress progress output. | Off. |
-| `--version` | Print packaged version and schema support. | Exits immediately. |
-
-**Outputs:** Normal `run` writes operational events to UART/artifacts and prints only its final result. A failed run additionally prints concise actionable reason fields; `--json` keeps the same contract in machine-readable form.
-
-**Errors:** Invalid configuration, ambiguous device, missing dependency/tool, unsupported device, transport failure, or command-specific failure. CMD receives the concise error code plus useful path/requested/actual fields; complete evidence remains in `result.json`.
-
-`validate` and `probe` report the resolved platform/profile file path and SHA-256. Check those fields before trusting an override; deployment manifests do not prove platform-YAML selection because platform configuration is consumed on the PC and is not deployed to the device.
-
-## 4. PC CLI command APIs
-
-### API: `probe`
-
-**Purpose:** Discover and normalize platform capabilities before deployment or testing.
-
-**Origin:** Combines paths from `default.yaml` and `monitor_profiles.yaml` with existing serial/device discovery.
-
-**Rationale:** Interface locations, permissions, thermal-zone indices, debugfs availability, and utility support must be validated rather than assumed.
-
-**Usage:**
+PC 默认使用 `--pc-artifacts result`，保留判定所需的紧凑结果。排查串口协议时使用：
 
 ```powershell
-vmin_judge.exe `
-  --transport hdc `
-  --device DEVICE_ID `
-  probe `
-  --platform kirin9030 `
-  --full
+& $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL run --profile cpu_stress_kirin9030 --test-id 0831-DEBUG-01 --pc-artifacts full
 ```
 
-| Parameter | Meaning |
-|---|---|
-| `--platform NAME` | Required platform adapter/profile; there is no implicit hardware default. |
-| `--full` | Perform complete topology/interface/tool discovery. |
-| `--refresh` | Compatibility flag. The current implementation probes the device live on every invocation and does not reuse a PC-side capability cache. |
-| `--require NAME` | Require a named capability; repeatable. |
+`full` 额外保存原始串口和规范化事件；它不改变判定。
 
-**Outputs:** `capabilities.json`, the resolved platform config path/fingerprint, device identity, interface provenance, units, permissions, and required/optional status. Thermal records retain the raw value, configured/applied unit, normalized Celsius value, and validity reason. Standalone `probe --full` scans both domains; profile-driven commands probe only their target domain and gate on that profile's requirements.
+## 6. Telemetry 独立运行或伴随 workload
 
-Platforms may declare required identity fields backed by device files such as `/proc/cmdline`. Missing or mismatched identity is fail-closed and remains blocking when a profile narrows CPU/GPU capability scope. CPU topology output includes cpufreq `affected_cpus`, `related_cpus`, per-core policy membership, and `policy_by_cpu`. Governor interfaces may declare supported-value files; profile-driven commands verify the requested governor on every target path before deployment or agent launch.
-
-The bundled `kirin9020` and `kirin9030` adapters have distinct required identities. Select the adapter matching the device-reported hardware; do not reuse a Kirin9020 profile unchanged on a Kirin9030 device. First run `probe --platform kirin9030 --full` and use its policy mapping to review any affinity configured in the workload profile.
-
-**Handoff:** Consumed by `deploy`, `golden`, `calibrate`, and `run`.
-
-**Errors:** `UNSUPPORTED` when required hardware capability is absent; `INFRA_ERROR` for inaccessible or malformed interfaces.
-
-### API: `pair`
-
-**Purpose:** Determine which PC serial port is physically connected to which device UART.
-
-**Origin:** Retains the current marker-based serial pairing feature.
-
-**Rationale:** ADB/HDC controls the board while test events arrive through a separate physical UART.
-
-**Usage:**
+独立采样，不启动 workload、不写 UART：
 
 ```powershell
-vmin_judge.exe `
-  --transport hdc `
-  pair `
-  --platform kirin9030 `
-  --device-port '<DEVICE_UART_PATH>' `
-  --pc-port '<PC_UART_PORT>' `
-  --baudrate 9600 `
-  --verify
+& $MON --transport hdc --device $DEVICE telemetry run --profile cpu_stress_kirin9030 --test-id 0831-TEL-01 --duration 60 --interval 5
 ```
 
-| Parameter | Meaning |
-|---|---|
-| `--device-port PATH` | Optional explicit device UART. |
-| `--pc-port PORT` | Optional explicit PC serial port. |
-| `--platform NAME` | Optional device-specific UART candidates and baud-rate source. |
-| `--timeout SECONDS` | Marker receive timeout. |
-| `--verify` | Repeat a verification marker after pairing. |
-| `--monitor` | Start diagnostic monitoring after success. |
-
-**Outputs:** Persistent pairing record plus bounded `pair-diagnostic.json` evidence containing the failure class, marker write count, received-byte count, and a short hexadecimal preview.
-
-**Handoff:** Used by later `run` or `monitor` commands when serial parameters are omitted.
-
-**Behavior and errors:** The generic engine opens the selected PC port first, settles and clears stale bytes, retries a unique marker up to a bounded count, and accepts fragmented input. It does not guess host/device port names and does not reconfigure the device with `stty`. Errors distinguish missing candidates, busy/open failures, remote echo failure, zero received bytes, and received data without the marker.
-
-### API: `deploy`
-
-**Purpose:** Install or update device-agent, workload, shader, golden, rule, and configuration assets.
-
-**Origin:** Builds on existing ADB/HDC `push` support and remote paths declared in `default.yaml`.
-
-**Rationale:** Qualification and batch runs must use verified assets while avoiding unnecessary retransmission.
-
-**Usage:**
+伴随核心测试：
 
 ```powershell
-vmin_judge.exe deploy `
-  --target all `
-  --profile gpu_vulkan_mixed `
-  --verify-hashes
+& $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL run --profile cpu_stress_kirin9030 --test-id 0831-CPU-TEL-01 --telemetry
 ```
 
-| Parameter | Meaning |
-|---|---|
-| `--target cpu\|gpu\|all` | Asset family to deploy. |
-| `--profile NAME` | Include profile-specific shaders/golden/config. |
-| `--force` | Push even when hashes match. |
-| `--verify-hashes` | Require remote SHA-256 verification. |
-| `--clean-stale` | Remove only manifest-owned obsolete files. |
+两种方式调用同一个 `avs-telemetry-agent` 和同一份 profile telemetry plan。采样只追加到设备本地 `spool/telemetry.jsonl`，不混入判错 UART。普通 error-only 运行不把 telemetry 缺失当作 DUT 错误；显式请求 `--telemetry` 但 collector 未部署属于基础设施错误。
 
-**Outputs:** `deployment-manifest.json` with local/remote paths, sizes, SHA-256 values, permissions, actions, and verification status.
+## 7. 拉取和报告
 
-**Handoff:** Consumed by `smoke`, `golden`, `calibrate`, and `run`.
-
-**Errors:** Transfer failure, remote filesystem/permission failure, hash mismatch, or insufficient storage.
-
-### API: `smoke`
-
-**Purpose:** Prove the minimum live closed loop before golden generation or baseline approval.
-
-**Rationale:** Package/resource resolution, live platform safety checks, deployment, device-agent/workload launch, UART event transport, judgement, and artifacts must be testable independently of multi-board qualification.
-
-**Usage:**
+拉取一个 test ID 的全部 attempts：
 
 ```powershell
-vmin_judge.exe `
-  --transport hdc `
-  --device DEVICE_ID `
-  --pc-serial COM6 `
-  --output-dir D:\MonitorTest\output `
-  smoke `
-  --profile cpu_smoke_kirin9030 `
-  --run-id smoke-cpu-001
+& $MON --transport hdc --device $DEVICE collect --test-id 0831-CPU-01 --verify-hashes
 ```
 
-| Parameter | Meaning |
-|---|---|
-| `--profile NAME` | Baseline-free smoke profile. |
-| `--repeat N` | Sequential smoke transactions. |
-| `--run-id ID` | Exact run ID, or prefix when repeating. |
-| `--overall-timeout SEC` | PC-side transaction timeout. |
-| `--heartbeat-timeout SEC` | Workload liveness timeout. |
-
-**Outputs:** A normal PC run directory and final object containing `minimum_closed_loop`. PASS requires complete agent/workload terminal evidence and policy evaluation. Smoke device spool is retained so `collect --verify-hashes` can be run afterward.
-
-**Safety:** Smoke uses a runtime-only synthetic baseline with no thresholds and marks any generated correctness reference as `discard`. It cannot create, approve, or satisfy a production golden/baseline.
-
-**Errors:** The same typed configuration, unsupported, transport, serial protocol, workload/DUT, and artifact failures as the live transaction. Any non-PASS means the minimum closed loop is not complete.
-
-### API: `golden cpu`
-
-**Purpose:** Establish a trusted deterministic CPU checksum for one correctness fingerprint.
-
-**Origin:** Uses the existing CPU workload `--generate-golden` and `golden`/`summary` records.
-
-**Rationale:** The workload can derive an expected value internally, but an externally approved checksum generated repeatedly on known-good boards is more robust for Vmin validation.
-
-**Usage:**
+只拉取一个 attempt：
 
 ```powershell
-vmin_judge.exe golden cpu `
-  --profile cpu_mixed_big4 `
-  --runs 10 `
-  --known-good `
-  --board-id BOARD_001
+& $MON --transport hdc --device $DEVICE collect --test-id 0831-CPU-01 --attempt-id 0831-CPU-01-001 --verify-hashes
 ```
 
-| Parameter | Meaning |
-|---|---|
-| `--profile NAME` | CPU qualification profile. |
-| `--runs N` | Golden repetitions on this board. |
-| `--board-id ID` | Qualification cohort identity. |
-| `--known-good` | Required acknowledgement that the board/environment is qualified. |
-| `--accept-checksum HEX` | Optional previously expected checksum for comparison. |
-| `--run-dir [BOARD_ID=]PATH` | Reuse an already collected qualified run; repeatable. If omitted, the command executes live runs. |
-
-**Outputs:** CPU golden manifest, every emitted golden record, effective configuration, workload hash, accepted/rejected repeats, and fingerprint.
-
-**Handoff:** Referenced by CPU calibration and approved CPU baselines.
-
-**Errors:** Non-identical repeated checksums, environment violation, workload failure, missing golden/summary, or fingerprint conflict.
-
-### API: `golden gpu`
-
-**Purpose:** Establish a trusted GPU raw readback/checksum artifact for one correctness fingerprint.
-
-**Origin:** Uses the GPU workload `--generate-golden`, `--golden-file`, and verifier implementation.
-
-**Rationale:** Later GPU executions require a known output generated with identical API, mode, shader, render, texture, backend, and build behavior.
-
-**Usage:**
+默认保留设备端数据。只有明确需要回收空间并且哈希核验成功时才删除：
 
 ```powershell
-vmin_judge.exe golden gpu `
-  --profile gpu_vulkan_mixed `
-  --runs 10 `
-  --known-good `
-  --board-id BOARD_001
+& $MON --transport hdc --device $DEVICE collect --test-id 0831-CPU-01 --verify-hashes --remove-remote-after-verify
 ```
 
-| Parameter | Meaning |
-|---|---|
-| `--profile NAME` | GPU qualification profile. |
-| `--runs N` | Repetitions used to validate stability. |
-| `--board-id ID` | Cohort identity. |
-| `--known-good` | Required qualification acknowledgement. |
-| `--run-dir [BOARD_ID=]PATH` | Reuse an already collected run containing the GPU readback; repeatable. |
-
-**Outputs:** Raw GPU buffer such as `vulkan_mixed.rgba`, golden manifest, buffer SHA-256, workload/shader hashes, effective configuration, driver/build identity, and repeat comparison.
-
-**Handoff:** Deployed for GPU calibration and batch testing and referenced by an approved baseline.
-
-**Errors:** Inconsistent readbacks, missing readback, driver/backend error, environment violation, or incompatible fingerprint.
-
-### API: `calibrate cpu`
-
-**Purpose:** Measure CPU performance distributions and propose limits for a CPU baseline.
-
-**Origin:** Uses existing CPU summary metrics and performance gates plus newly collected CPU telemetry.
-
-**Rationale:** Production thresholds must reflect representative known-good devices and controlled environmental conditions.
-
-**Usage:**
+已有 PC 运行目录可独立生成报告：
 
 ```powershell
-vmin_judge.exe calibrate cpu `
-  --profile cpu_mixed_big4 `
-  --runs 30 `
-  --board-id BOARD_001 `
-  --golden D:\avs-results\qualification\cpu-golden.json `
-  --temperature-range 35:60
+& $MON report --run-dir '<运行目录>' --format markdown,json
 ```
 
-| Parameter | Meaning |
-|---|---|
-| `--profile NAME` | Profile referencing an accepted CPU golden. |
-| `--runs N` | Repeated performance runs. |
-| `--board-id ID` | Cohort member. |
-| `--temperature-range MIN:MAX` | Accepted temperature band in °C. |
-| `--min-accepted N` | Minimum compliant samples. |
-| `--policy FILE` | Statistical margin/percentile policy. |
-| `--golden FILE` | Accepted CPU/GPU golden manifest used to bind correctness fingerprints. |
-| `--run-dir [BOARD_ID=]PATH` | Reuse collected samples; repeat for a multi-board cohort. If omitted, execute live runs. |
+## 8. 何时使用 baseline
 
-**Outputs:** Per-run evidence, accepted/rejected sample table, aggregate distributions, proposed CPU limits, and draft baseline.
-
-**Handoff:** Draft is reviewed with `baseline show` and promoted with `baseline approve`.
-
-**Errors:** Insufficient accepted samples, golden mismatch, uncontrolled environment, telemetry loss, or unstable cohort.
-
-### API: `calibrate gpu`
-
-**Purpose:** Measure GPU performance/telemetry distributions and propose GPU limits.
-
-**Origin:** Uses GPU workload frame/job metrics and Kirin/HVGR telemetry interfaces.
-
-**Rationale:** GPU correctness alone does not detect abnormal FPS, latency, throttling, frequency, or stability.
-
-**Usage:**
+普通压力测试只关心明确错误时，不传 `--baseline`。需要校验 checksum、golden 或阈值时才显式指定已批准 baseline：
 
 ```powershell
-vmin_judge.exe calibrate gpu `
-  --profile gpu_vulkan_mixed `
-  --runs 30 `
-  --board-id BOARD_001 `
-  --golden D:\avs-results\qualification\gpu-golden.json `
-  --temperature-range 35:60
+& $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL run --profile cpu_mixed_big4 --baseline '<baseline-id>' --test-id QUAL-CPU-01
 ```
 
-**Inputs:** Same common calibration controls as CPU plus a GPU golden, driver/API capability, shader hashes, and GPU-specific policy.
-
-**Outputs:** FPS/frame/GPU-job distributions, telemetry distributions, accepted/rejected samples, proposed GPU limits, and draft baseline.
-
-**Handoff:** Draft baseline review and approval.
-
-**Errors:** Golden mismatch, device lost, GPU timeout, unsupported API, throttle/environment violation, or insufficient samples.
-
-### API group: `baseline`
-
-**Purpose:** Manage immutable qualification results and control which baseline production runs may consume.
-
-**Origin:** New API required by the separation of qualification from batch testing.
-
-**Rationale:** Calibration data must not be silently overwritten or used before human approval.
-
-**Usage:**
+资格化流程是独立的：先在已准备好的已知良品板上执行并收集运行目录，再把这些目录显式传给 `golden`/`calibrate`，最后人工批准。`calibrate` 不会为了补齐样本而偷偷启动硬件。
 
 ```powershell
-vmin_judge.exe baseline list --status approved
-vmin_judge.exe baseline show BASELINE_ID
-vmin_judge.exe baseline approve BASELINE_ID --approver USER
-vmin_judge.exe baseline deprecate BASELINE_ID --reason "driver update"
+& $MON golden cpu --profile cpu_mixed_big4 --board-id BOARD-A --known-good --runs 2 --run-dir '<run1>' --run-dir '<run2>'
+& $MON calibrate cpu --profile cpu_mixed_big4 --board-id BOARD-A --golden '<golden.json>' --runs 2 --run-dir '<run1>' --run-dir '<run2>'
+& $MON baseline approve '<baseline-id>' --approver '<name>'
 ```
 
-| Subcommand | Purpose | Output |
-|---|---|---|
-| `list` | Search by profile/status/platform. | Baseline summaries. |
-| `show ID` | Display fingerprints, cohort, limits, golden, and approval. | Full baseline document. |
-| `approve ID` | Promote a draft after review. | Immutable approved version and approval record. |
-| `deprecate ID` | Prevent new runs while preserving history. | Updated status/audit record. |
-| `export ID` | Create a portable hash-verified baseline bundle. | Bundle path and hash. |
-| `import FILE` | Validate and register a baseline bundle. | Registered ID or validation failure. |
+## 9. 配置边界
 
-**Errors:** Invalid transition, fingerprint inconsistency, missing golden, failed signature/hash, or unknown ID.
+平台依赖写入配置，不写死在运行逻辑中：
 
-### API: `run`
+- `config/platforms/<platform>.yaml`：平台身份、UART 候选、CPU/GPU/thermal 只读路径。
+- `config/profiles/<profile>.yaml`：workload、telemetry 和 `scheduler_requirements`。
+- `config/workloads/<workload>.json`：workload 参数及 `verify_mode`。
 
-**Purpose:** Execute one or more production tests against an approved baseline with integrated monitoring.
+`scheduler_requirements` 当前只是声明性元数据。Monitor 2.1 不执行它。未来调度模块若要设置 governor、频率、CPU online、功耗策略或 affinity，必须有独立命令、权限、审计和恢复策略。
 
-**Origin:** Replaces the prototype's split/duplicated `execute` and `monitor` behavior.
+## 10. 判定和退出码
 
-**Rationale:** Workload launch, event monitoring, policy evaluation, artifact collection, cleanup, and restoration form one transactional operation.
+| 退出码 | 含义 |
+|---:|---|
+| 0 | PASS |
+| 1 | DUT 明确失败 |
+| 2 | workload 无有效结论（silent failure） |
+| 3 | 基础设施、agent、串口或事件协议错误 |
+| 4 | 配置、profile 或 baseline 错误 |
+| 5 | 平台/能力不支持 |
+| 6 | 用户中止 |
 
-**Usage:**
-
-```powershell
-vmin_judge.exe `
-  --pc-serial '<PC_UART_PORT>' `
-  run `
-  --profile gpu_vulkan_mixed `
-  --baseline BASELINE_ID `
-  --kernel-monitor critical `
-  --repeat 1
-```
-
-| Parameter | Meaning |
-|---|---|
-| `--profile NAME` | Production profile. |
-| `--baseline ID\|auto` | Explicit approved baseline or compatible auto-resolution. |
-| `--repeat N` | Sequential repetitions. |
-| `--run-id ID` | Optional externally supplied unique run ID. |
-| `--no-deploy` | Require already matching device assets. |
-| `--keep-device-spool` | Retain the device spool after PASS. Failures are always retained. |
-| `--kernel-monitor critical\|off` | Filtered critical kernel policy. |
-| `--overall-timeout SEC` | PC-side transaction timeout. |
-| `--heartbeat-timeout SEC` | PC-side liveness timeout. |
-
-**Outputs:** Complete PC run artifact directory and final machine-readable result. Routine events stay on UART/artifacts; CMD shows only the final verdict and, on failure, concise reasons. A PASS removes its device spool after the PC artifact is complete unless `--keep-device-spool` is set.
-
-**Handoff:** Result/report goes to batch automation; artifacts go to traceability storage.
-
-**Errors:** Any typed DUT verdict, infrastructure/configuration/unsupported error, user abort, or incompatible baseline.
-
-### Compatibility API: `execute`
-
-**Purpose:** Preserve legacy automation temporarily.
-
-**Origin:** Existing command.
-
-**Rationale:** Allows staged migration.
-
-**Usage:** Same essential inputs as `run`; internally translated to `run` with integrated monitoring.
-
-**Deprecation:** New automation must use `run`. Removal requires a major CLI version.
-
-Legacy `--no-launch` and `--auto-pair` are rejected by the v2 alias with an actionable error. Use `monitor` for diagnostic-only serial capture and `pair` as an explicit step. Correctness-sensitive workload overrides belong in a versioned profile/configuration, which changes the fingerprint and requires qualification; production `run` does not accept ad-hoc profile overrides.
-
-### API: `monitor`
-
-**Purpose:** Diagnose or observe an already running device-agent event stream without launching a workload.
-
-**Origin:** Retains the existing standalone serial-monitor concept.
-
-**Rationale:** Useful for UART bring-up, protocol debugging, and controlled external launch systems.
-
-**Usage:**
-
-```powershell
-vmin_judge.exe --pc-serial '<PC_UART_PORT>' --baudrate 9600 monitor --save-raw
-```
-
-| Parameter | Meaning |
-|---|---|
-| `--save-raw` | Preserve raw serial bytes. |
-| `--expected-run-id ID` | Reject records from another run. |
-| `--schema-version N` | Require a protocol major version. |
-| `--timeout SEC` | Stop if no usable record arrives. |
-
-**Outputs:** Decoded events and optional raw stream; no DUT PASS unless a complete compatible run manifest and terminal evidence are available.
-
-Run `monitor` only while a device agent or other documented JSONL frame producer is active. Pairing markers are raw bring-up bytes, not protocol events.
-
-**Errors:** Serial open/read failure, framing/sequence/schema error, or timeout.
-
-### API: `collect`
-
-**Purpose:** Pull device-spooled artifacts after a run or recover evidence after PC/UART interruption.
-
-**Origin:** Builds on existing ADB/HDC `pull` support.
-
-**Rationale:** Full logs should be retained on-device instead of flooding UART and must remain recoverable.
-
-**Usage:**
-
-```powershell
-vmin_judge.exe collect --run-id RUN_ID --verify-hashes
-```
-
-| Parameter | Meaning |
-|---|---|
-| `--run-id ID` | Run to collect. |
-| `--remote-run-dir PATH` | Optional explicit remote run directory. |
-| `--verify-hashes` | Verify against device artifact manifest. |
-| `--keep-remote` | Do not delete eligible remote spool data after success. |
-
-**Outputs:** Local artifacts plus collection verification record.
-
-**Errors:** Missing run, pull failure, hash mismatch, or incomplete remote manifest.
-
-### API: `report`
-
-**Purpose:** Regenerate a human/machine report from stored run artifacts without rerunning hardware.
-
-**Origin:** Extends the current basic result formatter.
-
-**Rationale:** Reporting format changes must not require another device execution.
-
-**Usage:**
-
-```powershell
-vmin_judge.exe report --run-dir D:\avs-results\RUN_ID --format markdown,json,csv
-```
-
-**Outputs:** Requested reports; source artifacts remain unchanged.
-
-**Errors:** Missing/inconsistent artifacts or unsupported schema.
-
-### API: `validate`
-
-**Purpose:** Validate configuration, profiles, baseline bundles, deployment assets, or packaged resources without running a test.
-
-**Origin:** Retains and expands the existing `validate` command.
-
-**Rationale:** Configuration and packaging failures should be detected before office hardware time is used.
-
-**Usage:**
-
-```powershell
-vmin_judge.exe validate --all
-vmin_judge.exe validate --profile cpu_mixed_big4
-vmin_judge.exe validate --package
-```
-
-| Parameter | Meaning |
-|---|---|
-| `--all` | Validate all discoverable resources. |
-| `--profile NAME` | Validate profile and referenced artifacts. |
-| `--baseline ID\|FILE` | Validate fingerprints, approval, and hashes. |
-| `--package` | Validate packaged resources and tool resolution. |
-| `--offline` | Skip device-dependent checks. |
-
-**Outputs:** Validation report and nonzero exit on errors.
-
-### API: `list-profiles`
-
-**Purpose:** List usable, pending, deprecated, or unsupported profiles.
-
-**Origin:** Existing command.
-
-**Rationale:** Operators need discoverable profile names and compatibility status.
-
-**Usage:**
-
-```powershell
-vmin_judge.exe list-profiles --target cpu --status implemented
-```
-
-**Outputs:** Profile name, target, description, required baseline, status, and compatibility notes.
-
-### API: `simulate`
-
-**Purpose:** Replay saved JSONL or raw serial captures through the decoder and policy engine.
-
-**Origin:** Existing log-file simulation command.
-
-**Rationale:** Enables regression and failure-policy testing without connected UDP boards.
-
-**Usage:**
-
-```powershell
-vmin_judge.exe simulate --events events.jsonl --profile cpu_mixed_big4
-```
-
-| Parameter | Meaning |
-|---|---|
-| `--events FILE` | Framed JSONL events. |
-| `--raw-serial FILE` | Raw capture to decode. |
-| `--profile NAME` | Policy/profile context. |
-| `--baseline ID` | Optional approved baseline. |
-| `--realtime` | Replay original timing instead of immediate processing. |
-
-**Outputs:** Simulated result and decoder/policy statistics.
-
-## 5. Device-agent CLI API
-
-### API: `avs-device-agent`
-
-**Purpose:** Execute one resolved run on the device and provide the only framed UART writer.
-
-**Origin:** New component replacing independent workload and `dmesg` redirection processes.
-
-**Rationale:** Multiple processes writing directly to one UART can interleave bytes and corrupt workload JSON.
-
-**Usage:**
-
-```sh
-/data/local/tmp/avs/bin/avs-device-agent --version
-```
-
-| Parameter | Meaning |
-|---|---|
-Internal run parameters include run ID, target, UART, spool directory, timeout, environment actions, telemetry sources, and the workload argv after `--`. They are generated by the PC and are not a stable operator-facing interface.
-
-The agent does not change the device UART baud automatically. The BSP/console owns that setup; `9600` configures the PC endpoint and records the expected link rate.
-| `--version` | Print agent/protocol version. |
-
-**Inputs:** PC-resolved run parameters, deployed workload/assets, platform interfaces, and kernel filter rules. The current Shell backend receives a safe flattened argv; it does not parse or require a remote JSON manifest.
-
-**Outputs:** UART JSONL events, local device spool, agent process exit status.
-
-**Errors:** Manifest/hash/config failure, environment apply/readback failure, workload failure, telemetry failure, UART failure, timeout, or restoration failure. Restoration failure is always reported even when the workload passed.
-
-**Implementation note:** Monitor deploys one version-controlled Shell script and passes resolved data-only arguments. It does not deploy or generate a per-run script, and it no longer pushes an unused remote manifest. Only the agent writes the UART; workload, telemetry, and filtered kernel producers are framed through that writer.
-
-## 6. Native CPU workload API
-
-### API: `cpu-avs-workload`
-
-**Purpose:** Generate deterministic CPU load, verify computation, measure performance, emit liveness/events, and return a detailed terminal status.
-
-**Origin:** Existing C++ CPU workload under `D:\workload\cpuworkload`.
-
-**Rationale:** Correctness and performance measurement belong close to the computation; platform policy such as affinity/frequency remains controlled by the device agent.
-
-**Configuration precedence:** built-in profile defaults, then flat JSON `--config`, then CLI overrides.
-
-**Usage:**
-
-```sh
-cpu-avs-workload \
-  --config /data/local/tmp/avs/configs/cpu_mixed_big4.json \
-  --output-format jsonl
-```
-
-### CPU parameter groups
-
-| Group | Parameters | Usage |
-|---|---|---|
-| Selection | `--profile`, `--backend`, `--api cpu`, `--mode compute`, `--config` | Select deterministic backend and inputs. |
-| Runtime | `--duration`, `--batches`, `--warmup`, `--timeout`, `--iterations`, `--threads`, `--working-set-kb`, `--seed`, `--batch-timeout-ms` | Define load and stop/timeout behavior. |
-| Duty cycle | `--duty-cycle`, `--burst-period`, `--burst-active` | Define burst active/idle behavior. |
-| Verification | `--verify-mode`, `--checksum-interval`, `--golden-checksum`, `--fail-fast`, `--generate-golden` | Generate or apply deterministic correctness data. |
-| Monitoring | `--heartbeat-interval`, `--summary-only`, `--per-batch-log`, `--output-format jsonl`, `--output` | Control event volume and destination. |
-| Performance | `--min-operations-per-sec`, `--max-throughput-cv-pct`, `--max-batch-p99-ms`, `--max-heartbeat-gap`, `--fail-on-instability` | Apply calibrated limits. |
-| Utility | `--list-profiles`, `--dump-effective-config`, `--version`, `--help` | Inspect without testing. |
-
-**Outputs:** JSONL `start`, `heartbeat`, optional `batch`, `verify`, `golden`, `error`, and `summary` records.
-
-**Exit codes:** `0 PASS`, `1 CHECKSUM_FAIL`, `2 API_ERROR`, `3 TIMEOUT`, `4 DEVICE_LOST` reserved, `5 ALLOCATION_FAIL`, `6 UNKNOWN_ERROR`, `7 PERFORMANCE_FAIL`.
-
-## 7. Native GPU workload API
-
-### API: `gpu-avs-workload`
-
-**Purpose:** Generate deterministic GPU graphics/compute load, read back and verify output, measure frames/GPU jobs, emit events, and return detailed status.
-
-**Origin:** Existing C++ GPU workload under `D:\workload\gpuworkload`.
-
-**Rationale:** API/backend-specific work and readback verification must execute on-device, while platform telemetry and final baseline policy remain external.
-
-**Configuration precedence:** built-in profile defaults, then flat JSON `--config`, then CLI overrides.
-
-**Usage:**
-
-```sh
-gpu-avs-workload \
-  --config /data/local/tmp/avs/configs/gpu_vulkan_mixed.json \
-  --output-format jsonl
-```
-
-### GPU parameter groups
-
-| Group | Parameters | Usage |
-|---|---|---|
-| Selection | `--profile`, `--api`, `--mode`, `--config` | Select Vulkan/GLES/OpenCL/null and graphics/compute mode. |
-| Render | `--width`, `--height`, `--rt-format`, `--samples` | Define output buffer identity. |
-| Runtime | `--duration`, `--frames`, `--warmup`, `--timeout`, `--loop` | Define run length and timeout. |
-| Load | `--shader`, `--shader-dir`, `--complexity`, `--iterations`, `--texture-count`, `--texture-size`, `--duty-cycle`, `--burst-period`, `--burst-active` | Define GPU work. |
-| Verification | `--verify-mode`, `--checksum-interval`, `--golden-checksum`, `--golden-file`, `--pixel-threshold`, `--pixel-max-diff-count`, `--fail-fast`, `--generate-golden` | Generate/apply readback correctness data. |
-| Timing | `--gpu-timestamp`, `--timestamp-scope`, `--gpu-timeout-ms` | Control GPU timing and timeout. |
-| Monitoring | `--heartbeat-interval`, `--summary-only`, `--per-frame-log`, `--output-format`, `--output` | Control event volume and destination. `per-frame-log` is currently parsed but does not emit frame events; do not rely on it until implemented or formally deprecated. |
-| Utility | `--list-profiles`, `--dump-effective-config`, `--version`, `--help` | Inspect without testing. |
-
-**Outputs:** JSONL `start`, `heartbeat`, `verify`, `golden`, `error`, and `summary` records plus an optional raw golden file. A future explicit `frame` event requires a protocol revision and bandwidth policy.
-
-**Important:** `verify_mode=none` performs no correctness validation. Checksum without a trusted checksum records rather than validates. Exact/pixel/compute comparison requires a compatible golden file.
-
-## 8. Configuration APIs
-
-### API: Platform YAML
-
-**Purpose:** Describe stable hardware interfaces, transport defaults, units, fallbacks, and required privileges.
-
-**Origin:** Refactors `default.yaml` and `monitor_profiles.yaml` into a validated platform adapter.
-
-**Rationale:** Single- and dual-framework boards may share paths while differing in transport or permissions; probing verifies the contract.
-
-**Usage:** Selected by `--platform` or referenced by a profile.
-
-**Output/handoff:** Provides candidates to `probe`; resolved choices are written to `capabilities.json`.
-
-### API: Profile YAML
-
-**Purpose:** Bind workload configuration, environment, golden reference, performance limits, required capabilities, and failure policy to a stable name.
-
-**Origin:** Replaces the empty/incomplete `workload_profiles.yaml` while retaining named profile selection.
-
-**Rationale:** A production test must be one reproducible contract rather than unrelated command-line fragments.
-
-**Usage example:**
-
-```yaml
-schema_version: 1
-name: cpu_mixed_big4
-target: cpu
-platform: kirin9020
-workload:
-  binary: bin/cpu-avs-workload
-  config: workloads/cpu_mixed_big4.json
-environment:
-  affinity: "4-7"
-  governor: performance
-  temperature_c: {min: 35, max: 60}
-baseline: kirin9020-cpu-mixed-big4-v1
-telemetry:
-  interval_ms: 1000
-  required: [cpu.frequency, cpu.online, cpu.temperature]
-kernel_monitor: critical
-kernel_options: {dedupe_window_ms: 1000, max_events_per_second: 10}
-```
-
-**Handoff:** Resolved with baseline/capabilities into a run manifest and flat workload JSON.
-
-### API: Calibration policy YAML
-
-**Purpose:** Define cohort/sample requirements and approved statistical margin methods.
-
-**Origin:** New qualification requirement.
-
-**Rationale:** Threshold derivation must be repeatable and reviewed, not encoded as arbitrary code constants.
-
-**Usage:** Passed through `calibrate --policy`.
-
-**Outputs:** Policy identity/hash is stored in the draft baseline.
-
-### API: Baseline JSON
-
-**Purpose:** Store an immutable approved correctness/performance contract.
-
-**Origin:** New separation between qualification and batch execution.
-
-**Rationale:** Batch testing directly reuses selected-board baseline data only when fingerprints match.
-
-**Required content:** ID/version/status, platform scope, correctness fingerprint, performance fingerprint, golden reference/hash, thresholds, environment, cohort/sample statistics, workload/shader hashes, schema versions, approval identity/time, and optional signature.
-
-**Usage:** Resolved explicitly with `--baseline ID` or compatibly with `--baseline auto`.
-
-### API: Run-manifest JSON
-
-**Purpose:** Provide the device agent with complete instructions for exactly one run.
-
-**Origin:** Replaces dynamically constructed shell command fragments and generated scripts.
-
-**Rationale:** A resolved immutable manifest is auditable, hashable, and safe to validate before mutation.
-
-**Required content:** Run ID, profile/baseline IDs and hashes, target, workload argv, asset paths/hashes, UART/spool paths, environment actions/readbacks, telemetry samplers, kernel rules, timeouts, event schema, and restoration plan.
-
-**Usage:** Generated by PC `run`, pushed to the remote run directory, and passed to `avs-device-agent --manifest`.
-
-### API: Kernel rule configuration
-
-**Purpose:** Identify only critical kernel events to report live and optional warning/ignore patterns.
-
-**Origin:** Refines current `cpu_judge.conf`/GPU rules while removing raw dmesg transmission.
-
-**Rationale:** Kernel evidence is valuable, but unrelated kernel traffic can exhaust UART bandwidth and corrupt workload delivery.
-
-**Usage:** Deployed to the agent and referenced by the run manifest. Full raw logs remain on-device.
-
-`dmesg` is not needed to judge workload correctness, performance, or telemetry limits. It is required only when `kernel_monitor` is `critical` or `full-local`; use `off` on images that do not expose it. Live kernel matches are deduplicated and rate-limited by `kernel_options`. `full-local` additionally writes `dmesg.raw` to the device spool but still does not send raw kernel traffic over UART.
-
-## 9. UART event API
-
-### Event envelope
-
-**Purpose:** Frame and route every live record reliably.
-
-**Origin:** Wraps existing workload JSONL and new agent/telemetry/kernel events.
-
-**Rationale:** Run ID, sequence, source, schema, timestamp, and optional CRC allow the PC to detect contamination, loss, and corruption.
-
-```json
-{
-  "schema_version": 1,
-  "run_id": "RUN_ID",
-  "seq": 1,
-  "timestamp_ms": 1234,
-  "source": "agent",
-  "type": "agent_start",
-  "payload": {},
-  "crc32": "optional"
-}
-```
-
-### Event-type APIs
-
-| Type | Purpose | Origin | Rationale and usage |
-|---|---|---|---|
-| `agent_start` | Declare agent/version/manifest identity. | New. | First event; PC rejects incompatible run/schema. |
-| `capability` | Report resolved interface/tool capability. | Platform probing. | Proves which interface produced each metric. |
-| `environment` | Report requested/applied/read-back environment. | New environment controller. | Required before workload start; mismatch may block run. |
-| `start` | Report effective workload configuration. | Existing CPU/GPU workload. | PC compares it with run manifest/baseline. |
-| `heartbeat` | Report liveness and rolling progress/performance. | Existing workloads. | Resets watchdog and feeds real-time limits. |
-| `batch` | Optional CPU batch detail. | Existing CPU workload. | Normally suppressed to protect bandwidth. |
-| `verify` | Report correctness comparison. | Existing workloads. | Any failed verify is a DUT failure. |
-| `golden` | Report generated correctness artifact identity. | Existing workloads. | Qualification only; stored by GoldenService. |
-| `telemetry` | Report normalized CPU/GPU frequency/temperature/etc. | New agent sampler. | Compared with environmental and performance policy. |
-| `kernel` | Report filtered critical/warning kernel event. | Existing rules, new filter. | Critical match can fail DUT; no raw stream. |
-| `error` | Report workload/agent/platform error. | Existing workloads plus agent. | Routed by source/type to DUT or infrastructure policy. |
-| `summary` | Report authoritative workload result and metrics. | Existing workloads. | Non-`PASS` or nonzero exit is terminal failure. |
-| `violation` | Report a policy limit crossing with evidence. | New policy/agent. | Supports real-time display and final reasoning. |
-| `agent_final` | Report workload exit, cleanup, restoration, spool state. | New. | Required final agent event; restoration failure is preserved. |
-
-Unknown additive fields are retained. An unsupported major schema, invalid JSON, sequence gap, wrong run ID, or CRC failure is an infrastructure error.
-
-## 10. Artifact APIs
-
-### API: Qualification directory
-
-**Purpose:** Preserve cohort, golden, sample, calibration, proposal, and approval evidence.
-
-**Origin:** New baseline lifecycle.
-
-**Rationale:** Approved limits must remain auditable and reproducible.
-
-**Usage:** Created by `golden`/`calibrate`; read by `baseline approve` and later audit/export.
-
-### API: Production run directory
-
-**Purpose:** Preserve complete evidence for one test execution.
-
-**Origin:** Expands current raw/log/result output.
-
-**Rationale:** Console output and a reduced verdict are insufficient for reproducibility, failure analysis, or baseline audit.
-
-**Required files:** Run manifest, capabilities, deployment manifest, effective profile/workload, events, telemetry, kernel events, workload summary, result, optional raw serial, artifact hashes, and report.
-
-**Usage:** Consumed by automation, `report`, `simulate`, audit, and failure analysis.
-
-### API: `result.json`
-
-**Purpose:** Provide the canonical machine-readable final result.
-
-**Origin:** Replaces the current reduced verdict-only formatting.
-
-**Rationale:** Automation needs one canonical result that preserves workload details, evaluated limits, evidence, and infrastructure validity without scraping text.
-
-**Required content:** Run/profile/baseline IDs, overall verdict/exit code, DUT and infrastructure reasons, workload result/exit, correctness evidence, performance metrics/limits, telemetry violations, kernel evidence, liveness, artifact completeness/hashes, timestamps, and tool versions.
-
-**Usage:** Batch automation uses this file rather than scraping console text.
-
-## 11. Process exit codes
-
-| Code | Meaning | Usage |
-|---:|---|---|
-| 0 | PASS | Completed and satisfied the approved baseline. |
-| 1 | DUT_FAIL | Correctness, performance, or critical platform failure. |
-| 2 | SILENT_FAILURE | Heartbeat/result disappeared under an otherwise valid monitor. |
-| 3 | INFRA_ERROR | Transport, framing, agent, artifact, or restoration failure prevents a reliable DUT judgement. |
-| 4 | INVALID_CONFIGURATION | Profile, baseline, schema, path, or argument error. |
-| 5 | UNSUPPORTED | Device lacks a required capability or compatible baseline. |
-| 6 | USER_ABORT | Operator cancellation; cleanup/restoration still attempted. |
-
-The native workload exit code is preserved separately in `result.json`.
-
-## 12. Path-resolution API after packaging
-
-### Purpose
-
-Make commands behave identically from source, PyInstaller one-folder, and PyInstaller one-file packages.
-
-### Origin
-
-The prototype used the executable/script directory and changed the working directory, but did not distinguish PyInstaller `_MEIPASS`, external overrides, writable state, and outputs. The v2 `PathResolver` replaces that behavior.
-
-### Rationale
-
-One-file bundled resources are extracted to a temporary read-only lifecycle, while users need stable external configuration and writable results.
-
-### Input resolution
-
-1. Absolute CLI path.
-2. Path relative to the caller's current working directory.
-3. Path relative to `--config-dir`.
-4. External override under the executable directory.
-5. Bundled read-only default.
-
-A path referenced inside a YAML/JSON file is resolved relative to that owning file.
-
-### Output resolution
-
-Relative outputs are created under `--output-dir`. Persistent baseline/pairing/cache data uses `--state-dir`. The executable and PyInstaller bundle directories are not assumed writable.
-
-Release packaging requires staged device assets under the project `tools` directory: CPU and GPU workload binaries plus `fullscreen.vert.spv` and `workload.frag.spv`. The profile deploys the shaders to `/data/local/tmp/avs/shaders/vulkan`, and the GPU config exposes that path through `shader_dir`. Workload, config, and shader byte hashes are part of the correctness fingerprint, so changing any of them requires a new golden and calibration.
-
-### Remote paths
-
-Remote device paths always use POSIX semantics and are never normalized as Windows paths.
-
-### Usage example
-
-```powershell
-Set-Location C:\automation\job-17
-D:\tools\vmin_judge.exe `
-  --config-dir D:\avs-config `
-  --output-dir D:\avs-results `
-  run --profile cpu_mixed_big4
-```
-
-The executable must resolve configuration from `D:\avs-config`, write to `D:\avs-results`, and never change the caller's current directory.
-
-## 13. API stability and versioning
-
-### Purpose
-
-Allow packages, device agents, configurations, events, baselines, and automation to evolve without silent incompatibility.
-
-### Origin
-
-New requirement introduced by reusable baseline qualification and separately packaged PC/device components.
-
-### Rationale
-
-A baseline or event produced by one schema must not be accepted by an incompatible consumer merely because field names look similar.
-
-### Usage
-
-- CLI breaking changes increment the packaged CLI major version.
-- Configuration, event, manifest, baseline, and result documents carry `schema_version`.
-- Additive optional fields may be introduced within one major schema.
-- Removing/changing a field or its unit requires a major schema version.
-- The PC and device agent exchange supported protocol ranges before a run.
-- Deprecated commands/options remain available for at least one documented migration period.
-- Every artifact records producer name/version and applicable schema versions.
-
-## 14. Operational guidance
-
-- Use `validate --package --offline` before taking a new package to the office.
-- When using `--config-dir`, inspect `resolved_configs.path`/`sha256` from `validate` and `platform_config` from `probe`; do not infer selection from deploy output.
-- Use `probe --full` after a BSP/kernel/driver update.
-- Use `deploy --verify-hashes`; later runs can deploy incrementally.
-- Generate and calibrate only on representative known-good boards.
-- Approve a baseline before batch use.
-- Use `run --baseline auto` only when fingerprint matching is strict and unambiguous.
-- Keep `--per-batch-log` and `--per-frame-log` disabled on a 9600-baud UART unless a dedicated bandwidth test proves safety.
-- Use workload heartbeats plus normalized telemetry; do not stream raw dmesg.
-- Treat missing/corrupt events as infrastructure errors and preserve raw captures for diagnosis.
+常见定位顺序：先看 PC `result.json`，再按其中的 `device_evidence` 使用 `collect` 拉取 `events.jsonl`、`workload.log`、`final.json` 和 telemetry。不要先归因于网络；核心 UART 判定与设备本地证据不依赖 GitHub。

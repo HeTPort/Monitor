@@ -55,10 +55,19 @@ class ArtifactStore:
     }
 
     @classmethod
-    def create(cls, output_root: Path, run_id: str, *, allow_existing_empty: bool = False) -> "ArtifactStore":
-        if not run_id or any(character in run_id for character in "\\/:*?\"<>|"):
-            raise ArtifactError(f"unsafe run_id: {run_id!r}")
-        run_dir = output_root.expanduser().resolve() / run_id
+    def create(
+        cls,
+        output_root: Path,
+        run_id: str,
+        *,
+        test_id: str | None = None,
+        allow_existing_empty: bool = False,
+    ) -> "ArtifactStore":
+        for name, value in (("run_id", run_id), ("test_id", test_id)):
+            if value is not None and (not value or any(character in value for character in "\\/:*?\"<>|")):
+                raise ArtifactError(f"unsafe {name}: {value!r}")
+        root = output_root.expanduser().resolve()
+        run_dir = root / test_id / run_id if test_id is not None else root / run_id
         if run_dir.exists() and any(run_dir.iterdir()) and not allow_existing_empty:
             raise ArtifactError(f"run directory already contains artifacts: {run_dir}")
         run_dir.mkdir(parents=True, exist_ok=True)
