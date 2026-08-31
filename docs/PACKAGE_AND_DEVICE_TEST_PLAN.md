@@ -1,8 +1,8 @@
 # Vmin Judge 打包与设备验收测试文档
 
-状态：适用于 `vmin_judge 2.0.1`、`avs-device-agent 0.1.1 protocol 1`、配置/事件/清单/基线/结果 schema v1
+状态：适用于包含 2026-08-31 最小闭环修复的 `vmin_judge 2.0.1`、`avs-device-agent 0.1.1 protocol 1`、配置/事件/清单/基线/结果 schema v1
 
-最后更新：2026-08-30。本文把 2026-08-29 第二批现场记录暴露的问题和本次修复后的验证点纳入主流程；其中“已通过离线回归”与“仍需真机确认”严格分开。
+最后更新：2026-08-31。本文把 2026-08-31 NCH-004 现场记录暴露的平台身份、发布包资源解析、CPU policy、governor 和串口闭环问题纳入主流程；其中“已通过离线回归”与“仍需真机确认”严格分开。
 
 对象：发布工程师、设备测试工程师、CPU/GPU workload 工程师、Monitor 维护者
 
@@ -47,6 +47,59 @@ Monitor 进程退出码：
 | P1 | 产物 | 本地/设备 spool 收集、哈希校验、报告重建、离线回放。 |
 | P1 | 长稳与带宽 | 平台配置波特率下无丢帧/乱序，原始 `dmesg` 不进入 UART。 |
 
+### 2.1 最小闭环完成判据
+
+本节是现场是否已经打通核心功能的唯一快速门槛。下面五项全部通过，才可声明“Monitor 最小闭环完成”：
+
+| 门槛 | 必须通过的测试 | 通过条件 |
+|---|---|---|
+| MC-01 发布包自包含 | REL-03 `validate --all --package --offline` | 退出码 0；CPU/GPU workload、shader、agent 和配置均从 EXE/bundle 解析，不搜索 `D:\Tools`、用户目录或源码目录。 |
+| MC-02 平台建档 | DEV-02 `probe --platform kirin9030 --full` | 退出码 0；身份为 Kirin9030；`required_missing=[]`；CPU policy/core 映射和 governor 支持值完整。每个平台+BSP+framework 组合通过一次即可归档。 |
+| MC-03 串口配对 | DEV-03 `pair --verify` | 退出码 0；PC COM、设备 UART、baud 保存；不能只看到 marker 而没有 verification。 |
+| MC-04 CPU/GPU live 闭环 | QUAL-00 两条 `smoke` | 两条命令均退出 0，且均有 `minimum_closed_loop=true`、`verdict=PASS`；事件包含 `agent_start`、workload `start/heartbeat/summary` 和 `agent_final`；PC `result.json` 判定完成。 |
+| MC-05 测后取证 | 对任一 smoke 执行 RUN-03 `collect` 和 RUN-04 `report` | spool 哈希验证成功；`collection.json` 存在；`report.md/json/csv` 与 `result.json` verdict 一致。 |
+
+以下项目不属于最小闭环的前置条件：10 次 golden、多板 calibration、baseline approve、30 次生产 PASS、故障注入和长稳。它们是后续资格认证/发布门槛，不能反过来替代 MC-01～MC-05。
+
+`smoke` 复用生产事务中的目标域实时安全检查、hash 部署、agent/负载启动、COM-before-agent、UART 解码、PolicyEngine 和 ArtifactStore，但使用运行时临时基线且丢弃生成的 correctness reference，绝不会创建或批准生产 golden/baseline。smoke 的设备 spool 默认保留，便于测试结束后统一拉取。
+
+“平台只做一次”指 full characterization 的人工审核和归档只做一次；每次 `smoke`/`golden`/`calibrate`/`run` 仍执行轻量实时 fail-closed 检查。设备身份、请求 governor、接口可读性或环境 readback 可能随 BSP/启动状态变化，不能从旧文件直接放行执行。
+
+MC-01～MC-05 最短命令集如下。全局参数必须位于子命令之前；每条命令都应按 3.2 节立即保存 `$LASTEXITCODE`：
+
+```powershell
+# MC-01：确认发布 EXE 自包含；不得出现向 D:\Tools 或用户目录搜索 workload。
+& $Exe --config-dir $ApprovedConfig --output-dir $Out --state-dir $State --json `
+  validate --all --package --offline *> "$Evidence\MC-01-package.json"
+
+# MC-02：Kirin9030 平台+BSP+framework 首次建档，后续只有平台/BSP/config fingerprint 变化才重做 full 审核。
+& $Exe --config-dir $ApprovedConfig --transport hdc --device $Device `
+  --output-dir $Out --state-dir $State --json `
+  probe --platform $Platform --full *> "$Evidence\MC-02-probe.json"
+
+# MC-03：建立并保存 UART 配对。
+& $Exe --device $Device --state-dir $State pair --channel hdc --platform $Platform `
+  --device-port $DeviceUart --pc-port $PcSerial --baudrate $Baudrate --timeout 5 --verify `
+  *> "$Evidence\MC-03-pair.txt"
+
+# MC-04：两条命令都必须 PASS。smoke 内部已经执行 hash 部署，不需要先单独 deploy。
+$CpuSmokeId = "smoke-cpu-$Framework-$BoardId"
+& $Exe --config-dir $ApprovedConfig --transport hdc --device $Device --pc-serial $PcSerial `
+  --baudrate $Baudrate --output-dir $Out --state-dir $State --json `
+  smoke --profile cpu_smoke_kirin9030 --run-id $CpuSmokeId *> "$Evidence\MC-04-cpu-smoke.json"
+
+$GpuSmokeId = "smoke-gpu-$Framework-$BoardId"
+& $Exe --config-dir $ApprovedConfig --transport hdc --device $Device --pc-serial $PcSerial `
+  --baudrate $Baudrate --output-dir $Out --state-dir $State --json `
+  smoke --profile gpu_smoke_kirin9030 --run-id $GpuSmokeId *> "$Evidence\MC-04-gpu-smoke.json"
+
+# MC-05：验证一次设备 spool 拉取，再从 PC 的 result.json 重建报告。
+& $Exe --transport hdc --device $Device --output-dir $Out --state-dir $State --json `
+  collect --run-id $CpuSmokeId --verify-hashes --keep-remote *> "$Evidence\MC-05-collect.json"
+& $Exe --output-dir $Out --state-dir $State --json `
+  report --run-dir "$Out\$CpuSmokeId" --format markdown,json,csv *> "$Evidence\MC-05-report.json"
+```
+
 ## 3. 测试环境与变量
 
 ### 3.1 必需环境
@@ -71,9 +124,10 @@ $PackageId = 'vmin-judge-2.0.1-YYYYMMDD'
 $Device = 'DEVICE_ID'
 $BoardId = 'BOARD_001'
 $Framework = 'single'       # single 或 dual
+$Platform = 'kirin9030'     # 0831 NCH-004 的 /proc/cmdline 实测身份
 $PcSerial = '<PC_UART_PORT>'
 $DeviceUart = '<DEVICE_UART_PATH>' # 以板端/BSP 确认的业务 UART 为准，不要使用控制台
-$Baudrate = 9600                 # Kirin9020 配置值；其他平台按其配置填写
+$Baudrate = 9600                 # 以所选平台配置和配对结果为准
 $ApprovedConfig = 'D:\approved-config'
 $RemoteRoot = '/data/local/tmp/avs'
 $Out = "D:\MonitorTest\$PackageId\$Framework\$BoardId\output"
@@ -103,15 +157,15 @@ Set-Content -Encoding ascii "$Evidence\00-version.exit.txt" $VersionExit
 |---:|---|---|---|
 | 1 | REL-03/REL-04 | 记录 EXE 版本、SHA-256，离线验证内置包和批准配置 | `2.0.1`；批准配置路径/hash 正确 |
 | 2 | DEV-INFO | 一次性采集设备身份、UART、CPU、GPU、thermal、工具和权限 | 采集文件完整；不要求所有接口都存在 |
-| 3 | DEV-02 | 用同一个 `--config-dir` 做 full probe | v500 hang 路径和值、profile 所需接口明确 |
+| 3 | DEV-02 | 用同一个 `--config-dir` 做 Kirin9030 full probe | 身份匹配；policy/core、governor、v500 hang 路径和值明确 |
 | 4 | DEV-03 | 显式 UART/COM/baud 配对 | `SUCCESS` 且 verify 成功 |
 | 5 | DEV-04 | 两次部署并检查 agent 版本 | 第一次 pushed、第二次 unchanged、agent 0.1.1 |
-| 6 | QUAL-00 | CPU/GPU 各 1 次 live smoke | 每次 individual run 有完整 `result.json` |
+| 6 | QUAL-00 | CPU/GPU 各 1 次 baseline-free live smoke | 两次均 `minimum_closed_loop=true` 且有完整 `result.json` |
 | 7 | QUAL-01/02 | 预热后做正式 CPU/GPU golden | 每次 PASS，CPU checksum/GPU readback 一致 |
 | 8 | RUN-01 | 有批准 baseline 后执行 normal run | UART 有完整事件，CMD 仅最终结果/错误 |
 | 9 | RUN-03/第 13 节 | 收集失败 spool，打包现场证据 | hash 验证成功，反馈包可离线分析 |
 
-若尚无批准 baseline，本次现场工作的终点是 QUAL-01/QUAL-02 和完整证据，不应把 `run --baseline auto` 的配置失败记成产品运行失败。CPU 和 GPU 分开推进：CPU smoke/golden 不应被 GPU-only `gpu.hang_count` 阻断。
+若尚无批准 baseline，仍可完成 MC-01～MC-05；不应把 `run --baseline auto` 的配置失败记成最小闭环失败。CPU 和 GPU 分开推进：CPU smoke 不应被 GPU-only `gpu.hang_count` 阻断。
 
 ## 4. 打包前和发布包测试
 
@@ -351,9 +405,11 @@ hdc -t $Device shell taskset --help
 
 在单框架和双框架镜像各执行一次：
 
+`--platform` 必须显式提供；程序不再把未知硬件默认为 Kirin9020。
+
 ```powershell
 & $Exe --config-dir $ApprovedConfig --transport hdc --device $Device --output-dir $Out --state-dir $State --json `
-  probe --platform kirin9020 --full --refresh `
+  probe --platform $Platform --full `
   *> "$Evidence\DEV-02-probe.json"
 $ProbeExit = $LASTEXITCODE
 Set-Content -Encoding ascii "$Evidence\DEV-02-probe.exit.txt" $ProbeExit
@@ -363,9 +419,13 @@ Copy-Item "$Out\probes\$Device\capabilities.json" `
 
 通过标准：`$ProbeExit=0`、`supported=true`、`required_missing=[]`。重点核对：
 
+- 身份：`platform_identity.matched=true`，hardware/chiptype 的 `actual` 均为 `Kirin9030`。用 `kirin9020` 适配器探测本设备必须 fail-closed，不能继续部署。
+- CPU policy：`cpu_topology.policies` 能读出每个 policy 的 `affected_cpus`/`related_cpus`，`policy_by_cpu` 覆盖实际 CPU；不再执行易受 PowerShell/HDC 字符串展开影响的手写 `for p in ...` 命令。
+- governor：CPU/GPU governor 记录包含 `available_value_paths`、`supported_values_by_path`；后续配置请求的值必须在每个目标路径上可验证。
+
 - CPU：每核 frequency/min/max/governor/online、`/proc/stat` utilization、按 thermal `type` 匹配的温度。
 - GPU：frequency/min/max/governor/utilization/power policy/hang count、按 thermal `type` 匹配的温度。
-- Kirin9020 当前优先探测 `/sys/module/hvgr_kmd_v500/parameters/gpu_hang_count`，并保留 v350 作为旧 BSP 回退；`candidate_paths` 和实际 `paths` 必须与设备接口一致。
+- Kirin9030 当前优先探测 `/sys/module/hvgr_kmd_v500/parameters/gpu_hang_count`，并保留 v350 作为旧 BSP 回退；`candidate_paths` 和实际 `paths` 必须与设备接口一致。
 - 工具：`device.shell`、`device.sha256sum` 可用；CPU profile 运行时 `device.taskset` 必需；kernel monitor 开启时 `device.dmesg` 必需。
 - 每个 metric 都有实际路径、单位、值和 provenance，不允许只有“可用”布尔值。温度还要核对 `raw_value`、配置/实际采用单位、归一化摄氏值、`valid` 和 `invalid_reason`。
 - 单/双框架可以使用不同真实路径，但语义、单位和必需能力必须等价。把两个 `capabilities.json` 做字段级 diff，并注明所有差异。
@@ -373,7 +433,7 @@ Copy-Item "$Out\probes\$Device\capabilities.json" `
 
 `--full` 是平台全量清单。实际 CPU/GPU `run`、`golden`、`calibrate` 只探测所选 profile 的目标域并按 required capability 判定：CPU profile 不再扫描或受 GPU-only `gpu.hang_count` 影响；GPU profile 仍必须探测并在缺失时阻断。
 
-当前实现每次都从设备实时读取，没有复用 PC 端 probe cache；`--refresh` 作为兼容参数保留，因此带或不带它都应得到本次设备事实。若两次结果不同，应按设备状态变化调查，而不是归因于旧缓存。
+当前实现每次都从设备实时读取；`--refresh` 作为兼容参数保留。DEV-02 的完整输出按平台+BSP+framework 归档一次；运行命令里的目标域实时检查是安全门，不是要求人工重复做 DEV-INFO/DEV-02 验收。BSP、平台配置 fingerprint 或硬件身份变化后必须重新执行并审核 DEV-02。
 
 缺少必需接口时预期退出码为 5。不要通过删除 profile 的 required 项来“通过”验收。
 
@@ -382,7 +442,7 @@ Copy-Item "$Out\probes\$Device\capabilities.json" `
 配对时只连接一块目标设备，避免旧 `pair` 接口选择歧义：
 
 ```powershell
-& $Exe --device $Device --state-dir $State pair --channel hdc --platform kirin9020 `
+& $Exe --device $Device --state-dir $State pair --channel hdc --platform $Platform `
   --device-port $DeviceUart --pc-port $PcSerial --baudrate $Baudrate --timeout 5 --verify `
   *> "$Evidence\DEV-03-pair.txt"
 $PairExit = $LASTEXITCODE
@@ -391,7 +451,7 @@ Copy-Item "$State\pair-diagnostic.json" "$Evidence\DEV-03-pair-diagnostic.json"
 Get-Content "$State\pairing.conf" *> "$Evidence\DEV-03-pairing-conf.json"
 ```
 
-不传显式端口时，PC 端来自实际枚举，设备端来自实际扫描；只有传入 `--platform kirin9020` 时才把该平台的 `serial.uart_candidates` 用作扫描失败后的候选。通用配对层不猜测 `/dev/tty*` 或 `COM*`。算法先打开 PC 端、等待短暂稳定、清空旧输入，在一个总超时内最多发送 3 次唯一 marker，并持续匹配可分片到达的字节。
+不传显式端口时，PC 端来自实际枚举，设备端来自实际扫描；只有传入 `--platform $Platform` 时才把该平台的 `serial.uart_candidates` 用作扫描失败后的候选。通用配对层不猜测 `/dev/tty*` 或 `COM*`。算法先打开 PC 端、等待短暂稳定、清空旧输入，在一个总超时内最多发送 3 次唯一 marker，并持续匹配可分片到达的字节。
 
 配对成功后，先完成 DEV-04 部署并启动 device agent/workload（或另一个明确的 JSONL 帧生产者），随后才能用 `monitor` 验证协议流：
 
@@ -429,34 +489,33 @@ hdc -t $Device shell /data/local/tmp/avs/bin/avs-device-agent --version `
 
 当前 profile 中 `baseline: null`，所以不能直接执行生产 `run --baseline auto`。必须先生成 golden、完成多板校准并批准 baseline。
 
-### QUAL-00：live 事务烟测与现场观察点
+### QUAL-00：baseline-free 最小 live 闭环
 
-正式 10 次 golden 前，CPU/GPU 各执行 1 次。烟测产物只用于定位，不直接审批为生产 golden：
+正式 golden 前，CPU/GPU 各执行一次独立 `smoke`。它使用短 workload 配置，不设置未经0831证据确认的 affinity/governor/frequency，不创建 qualification manifest 或生产 baseline：
 
 ```powershell
 $CpuSmokeId = "smoke-cpu-$Framework-$BoardId"
 & $Exe --config-dir $ApprovedConfig --transport hdc --device $Device `
   --pc-serial $PcSerial --baudrate $Baudrate --output-dir $Out --state-dir $State --json `
-  golden cpu --profile cpu_mixed_big4 --runs 1 --known-good --board-id $BoardId `
-  --qualification-id $CpuSmokeId *> "$Evidence\QUAL-00-cpu-smoke.json"
+  smoke --profile cpu_smoke_kirin9030 --run-id $CpuSmokeId `
+  *> "$Evidence\QUAL-00-cpu-smoke.json"
 $CpuSmokeExit = $LASTEXITCODE
+Set-Content -Encoding ascii "$Evidence\QUAL-00-cpu-smoke.exit.txt" $CpuSmokeExit
 
 $GpuSmokeId = "smoke-gpu-$Framework-$BoardId"
 & $Exe --config-dir $ApprovedConfig --transport hdc --device $Device `
   --pc-serial $PcSerial --baudrate $Baudrate --output-dir $Out --state-dir $State --json `
-  golden gpu --profile gpu_vulkan_mixed --runs 1 --known-good --board-id $BoardId `
-  --qualification-id $GpuSmokeId --readback-name gpu-golden.rgba `
+  smoke --profile gpu_smoke_kirin9030 --run-id $GpuSmokeId `
   *> "$Evidence\QUAL-00-gpu-smoke.json"
 $GpuSmokeExit = $LASTEXITCODE
+Set-Content -Encoding ascii "$Evidence\QUAL-00-gpu-smoke.exit.txt" $GpuSmokeExit
 ```
 
 每条命令后的检查方法：
 
 ```powershell
-$LatestCpuRun = Get-ChildItem $Out -Directory -Filter 'golden-cpu-*' |
-  Sort-Object LastWriteTime -Descending | Select-Object -First 1
-$LatestGpuRun = Get-ChildItem $Out -Directory -Filter 'golden-gpu-*' |
-  Sort-Object LastWriteTime -Descending | Select-Object -First 1
+$LatestCpuRun = Get-Item "$Out\$CpuSmokeId"
+$LatestGpuRun = Get-Item "$Out\$GpuSmokeId"
 
 foreach ($RunDir in @($LatestCpuRun, $LatestGpuRun) | Where-Object { $_ }) {
   "=== $($RunDir.FullName) ==="
@@ -469,14 +528,16 @@ foreach ($RunDir in @($LatestCpuRun, $LatestGpuRun) | Where-Object { $_ }) {
 
 一次 live 事务的代码行为和预期顺序如下：
 
-1. PC 先解析批准 profile/platform 并做目标域 probe。CPU smoke 只要求 CPU 域，GPU smoke 才要求 `gpu.hang_count`。
+1. PC 先解析 smoke profile/Kirin9030 platform，并做身份和目标域实时安全检查。CPU smoke 只要求 CPU 域，GPU smoke 才要求 `gpu.hang_count`。
 2. 资产做 SHA-256 部署/校验；平台 YAML 不部署。
 3. PC 先打开并清空 COM 输入缓冲，再通过 HDC 启动 agent，防止丢掉最早的 `agent_start`。
 4. agent 把环境 apply/readback 结果、workload 原生事件、5 秒遥测、过滤后的 kernel 事件、summary、restore 和 `agent_final` 保留在 UART/设备 spool。
 5. PC 的统一判断引擎消费 UART：workload heartbeat/summary 决定 workload liveness，telemetry 不能掩盖 workload 静默；最终生成 `result.json`。
 6. CMD 默认不复制 heartbeat、telemetry 或正常环境事件，只输出最终 JSON 对象；失败时额外给出精简错误。完整证据在 run 目录。
 
-通过标准：若环境温度已经在 35–60 °C，烟测应退出 0/PASS；若未预热或发现真实 DUT 问题，可以非 PASS，但必须有可读 `result.json`、`serial.raw` 和具体 reason，不能卡住且无产物。协议错误发生后仍应把 agent 结束前的后续原始字节保留在 `serial.raw`，最终分类为 INFRA_ERROR 而不是假 PASS。
+最小闭环通过标准：`$CpuSmokeExit=0` 且 `$GpuSmokeExit=0`；两个命令输出都包含 `minimum_closed_loop=true` 和唯一 PASS run；每个 run 都有可读 `result.json`、`serial.raw`、`events.jsonl`、`artifact-hashes.json`、`workload-summary.json`；事件顺序中存在 `agent_start`、workload `start`/`heartbeat`/`summary`、环境恢复和 `agent_final`，且无 run ID/seq/JSON 错误。任何 DUT_FAIL/INFRA_ERROR/SILENT_FAILURE 都表示最小闭环尚未通过，不能仅以“有产物”关闭。
+
+smoke 的 correctness reference 标记为 `discard`，不得交给 `baseline approve`。smoke PASS 后设备 spool 保留；立即用 RUN-03 的 `collect --verify-hashes --keep-remote` 验证拉取，再用 RUN-04 生成报告。
 
 CPU 环境 readback 必须按 probe 返回的每个 `policyN` 使用自己的 platform max。当前已观察的 Kirin9020 示例为 1550000、2050000、2094000、2508000 kHz 四种 policy max；以 DEV-INFO 当天实测为准。若所有 policy 都被请求为 2508000，说明旧的路径映射问题仍存在，提交所有 `environment` 事件和 cpufreq policy 清单。
 
@@ -803,6 +864,7 @@ feedback/<package-id>/<framework>/<board-id>/<case-id>/
 | `probe` | `_probe`、`src/platform_probe.py::PlatformProbe` | 连接设备并实时读取接口；独立 `--full` 扫 CPU+GPU，live profile 只扫目标域；随后检查 Shell/hash/dmesg/taskset。 | 最终 probe 对象和 `capabilities.json`；含 `platform_config` provenance。 |
 | `pair` | `main.py::cmd_pair`、`src/serial_port_manager.py` | 显式参数优先；先打开/清空 PC COM，再经 HDC/ADB 多次写唯一 marker，接收可分片字节并验证，保存配对。不会自动改设备 `stty`。 | 成功/分类错误摘要；详细有界证据在 `pair-diagnostic.json`，正常 marker 不回显。 |
 | `deploy` | `cmd_deploy`、`src/deployment.py::DeploymentManager` | 规划 agent/workload/workload config/shader/golden，远端 hash 相同则跳过；可安全清理旧 manifest 中且限定根目录内的资产。 | 最终 manifest 路径；清单逐资产记录 pushed/unchanged/hash。平台 YAML 不部署。 |
+| `smoke` | `cmd_smoke`、`_execute_live_qualification`、`RunManifestBuilder`、`RunOrchestrator` | 使用 baseline-free 临时 manifest 复用目标域 probe、部署、agent/workload、UART 判断和落盘；生成的 correctness reference 明确丢弃；PASS spool 保留供 collect。 | 最终对象含 `minimum_closed_loop` 和唯一/重复 run 结果；不创建 production golden/baseline。 |
 | `golden` | `cmd_golden`、`_execute_live_qualification`、`GoldenService` | 不足的 run 用统一 live 事务补齐；每次必须 PASS 且恰有一个 golden；随后聚合 checksum/readback 和 fingerprint。 | 成功时给 qualification ID/manifest/hash；首个 live 失败立即给具体 `result.json` 路径。 |
 | `calibrate` | `cmd_calibrate`、`CalibrationService` | 从已有 run 或 live run 构造样本，按温度/遥测/throttle/environment 拒绝不合格样本，生成 draft baseline。 | 最终 baseline ID/draft/proposal；不会自动批准。 |
 | `baseline` | `BaselineRegistry` | 创建后批准 evidence 不可变；批准/弃用状态与审计分离；导入导出校验 hash。 | 最终 ID/status/hash/bundle；篡改返回配置错误。 |

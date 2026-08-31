@@ -89,6 +89,7 @@ class PlatformProbe:
         invalid_domains = selected_domains.difference({"cpu", "gpu"})
         if invalid_domains:
             raise ProbeError(f"unsupported probe domains: {', '.join(sorted(invalid_domains))}")
+        platform_identity = self._probe_platform_identity()
         capabilities: dict[str, Any] = {}
         for domain, section in (("cpu", self.platform.cpu), ("gpu", self.platform.gpu)):
             if domain not in selected_domains:
@@ -114,8 +115,10 @@ class PlatformProbe:
         if "gpu" in selected_domains and thermal.get("gpu", {}).get("paths"):
             capabilities["gpu.temperature"] = thermal["gpu"]
 
+        identity_required_missing = list(platform_identity["required_missing"])
         required_missing = sorted(
-            name for name, record in capabilities.items() if record.get("required") and not record.get("available")
+            identity_required_missing
+            + [name for name, record in capabilities.items() if record.get("required") and not record.get("available")]
         )
         return {
             "schema_version": 1,
@@ -124,6 +127,8 @@ class PlatformProbe:
             "platform_fingerprint": self.platform.fingerprint,
             "probe_domains": sorted(selected_domains),
             "device": dict(self.backend.identity()),
+            "platform_identity": platform_identity,
+            "identity_required_missing": identity_required_missing,
             "cpu_topology": cpu_topology,
             "thermal_zones": thermal,
             "capabilities": capabilities,
@@ -152,12 +157,111 @@ class PlatformProbe:
         """
         capabilities = probe_result.get("capabilities", {})
         required = sorted(set(names))
-        missing = sorted(name for name in required if not capabilities.get(name, {}).get("available"))
+        missing = sorted(
+            set(probe_result.get("identity_required_missing", []))
+            | {name for name in required if not capabilities.get(name, {}).get("available")}
+        )
         probe_result["platform_required_missing"] = list(probe_result.get("required_missing", []))
         probe_result["required_scope"] = {"name": scope, "capabilities": required}
         probe_result["required_missing"] = missing
         probe_result["supported"] = not missing
         return probe_result
+
+    def apply_requested_value_preflight(
+        self,
+        probe_result: dict[str, Any],
+        capability_name: str,
+        requested: str,
+    ) -> dict[str, Any]:
+        record = probe_result.get("capabilities", {}).get(capability_name, {})
+        configured = bool(record.get("available_values_configured", False))
+        required = bool(record.get("require_requested_value", False))
+        supported_by_path = record.get("supported_values_by_path", {})
+        governor_paths = list(record.get("paths", []))
+        unsupported_paths: list[str] = []
+        unverified_paths: list[str] = []
+        for path in governor_paths:
+            supported = supported_by_path.get(path)
+            if not supported:
+                unverified_paths.append(path)
+            elif requested not in supported:
+                unsupported_paths.append(path)
+        verified = configured and bool(governor_paths) and not unsupported_paths and not unverified_paths
+        record["requested_value_preflight"] = {
+            "requested": requested,
+            "configured": configured,
+            "required": required,
+            "verified": verified,
+            "unsupported_paths": unsupported_paths,
+            "unverified_paths": unverified_paths,
+        }
+        requirement_name = f"{capability_name}.requested_value"
+        if required and not verified:
+            probe_result["required_missing"] = sorted(
+                set(probe_result.get("required_missing", [])) | {requirement_name}
+            )
+            probe_result["supported"] = False
+        return probe_result
+
+    def _probe_platform_identity(self) -> dict[str, Any]:
+        identity = self.platform.identity
+        default_required = bool(identity.get("required", False))
+        configured_fields = identity.get("fields", {})
+        fields: dict[str, Any] = {}
+        required_missing: list[str] = []
+        for field_name, definition in configured_fields.items():
+            path = str(PurePosixPath(str(definition["path"])))
+            parser = str(definition.get("parser", "text"))
+            accepted = [str(value) for value in definition.get("accepted", [])]
+            required = bool(definition.get("required", default_required))
+            actual: str | None = None
+            error: str | None = None
+            if not self.backend.exists(path):
+                error = "source path not found"
+            else:
+                try:
+                    raw = self.backend.read_text(path)
+                    if parser == "kernel_cmdline":
+                        key = str(definition["key"])
+                        tokens = {
+                            token.partition("=")[0]: token.partition("=")[2]
+                            for token in raw.split()
+                            if "=" in token
+                        }
+                        actual = tokens.get(key)
+                        if actual is None:
+                            error = f"key not found: {key}"
+                    else:
+                        actual = raw.strip() or None
+                        if actual is None:
+                            error = "identity value is empty"
+                except OSError as exc:
+                    error = str(exc)
+            case_sensitive = bool(definition.get("case_sensitive", False))
+            comparable_actual = actual if case_sensitive or actual is None else actual.casefold()
+            comparable_accepted = accepted if case_sensitive else [value.casefold() for value in accepted]
+            matched = comparable_actual in comparable_accepted
+            capability_name = f"platform.identity.{field_name}"
+            if required and not matched:
+                required_missing.append(capability_name)
+            fields[field_name] = {
+                "path": path,
+                "parser": parser,
+                "key": definition.get("key"),
+                "accepted": accepted,
+                "actual": actual,
+                "available": actual is not None,
+                "matched": matched,
+                "required": required,
+                "error": error,
+            }
+        return {
+            "configured": bool(configured_fields),
+            "required": default_required,
+            "matched": not required_missing,
+            "fields": fields,
+            "required_missing": sorted(required_missing),
+        }
 
     def _probe_interface(self, name: str, definition: Mapping[str, Any], *, include_values: bool) -> dict[str, Any]:
         candidates = definition.get("candidates", [])
@@ -181,6 +285,44 @@ class PlatformProbe:
                 except (OSError, ValueError) as exc:
                     unreadable.append(path)
                     values[path] = {"error": str(exc)}
+        available_value_candidates = definition.get("available_values_candidates", [])
+        if isinstance(available_value_candidates, str):
+            available_value_candidates = [available_value_candidates]
+        if not isinstance(available_value_candidates, list) or not all(
+            isinstance(item, str) for item in available_value_candidates
+        ):
+            raise ProbeError(f"{name}.available_values_candidates must be a list of strings")
+        available_value_paths: list[str] = []
+        for candidate in available_value_candidates:
+            matched = self.backend.glob(candidate) if self._has_glob(candidate) else (
+                [candidate] if self.backend.exists(candidate) else []
+            )
+            for path in matched:
+                normalized = str(PurePosixPath(path))
+                if normalized not in available_value_paths:
+                    available_value_paths.append(normalized)
+        values_by_source: dict[str, list[str]] = {}
+        available_value_errors: dict[str, str] = {}
+        if include_values:
+            for path in available_value_paths:
+                try:
+                    values_by_source[path] = list(dict.fromkeys(self.backend.read_text(path).split()))
+                except OSError as exc:
+                    available_value_errors[path] = str(exc)
+        supported_values_by_path: dict[str, list[str]] = {}
+        for path in paths:
+            same_parent = [
+                available_path
+                for available_path in available_value_paths
+                if PurePosixPath(available_path).parent == PurePosixPath(path).parent
+            ]
+            if len(same_parent) == 1 and same_parent[0] in values_by_source:
+                supported_values_by_path[path] = values_by_source[same_parent[0]]
+            elif len(available_value_paths) == 1 and available_value_paths[0] in values_by_source:
+                supported_values_by_path[path] = values_by_source[available_value_paths[0]]
+        supported_values = sorted(
+            {value for supported in supported_values_by_path.values() for value in supported}
+        )
         return {
             "name": name,
             "available": bool(paths),
@@ -192,6 +334,14 @@ class PlatformProbe:
             "readable": bool(paths) and not unreadable,
             "unreadable_paths": unreadable,
             "values": values,
+            "available_values_configured": bool(available_value_candidates),
+            "available_value_candidate_paths": list(available_value_candidates),
+            "available_value_paths": available_value_paths,
+            "available_values_by_source": values_by_source,
+            "available_value_errors": available_value_errors,
+            "supported_values": supported_values,
+            "supported_values_by_path": supported_values_by_path,
+            "require_requested_value": bool(definition.get("require_requested_value", False)),
             "provenance": "platform-profile+runtime-probe",
         }
 
@@ -232,7 +382,83 @@ class PlatformProbe:
             if cores:
                 source = "/proc/stat"
         cores.sort(key=lambda item: item["cpu"])
-        return {"core_count": len(cores), "cores": cores, "source_glob": pattern, "source": source}
+        policies = self._probe_cpu_policies(include_values=include_values)
+        policy_by_cpu: dict[str, list[int]] = {}
+        for policy in policies:
+            membership = policy["related_cpus"] or policy["affected_cpus"]
+            for cpu_id in membership:
+                policy_by_cpu.setdefault(str(cpu_id), []).append(policy["policy"])
+        for core in cores:
+            core["policies"] = list(policy_by_cpu.get(str(core["cpu"]), []))
+        return {
+            "core_count": len(cores),
+            "cores": cores,
+            "source_glob": pattern,
+            "source": source,
+            "policy_glob": str(
+                self.platform.cpu.get(
+                    "policy_glob", "/sys/devices/system/cpu/cpufreq/policy[0-9]*"
+                )
+            ),
+            "policies": policies,
+            "policy_by_cpu": policy_by_cpu,
+        }
+
+    def _probe_cpu_policies(self, *, include_values: bool) -> list[dict[str, Any]]:
+        pattern = str(
+            self.platform.cpu.get(
+                "policy_glob", "/sys/devices/system/cpu/cpufreq/policy[0-9]*"
+            )
+        )
+        policies: list[dict[str, Any]] = []
+        for path in self.backend.glob(pattern):
+            match = re.search(r"/policy(\d+)$", path.rstrip("/"))
+            if not match:
+                continue
+            record: dict[str, Any] = {
+                "policy": int(match.group(1)),
+                "path": str(PurePosixPath(path)),
+                "affected_cpus": [],
+                "related_cpus": [],
+                "errors": {},
+            }
+            if include_values:
+                for field_name in ("affected_cpus", "related_cpus"):
+                    field_path = f"{path.rstrip('/')}/{field_name}"
+                    if not self.backend.exists(field_path):
+                        record["errors"][field_name] = "not found"
+                        continue
+                    try:
+                        record[field_name] = self._parse_cpu_list(self.backend.read_text(field_path))
+                    except (OSError, ValueError) as exc:
+                        record["errors"][field_name] = str(exc)
+            record["mapped_cpus"] = record["related_cpus"] or record["affected_cpus"]
+            record["readable"] = bool(record["mapped_cpus"])
+            policies.append(record)
+        policies.sort(key=lambda item: item["policy"])
+        return policies
+
+    @staticmethod
+    def _parse_cpu_list(raw: str) -> list[int]:
+        cpus: set[int] = set()
+        normalized = raw.strip().replace(",", " ")
+        if not normalized:
+            return []
+        for token in normalized.split():
+            if "-" in token:
+                start_text, separator, end_text = token.partition("-")
+                if not separator or not start_text.isdigit() or not end_text.isdigit():
+                    raise ValueError(f"invalid CPU range: {token}")
+                start = int(start_text)
+                end = int(end_text)
+                if start > end:
+                    raise ValueError(f"descending CPU range: {token}")
+                cpus.update(range(start, end + 1))
+            elif token.isdigit():
+                cpus.add(int(token))
+            else:
+                raise ValueError(f"invalid CPU id: {token}")
+        return sorted(cpus)
 
     def _probe_thermal(self, *, include_values: bool) -> dict[str, Any]:
         thermal = self.platform.thermal

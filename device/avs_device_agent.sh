@@ -104,7 +104,21 @@ emit_event() {
 }
 
 json_escape() {
-    printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+    # Keep every event on exactly one JSONL record. Command substitution strips
+    # trailing newlines, but embedded newlines/tabs/CR from sysfs text metrics
+    # must still be represented as JSON escapes rather than raw control bytes.
+    printf '%s' "$1" | awk '
+        BEGIN { ORS = ""; first = 1 }
+        {
+            gsub(/\\/, "\\\\")
+            gsub(/"/, "\\\"")
+            gsub(/\r/, "\\r")
+            gsub(/\t/, "\\t")
+            if (!first) printf "\\n"
+            printf "%s", $0
+            first = 0
+        }
+    '
 }
 
 restore_environment() {

@@ -179,6 +179,13 @@ def _probe(args: Namespace, paths: PathResolver, transport: Transport, profile: 
     if profile is not None:
         required.extend(profile.telemetry.get("required", []))
         probe.apply_required_scope(result, required, scope=f"profile:{profile.name}")
+        requested_governor = profile.environment.get("governor")
+        if requested_governor:
+            probe.apply_requested_value_preflight(
+                result,
+                f"{profile.target}.governor",
+                str(requested_governor),
+            )
     else:
         probe.require(result, sorted(set(required)))
     tool_checks: dict[str, tuple[tuple[str, ...], bool]] = {
@@ -510,8 +517,13 @@ def _execute_live_qualification(
     deployment = DeploymentManager(transport).deploy(assets, verify_hashes=True)
     rules_path = paths.resolve_input("config/kernel/critical.conf")
     run_dirs: list[Path] = []
-    for _ in range(count):
-        run_id = new_run_id(f"{mode}-{profile.target}")
+    requested_run_id = getattr(args, "run_id", None)
+    for repetition in range(count):
+        run_id = (
+            f"{requested_run_id}-{repetition + 1:03d}"
+            if requested_run_id and count > 1
+            else (requested_run_id or new_run_id(f"{mode}-{profile.target}"))
+        )
         manifest = RunManifestBuilder(paths).build_qualification(
             profile=profile,
             golden=effective_golden,
@@ -550,6 +562,47 @@ def _execute_live_qualification(
                 raise QualificationError(f"failed to collect GPU readback for {run_id}: {transfer.message}")
         run_dirs.append(run_dir)
     return run_dirs
+
+
+@command_boundary
+def cmd_smoke(args: Namespace) -> int:
+    """Run the baseline-free minimum live transaction without creating trusted qualification data."""
+    if args.repeat < 1:
+        raise ConfigError("--repeat must be at least 1")
+    paths = make_paths(args)
+    paths.ensure_writable_roots()
+    profile = load_profile(paths, args.profile)
+    run_dirs = _execute_live_qualification(
+        args,
+        paths,
+        profile,
+        mode="smoke",
+        count=args.repeat,
+        golden=None,
+    )
+    runs: list[dict[str, Any]] = []
+    for run_dir in run_dirs:
+        result_path = run_dir / "result.json"
+        result = json.loads(result_path.read_text(encoding="utf-8"))
+        runs.append(
+            {
+                "run_id": result.get("run_id", run_dir.name),
+                "verdict": result.get("verdict"),
+                "exit_code": result.get("exit_code"),
+                "result": str(result_path),
+                "device_spool": "retained",
+            }
+        )
+    print_command_result(
+        args,
+        {
+            "minimum_closed_loop": all(run.get("verdict") == "PASS" for run in runs),
+            "repeat": args.repeat,
+            "exit_code": 0,
+            "runs": runs,
+        },
+    )
+    return 0
 
 
 @command_boundary

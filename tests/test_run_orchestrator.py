@@ -134,6 +134,22 @@ class RunManifestTests(unittest.TestCase):
             self.assertEqual(qualification["qualification"]["mode"], "golden")
             self.assertIn("--generate-golden", qualification["workload"]["argv"])
 
+            smoke = RunManifestBuilder(paths).build_qualification(
+                profile=current_profile,
+                golden={},
+                capabilities=capabilities,
+                mode="smoke",
+                run_id="smoke-1",
+                kernel_mode="critical",
+                kernel_rules_path=rules,
+                device_uart="/dev/ttyQualification7",
+            )
+            self.assertIsNone(smoke["baseline"])
+            self.assertEqual(smoke["qualification"]["mode"], "smoke")
+            self.assertFalse(smoke["qualification"]["production_baseline_allowed"])
+            self.assertEqual(smoke["qualification"]["generated_reference_disposition"], "discard")
+            self.assertIn("--generate-golden", smoke["workload"]["argv"])
+
     def test_policy_paths_keep_per_policy_platform_maxima(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

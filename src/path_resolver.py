@@ -94,6 +94,7 @@ class PathResolver:
             return [_absolute(raw)]
 
         candidates: list[Path] = []
+        owner_path: Path | None = None
         if owner is not None:
             owner_path = _absolute(Path(owner))
             candidates.append(owner_path.parent / raw if owner_path.suffix else owner_path / raw)
@@ -101,6 +102,26 @@ class PathResolver:
             candidates.append(self.config_dir / raw)
             if raw.parts and raw.parts[0].lower() == "config" and len(raw.parts) > 1:
                 candidates.append(self.config_dir.joinpath(*raw.parts[1:]))
+            if owner_path is not None:
+                try:
+                    owner_relative = owner_path.relative_to(self.config_dir)
+                except ValueError:
+                    pass
+                else:
+                    # A config-only override keeps release assets in the executable.
+                    # Mirror the external owner's layout under both supported config
+                    # roots so ../../tools resolves inside exe_root/bundle_root rather
+                    # than accidentally escaping above the PyInstaller _MEIPASS root.
+                    for root, boundary in (
+                        (self.exe_root, self.exe_root),
+                        (self.exe_root / "config", self.exe_root),
+                        (self.bundle_root, self.bundle_root),
+                        (self.bundle_root / "config", self.bundle_root),
+                    ):
+                        normalized_boundary = _absolute(boundary)
+                        candidate = _absolute(root / owner_relative.parent / raw)
+                        if candidate == normalized_boundary or candidate.is_relative_to(normalized_boundary):
+                            candidates.append(candidate)
         candidates.append(self.cwd / raw)
         candidates.extend((self.exe_root / raw, self.bundle_root / raw))
         return self._deduplicate(candidates)

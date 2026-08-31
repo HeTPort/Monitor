@@ -39,7 +39,7 @@ The design therefore retains the useful transport and workload contracts while r
 |---|---|---|
 | Path, config, event, policy, artifact, baseline, and calibration services | Implemented | Covered by offline unit and integration tests. |
 | ADB/HDC transport and deployment | Implemented | Typed argv-only commands, SHA-256 verification, idempotency, and managed stale cleanup are fake-transport tested. |
-| PC qualification and production CLI | Implemented | `probe`, `deploy`, `golden`, `calibrate`, `baseline`, `run`, `collect`, `report`, `validate`, and `simulate` route through v2 services. |
+| PC qualification and production CLI | Implemented | `probe`, `deploy`, baseline-free `smoke`, `golden`, `calibrate`, `baseline`, `run`, `collect`, `report`, `validate`, and `simulate` route through v2 services. |
 | Device agent | Shell bring-up implementation complete | Fixed POSIX Shell script, single UART writer, telemetry/kernel producers, spool hashes, and restoration are offline tested; device Python is not required. |
 | Packaging | Build definition complete | PyInstaller spec, bundled resources, hidden imports, build script, and frozen-path unit test exist. Build/smoke test still needs an environment with the packaging dependencies. |
 | UDP hardware qualification | Pending office execution | Probe both framework variants, validate permissions/interfaces, generate CPU/GPU goldens, calibrate a known-good cohort, approve baselines, and run deliberate-failure tests. |
@@ -199,7 +199,7 @@ Purpose: discover device identity, CPU topology, GPU driver, telemetry paths, pe
 
 Origin: consolidates paths from `default.yaml`, `monitor_profiles.yaml`, serial discovery, and runtime probing.
 
-Output: versioned `capabilities.json` with required/optional capability status and normalized units. Thermal evidence retains raw values, configured/applied parsers, normalized Celsius values, and validity. Mixed degree/millidegree sources are normalized per path rather than by one platform-wide assumption.
+Output: versioned `capabilities.json` with required/optional capability status and normalized units. Required configured platform identity is fail-closed. CPU topology includes cpufreq affected/related core membership and a policy-by-core index. Governor records include per-path supported values and profile-request preflight. Thermal evidence retains raw values, configured/applied parsers, normalized Celsius values, and validity. Mixed degree/millidegree sources are normalized per path rather than by one platform-wide assumption.
 
 Rationale: thermal-zone numbers, debugfs availability, devfreq aliases, units, and permissions may change between builds even when single-/dual-framework hardware interfaces are intended to match. Platform-wide missing requirements remain visible, but execution support is recomputed from the selected profile's requirement scope so an unrelated GPU-only gap does not block CPU qualification.
 

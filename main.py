@@ -11,7 +11,7 @@ Usage:
 
     # After packaging with PyInstaller
     vmin_judge.exe --help
-    vmin_judge.exe probe --platform kirin9020
+    vmin_judge.exe probe --platform kirin9030 --full
     vmin_judge.exe run --profile gpu_vulkan_mixed --baseline auto
 
 Version: 2.0
@@ -147,7 +147,7 @@ Examples:
   vmin_judge pair --channel hdc
 
   # Probe the target and execute an approved baseline
-  vmin_judge --transport hdc --device DEVICE_ID probe --platform kirin9020
+  vmin_judge --transport hdc --device DEVICE_ID probe --platform kirin9030 --full
   vmin_judge --pc-serial COM4 run --profile gpu_vulkan_mixed --baseline auto
 
   # List available profiles
@@ -301,7 +301,7 @@ Examples:
     )
 
     probe_parser = subparsers.add_parser('probe', help='Discover normalized device capabilities')
-    probe_parser.add_argument('--platform', default='kirin9020')
+    probe_parser.add_argument('--platform', required=True)
     probe_parser.add_argument('--full', action='store_true')
     probe_parser.add_argument('--refresh', action='store_true')
     probe_parser.add_argument('--require', action='append', default=[])
@@ -340,6 +340,17 @@ Examples:
         target_parser.add_argument('--golden', required=True)
         target_parser.add_argument('--run-dir', action='append', default=[])
         target_parser.add_argument('--baseline-id')
+
+    smoke_parser = subparsers.add_parser(
+        'smoke',
+        help='Run the baseline-free probe/deploy/agent/workload/UART verdict transaction',
+        description='Run the baseline-free probe/deploy/agent/workload/UART verdict transaction.',
+    )
+    smoke_parser.add_argument('--profile', required=True)
+    smoke_parser.add_argument('--repeat', type=int, default=1)
+    smoke_parser.add_argument('--run-id')
+    smoke_parser.add_argument('--overall-timeout', type=float, default=180.0)
+    smoke_parser.add_argument('--heartbeat-timeout', type=float, default=30.0)
 
     baseline_parser = subparsers.add_parser('baseline', help='Manage immutable approved baselines')
     baseline_subparsers = baseline_parser.add_subparsers(dest='baseline_action', required=True)
@@ -709,6 +720,7 @@ def main():
         cmd_probe as cmd_probe_v2,
         cmd_report as cmd_report_v2,
         cmd_run as cmd_run_v2,
+        cmd_smoke as cmd_smoke_v2,
         cmd_simulate as cmd_simulate_v2,
         cmd_validate_v2,
     )
@@ -720,6 +732,7 @@ def main():
         'golden': cmd_golden_v2,
         'calibrate': cmd_calibrate_v2,
         'baseline': cmd_baseline_v2,
+        'smoke': cmd_smoke_v2,
         'run': cmd_run_v2,
         'collect': cmd_collect_v2,
         'report': cmd_report_v2,

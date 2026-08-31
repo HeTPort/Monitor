@@ -201,7 +201,7 @@ class RunManifestBuilder:
         kernel_rules_path: Path | None = None,
         device_uart: str | None = None,
     ) -> dict[str, Any]:
-        if mode not in {"golden", "calibration"}:
+        if mode not in {"smoke", "golden", "calibration"}:
             raise RunError(f"unsupported qualification mode: {mode}")
         synthetic = Baseline.from_mapping(
             {
@@ -229,10 +229,16 @@ class RunManifestBuilder:
             kernel_rules_path=kernel_rules_path,
             device_uart=device_uart,
         )
-        manifest["qualification"] = {"mode": mode, "production_baseline_allowed": False}
+        manifest["qualification"] = {
+            "mode": mode,
+            "production_baseline_allowed": False,
+            "generated_reference_disposition": (
+                "discard" if mode == "smoke" else ("qualification-artifact" if mode == "golden" else "not-generated")
+            ),
+        }
         manifest["baseline"] = None
         argv = manifest["workload"]["argv"]
-        if mode == "golden":
+        if mode in {"smoke", "golden"}:
             argv.extend(("--generate-golden", "true"))
             if profile.target == "gpu":
                 argv.extend(("--golden-file", f"{manifest['spool_dir']}/gpu-golden.rgba"))

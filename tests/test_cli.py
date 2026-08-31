@@ -1,18 +1,23 @@
 from __future__ import annotations
 
 import json
+import io
 import subprocess
 import sys
 import tempfile
 import unittest
 from argparse import Namespace
+from contextlib import redirect_stdout
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import ANY, patch
 
 from src.cli_commands import (
     _apply_platform_serial,
     _apply_saved_pairing,
     _cleanup_device_spool_after_pass,
     _concise_reason,
+    cmd_smoke,
 )
 from src.events import build_event, encode_event
 from src.path_resolver import PathResolver
@@ -41,8 +46,12 @@ class CLITests(unittest.TestCase):
         self.assertIn("config=1", version.stdout)
         help_result = self.run_cli("--help")
         self.assertEqual(help_result.returncode, 0, help_result.stderr)
-        for command in ("probe", "deploy", "golden", "calibrate", "baseline", "run", "collect", "report"):
+        for command in ("probe", "deploy", "smoke", "golden", "calibrate", "baseline", "run", "collect", "report"):
             self.assertIn(command, help_result.stdout)
+
+        smoke_help = self.run_cli("smoke", "--help")
+        self.assertEqual(smoke_help.returncode, 0, smoke_help.stderr)
+        self.assertIn("baseline-free", smoke_help.stdout)
 
     def test_pair_help_exposes_optional_platform_serial_config(self) -> None:
         result = self.run_cli("pair", "--help")
@@ -57,6 +66,43 @@ class CLITests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             payload = json.loads(result.stdout)
             self.assertEqual(payload["count"], 0)
+
+    def test_smoke_reports_minimum_closed_loop_and_retained_spool(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = Path(tmp) / "smoke-cpu-001"
+            run_dir.mkdir()
+            (run_dir / "result.json").write_text(
+                json.dumps(
+                    {
+                        "run_id": "smoke-cpu-001",
+                        "verdict": "PASS",
+                        "exit_code": 0,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            fake_paths = SimpleNamespace(ensure_writable_roots=lambda: None)
+            args = Namespace(repeat=1, profile="cpu_smoke_kirin9030", json_output=True)
+            output = io.StringIO()
+            with (
+                patch("src.cli_commands.make_paths", return_value=fake_paths),
+                patch("src.cli_commands.load_profile", return_value=SimpleNamespace()),
+                patch("src.cli_commands._execute_live_qualification", return_value=[run_dir]) as execute,
+                redirect_stdout(output),
+            ):
+                exit_code = cmd_smoke(args)
+            payload = json.loads(output.getvalue())
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(payload["minimum_closed_loop"])
+            self.assertEqual(payload["runs"][0]["device_spool"], "retained")
+            execute.assert_called_once_with(
+                args,
+                fake_paths,
+                ANY,
+                mode="smoke",
+                count=1,
+                golden=None,
+            )
 
     def test_validate_reports_resolved_override_path_and_fingerprint(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

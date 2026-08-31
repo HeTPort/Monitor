@@ -62,6 +62,18 @@ class PathResolverTests(unittest.TestCase):
         (self.cwd / "workload.json").write_text("wrong", encoding="utf-8")
         self.assertEqual(self.resolver.resolve_input("workload.json", owner=owner), referenced.resolve())
 
+    def test_external_profile_falls_back_to_bundled_release_asset(self) -> None:
+        owner = self.config / "profiles" / "cpu.yaml"
+        owner.parent.mkdir()
+        owner.write_text("profile", encoding="utf-8")
+        bundled = self.bundle / "tools" / "cpu-avs-workload"
+        bundled.parent.mkdir()
+        bundled.write_bytes(b"workload")
+
+        resolved = self.resolver.resolve_input("../../tools/cpu-avs-workload", owner=owner)
+
+        self.assertEqual(resolved, bundled.resolve())
+
     def test_output_state_and_remote_roots(self) -> None:
         output = self.resolver.resolve_output("run/result.json", create_parent=True)
         state = self.resolver.resolve_state("registry/index.json", create_parent=True)

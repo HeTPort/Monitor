@@ -99,6 +99,8 @@ class ProfileConfig:
         if target not in VALID_TARGETS:
             raise ConfigError(f"{context}.target: expected one of {sorted(VALID_TARGETS)}")
         platform = _require(data, "platform", str, context).strip()
+        if not platform:
+            raise ConfigError(f"{context}.platform: must not be empty")
         workload = dict(_require(data, "workload", dict, context))
         binary = _require(workload, "binary", str, f"{context}.workload")
         if not binary.strip():
@@ -171,6 +173,7 @@ class ProfileConfig:
 class PlatformConfig:
     schema_version: int
     name: str
+    identity: dict[str, Any]
     transport: dict[str, Any]
     serial: dict[str, Any]
     cpu: dict[str, Any]
@@ -186,11 +189,41 @@ class PlatformConfig:
         version = require_schema_version(data, context)
         name = _require(data, "name", str, context)
         sections: dict[str, dict[str, Any]] = {}
-        for section in ("transport", "serial", "cpu", "gpu", "thermal"):
+        for section in ("identity", "transport", "serial", "cpu", "gpu", "thermal"):
             value = data.get(section) or {}
             if not isinstance(value, dict):
                 raise ConfigError(f"{context}.{section}: expected mapping")
             sections[section] = dict(value)
+        identity = sections["identity"]
+        identity_required = identity.get("required", False)
+        if not isinstance(identity_required, bool):
+            raise ConfigError(f"{context}.identity.required: expected boolean")
+        identity_fields = identity.get("fields", {})
+        if not isinstance(identity_fields, dict):
+            raise ConfigError(f"{context}.identity.fields: expected mapping")
+        if identity_required and not identity_fields:
+            raise ConfigError(f"{context}.identity.fields: required identity needs at least one field")
+        for field_name, definition in identity_fields.items():
+            field_context = f"{context}.identity.fields.{field_name}"
+            if not isinstance(field_name, str) or not field_name or not isinstance(definition, dict):
+                raise ConfigError(f"{field_context}: expected named mapping")
+            path_value = definition.get("path")
+            if not isinstance(path_value, str) or not path_value:
+                raise ConfigError(f"{field_context}.path: expected non-empty string")
+            parser = definition.get("parser", "text")
+            if parser not in {"text", "kernel_cmdline"}:
+                raise ConfigError(f"{field_context}.parser: expected text or kernel_cmdline")
+            if parser == "kernel_cmdline" and (
+                not isinstance(definition.get("key"), str) or not definition["key"].strip()
+            ):
+                raise ConfigError(f"{field_context}.key: expected non-empty string for kernel_cmdline")
+            accepted = definition.get("accepted", [])
+            if not isinstance(accepted, list) or not accepted or any(
+                not isinstance(value, str) or not value for value in accepted
+            ):
+                raise ConfigError(f"{field_context}.accepted: expected non-empty string list")
+            if "required" in definition and not isinstance(definition["required"], bool):
+                raise ConfigError(f"{field_context}.required: expected boolean")
         serial = sections["serial"]
         baudrate = serial.get("baudrate")
         if baudrate is not None and (not isinstance(baudrate, int) or isinstance(baudrate, bool) or baudrate <= 0):
@@ -201,6 +234,32 @@ class PlatformConfig:
             for candidate in uart_candidates
         ):
             raise ConfigError(f"{context}.serial.uart_candidates: expected a list of non-empty strings")
+        policy_glob = sections["cpu"].get("policy_glob")
+        if policy_glob is not None and (not isinstance(policy_glob, str) or not policy_glob):
+            raise ConfigError(f"{context}.cpu.policy_glob: expected non-empty string")
+        for domain in ("cpu", "gpu"):
+            interfaces = sections[domain].get("interfaces", {})
+            if not isinstance(interfaces, dict):
+                raise ConfigError(f"{context}.{domain}.interfaces: expected mapping")
+            for interface_name, definition in interfaces.items():
+                if not isinstance(definition, dict):
+                    raise ConfigError(f"{context}.{domain}.interfaces.{interface_name}: expected mapping")
+                available_candidates = definition.get("available_values_candidates")
+                if available_candidates is not None and (
+                    not isinstance(available_candidates, list)
+                    or not available_candidates
+                    or any(not isinstance(value, str) or not value for value in available_candidates)
+                ):
+                    raise ConfigError(
+                        f"{context}.{domain}.interfaces.{interface_name}.available_values_candidates: "
+                        "expected non-empty string list"
+                    )
+                if "require_requested_value" in definition and not isinstance(
+                    definition["require_requested_value"], bool
+                ):
+                    raise ConfigError(
+                        f"{context}.{domain}.interfaces.{interface_name}.require_requested_value: expected boolean"
+                    )
         thermal = sections["thermal"]
         allowed_temperature_units = {"auto", "degree_celsius", "celsius", "millidegree_celsius", "millicelsius"}
         temperature_unit = str(thermal.get("temperature_unit", "millidegree_celsius")).lower()

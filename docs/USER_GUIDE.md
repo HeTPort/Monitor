@@ -37,7 +37,7 @@ Internal Python classes are described in the design document and are not a stabl
 Use this workflow only on a representative known-good cohort or when an existing baseline is invalidated:
 
 ```powershell
-vmin_judge.exe --transport hdc --device DEVICE_ID probe
+vmin_judge.exe --transport hdc --device DEVICE_ID probe --platform kirin9030 --full
 vmin_judge.exe deploy --target all --verify-hashes
 vmin_judge.exe golden cpu --profile cpu_mixed_big4 --runs 10 --known-good --board-id BOARD_001
 vmin_judge.exe calibrate cpu --profile cpu_mixed_big4 --runs 30 --board-id BOARD_001 --golden GOLDEN_MANIFEST.json
@@ -45,6 +45,15 @@ vmin_judge.exe baseline approve BASELINE_ID --approver USER
 ```
 
 GPU qualification uses `golden gpu` and `calibrate gpu`.
+
+Before qualification, the baseline-free minimum closed loop can be checked independently:
+
+```powershell
+vmin_judge.exe --transport hdc --device DEVICE_ID --pc-serial COM6 smoke --profile cpu_smoke_kirin9030 --run-id smoke-cpu-001
+vmin_judge.exe --transport hdc --device DEVICE_ID --pc-serial COM6 smoke --profile gpu_smoke_kirin9030 --run-id smoke-gpu-001
+```
+
+`smoke` uses the normal live safety probe, deployment, device agent, workload, UART decoder, judgement, and artifact path. It does not require or create an approved baseline. Its generated correctness reference is disposable, and its device spool is retained for a later `collect` check.
 
 ### 2.2 Batch testing
 
@@ -72,7 +81,7 @@ The tool performs a lightweight compatibility check, incrementally deploys missi
 
 **Rationale:** Operators and automation require one packaged interface with stable exit codes and no dependency on the source-tree working directory.
 
-The operator normally starts this agent through `run`, `golden`, or `calibrate`; the PC has already resolved the JSON manifest and supplies a safe argument vector. The supported direct health check is:
+The operator normally starts this agent through `smoke`, `run`, `golden`, or `calibrate`; the PC has already resolved the JSON manifest and supplies a safe argument vector. The supported direct health check is:
 
 ```text
 vmin_judge.exe [global-options] <command> [command-options]
@@ -83,6 +92,8 @@ vmin_judge.exe [global-options] <command> [command-options]
 | Parameter | Purpose | Default/behavior |
 |---|---|---|
 | `--config-dir PATH` | Explicit external configuration override root. It may contain `config/platforms/...` or start directly at `platforms/...`. | Optional; overrides caller, executable, and bundled configuration. |
+
+An external profile may override configuration only. Relative workload and shader references first resolve beside that external profile, then fall back to the equivalent executable and bundled `config` layout. Operators do not need to copy packaged workload binaries out of the one-file executable merely to use `--config-dir`.
 | `--output-dir PATH` | Root for qualification and run artifacts. | Current directory or configured writable state. |
 | `--state-dir PATH` | Persistent pairing, baseline registry, and cache. | User-local application state. |
 | `--transport auto\|adb\|hdc` | Device control transport. | `auto`. |
@@ -121,18 +132,22 @@ vmin_judge.exe `
   --transport hdc `
   --device DEVICE_ID `
   probe `
-  --platform kirin9020 `
+  --platform kirin9030 `
   --full
 ```
 
 | Parameter | Meaning |
 |---|---|
-| `--platform NAME` | Platform adapter/profile. |
+| `--platform NAME` | Required platform adapter/profile; there is no implicit hardware default. |
 | `--full` | Perform complete topology/interface/tool discovery. |
-| `--refresh` | Ignore a cached capability record. |
+| `--refresh` | Compatibility flag. The current implementation probes the device live on every invocation and does not reuse a PC-side capability cache. |
 | `--require NAME` | Require a named capability; repeatable. |
 
 **Outputs:** `capabilities.json`, the resolved platform config path/fingerprint, device identity, interface provenance, units, permissions, and required/optional status. Thermal records retain the raw value, configured/applied unit, normalized Celsius value, and validity reason. Standalone `probe --full` scans both domains; profile-driven commands probe only their target domain and gate on that profile's requirements.
+
+Platforms may declare required identity fields backed by device files such as `/proc/cmdline`. Missing or mismatched identity is fail-closed and remains blocking when a profile narrows CPU/GPU capability scope. CPU topology output includes cpufreq `affected_cpus`, `related_cpus`, per-core policy membership, and `policy_by_cpu`. Governor interfaces may declare supported-value files; profile-driven commands verify the requested governor on every target path before deployment or agent launch.
+
+The bundled `kirin9020` and `kirin9030` adapters have distinct required identities. Select the adapter matching the device-reported hardware; do not reuse a Kirin9020 profile unchanged on a Kirin9030 device. First run `probe --platform kirin9030 --full` and use its policy mapping to review any affinity configured in the workload profile.
 
 **Handoff:** Consumed by `deploy`, `golden`, `calibrate`, and `run`.
 
@@ -152,7 +167,7 @@ vmin_judge.exe `
 vmin_judge.exe `
   --transport hdc `
   pair `
-  --platform kirin9020 `
+  --platform kirin9030 `
   --device-port '<DEVICE_UART_PATH>' `
   --pc-port '<PC_UART_PORT>' `
   --baudrate 9600 `
@@ -201,9 +216,42 @@ vmin_judge.exe deploy `
 
 **Outputs:** `deployment-manifest.json` with local/remote paths, sizes, SHA-256 values, permissions, actions, and verification status.
 
-**Handoff:** Consumed by `golden`, `calibrate`, and `run`.
+**Handoff:** Consumed by `smoke`, `golden`, `calibrate`, and `run`.
 
 **Errors:** Transfer failure, remote filesystem/permission failure, hash mismatch, or insufficient storage.
+
+### API: `smoke`
+
+**Purpose:** Prove the minimum live closed loop before golden generation or baseline approval.
+
+**Rationale:** Package/resource resolution, live platform safety checks, deployment, device-agent/workload launch, UART event transport, judgement, and artifacts must be testable independently of multi-board qualification.
+
+**Usage:**
+
+```powershell
+vmin_judge.exe `
+  --transport hdc `
+  --device DEVICE_ID `
+  --pc-serial COM6 `
+  --output-dir D:\MonitorTest\output `
+  smoke `
+  --profile cpu_smoke_kirin9030 `
+  --run-id smoke-cpu-001
+```
+
+| Parameter | Meaning |
+|---|---|
+| `--profile NAME` | Baseline-free smoke profile. |
+| `--repeat N` | Sequential smoke transactions. |
+| `--run-id ID` | Exact run ID, or prefix when repeating. |
+| `--overall-timeout SEC` | PC-side transaction timeout. |
+| `--heartbeat-timeout SEC` | Workload liveness timeout. |
+
+**Outputs:** A normal PC run directory and final object containing `minimum_closed_loop`. PASS requires complete agent/workload terminal evidence and policy evaluation. Smoke device spool is retained so `collect --verify-hashes` can be run afterward.
+
+**Safety:** Smoke uses a runtime-only synthetic baseline with no thresholds and marks any generated correctness reference as `discard`. It cannot create, approve, or satisfy a production golden/baseline.
+
+**Errors:** The same typed configuration, unsupported, transport, serial protocol, workload/DUT, and artifact failures as the live transaction. Any non-PASS means the minimum closed loop is not complete.
 
 ### API: `golden cpu`
 

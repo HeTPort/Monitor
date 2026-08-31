@@ -44,6 +44,12 @@ class ShellDeviceAgentTests(unittest.TestCase):
             temp_degree = root / "temp-degree"
             temp_milli.write_text("31074\n", encoding="utf-8")
             temp_degree.write_text("30\n", encoding="utf-8")
+            throttle = root / "gpu-throttle"
+            throttle.write_text(
+                'Status: "enable"\nPath: C:\\gpu\tready\n',
+                encoding="utf-8",
+                newline="\n",
+            )
             workload = root / "workload.sh"
             workload.write_text(
                 "#!/bin/sh\n"
@@ -79,6 +85,8 @@ class ShellDeviceAgentTests(unittest.TestCase):
                     f"cpu.temperature.0|temperature_auto|{shell_path(temp_milli)}",
                     "--telemetry",
                     f"cpu.temperature.1|temperature_auto|{shell_path(temp_degree)}",
+                    "--telemetry",
+                    f"gpu.throttle|text|{shell_path(throttle)}",
                     "--",
                     "sh",
                     shell_path(workload),
@@ -112,6 +120,16 @@ class ShellDeviceAgentTests(unittest.TestCase):
             }
             self.assertEqual(temperatures["cpu.temperature.0"], 31.074)
             self.assertEqual(temperatures["cpu.temperature.1"], 30.0)
+            throttle_events = [
+                event for event in events
+                if event.type == "telemetry" and event.payload.get("metric") == "gpu.throttle"
+            ]
+            self.assertTrue(throttle_events)
+            self.assertEqual(
+                throttle_events[0].payload["value"],
+                'Status: "enable"\nPath: C:\\gpu\tready',
+            )
+            self.assertTrue(all(line.startswith(b"{") and line.endswith(b"}") for line in uart.read_bytes().splitlines()))
             self.assertTrue((spool / "events.jsonl").exists())
             hashes = json.loads((spool / "artifact-hashes.json").read_text(encoding="utf-8"))
             self.assertEqual(len(hashes["sha256"]["events.jsonl"]), 64)

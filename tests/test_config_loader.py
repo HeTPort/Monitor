@@ -43,6 +43,12 @@ class ConfigLoaderTests(unittest.TestCase):
         with self.assertRaisesRegex(ConfigError, "list of strings"):
             ProfileConfig.from_mapping(data, source_path=Path("profile.json"))
 
+    def test_rejects_empty_profile_platform(self) -> None:
+        data = valid_profile()
+        data["platform"] = " "
+        with self.assertRaisesRegex(ConfigError, "platform: must not be empty"):
+            ProfileConfig.from_mapping(data, source_path=Path("profile.json"))
+
     def test_rejects_unknown_document_extension(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "profile.conf"
@@ -92,6 +98,50 @@ class ConfigLoaderTests(unittest.TestCase):
                 path.write_text(json.dumps(data), encoding="utf-8")
                 with self.assertRaisesRegex(ConfigError, expected):
                     PlatformConfig.from_file(path)
+
+    def test_platform_rejects_incomplete_required_identity(self) -> None:
+        data = {
+            "schema_version": 1,
+            "name": "identity-test",
+            "identity": {"required": True, "fields": {}},
+            "transport": {},
+            "serial": {},
+            "cpu": {},
+            "gpu": {},
+            "thermal": {},
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "platform.json"
+            path.write_text(json.dumps(data), encoding="utf-8")
+            with self.assertRaisesRegex(ConfigError, "at least one field"):
+                PlatformConfig.from_file(path)
+
+    def test_platform_rejects_empty_kernel_cmdline_identity_key(self) -> None:
+        data = {
+            "schema_version": 1,
+            "name": "identity-test",
+            "identity": {
+                "required": True,
+                "fields": {
+                    "hardware": {
+                        "path": "/proc/cmdline",
+                        "parser": "kernel_cmdline",
+                        "key": " ",
+                        "accepted": ["Kirin9030"],
+                    }
+                },
+            },
+            "transport": {},
+            "serial": {},
+            "cpu": {},
+            "gpu": {},
+            "thermal": {},
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "platform.json"
+            path.write_text(json.dumps(data), encoding="utf-8")
+            with self.assertRaisesRegex(ConfigError, "non-empty string"):
+                PlatformConfig.from_file(path)
 
 
 if __name__ == "__main__":
