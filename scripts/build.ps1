@@ -9,8 +9,8 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $projectRoot
 try {
     $requiredAssets = @(
-        "tools\cpu-avs-workload",
-        "tools\gpu-avs-workload",
+        "tools\cpu-avs-workload\cpu-avs-workload",
+        "tools\gpu-avs-workload\gpu-avs-workload",
         "tools\shaders\vulkan\fullscreen.vert.spv",
         "tools\shaders\vulkan\workload.frag.spv"
     )
@@ -20,14 +20,26 @@ try {
         }
     }
     if (-not $SkipTests) {
+        $oldErrorActionPreference = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        
         & $Python -m unittest discover -s tests -v
+        
+
+        $ErrorActionPreference = $oldErrorActionPreference
         if ($LASTEXITCODE -ne 0) { throw "Unit tests failed" }
     }
     & $Python -c "import serial, yaml, PyInstaller"
     if ($LASTEXITCODE -ne 0) {
         throw "Packaging dependencies are missing. Install requirements-dev.txt into the selected Python environment."
     }
+    $oldErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    
     & $Python -m PyInstaller --clean --noconfirm vmin_judge.spec
+    
+ 
+    $ErrorActionPreference = $oldErrorActionPreference
     if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed" }
     & (Join-Path $projectRoot "dist\vmin_judge.exe") --version
     if ($LASTEXITCODE -ne 0) { throw "Packaged executable smoke test failed" }
