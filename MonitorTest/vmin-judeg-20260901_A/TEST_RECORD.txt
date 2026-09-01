@@ -1,0 +1,271 @@
+PS D:\h60106817\release> $MON = 'D:\h60106817\release\vmin_judge.exe'
+PS D:\h60106817\release> $DEVICE = '0123456789ABCDEF'
+PS D:\h60106817\release> $PC_SERIAL = 'COM6'
+PS D:\h60106817\release> $DEVICE_UART = '/dev/ttyHW0'
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --json relay probe --platform kirin9030
+{
+  "baudrate": 9600,
+  "device_abi": {
+    "long_bit": "64",
+    "raw_checks": {
+      "getconf": {
+        "available": true,
+        "return_code": 0,
+        "stderr": "",
+        "stdout": "64"
+      },
+      "uname": {
+        "available": true,
+        "return_code": 0,
+        "stderr": "",
+        "stdout": "aarch64"
+      }
+    },
+    "uname_m": "aarch64"
+  },
+  "next_action": "build native/uart_relay/avs_uart_relay.c with the workload OpenHarmony toolchain, stage it as tools/relay/kirin9030/avs-uart-relay, then deploy and repeat",
+  "platform": "kirin9030",
+  "relay": {
+    "deployed_executable": false,
+    "remote": "/data/local/tmp/avs/bin/avs-uart-relay"
+  },
+  "supported": false,
+  "uart": "/dev/ttyHW0"
+}
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --json probe --platform kirin9030 --full
+{
+  "capabilities": "D:\\h60106817\\release\\output\\probes\\0123456789ABCDEF\\capabilities.json",
+  "required_missing": [],
+  "supported": true
+}
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART pair --platform kirin9030 --verify
+[OK] Pairing /dev/ttyHW0 -> COM6 @ 9600 baud (204.0 ms)
+[OK] Pairing verified
+PS D:\h60106817\release> hdc shell
+# ls /data/local/tmp/avs
+bin  configs  runs  shaders  tests
+# ls /data/local/tmp/avs/bin
+avs-device-agent  avs-telemetry-agent  cpu-avs-workload  gpu-avs-workload
+# exit
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE deploy --profile cpu_stress_kirin9030
+complete: True
+verified: True
+manifest: D:\h60106817\release\output\deployment-manifest.json
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE deploy --profile gpu_stress_kirin9030
+complete: True
+verified: True
+manifest: D:\h60106817\release\output\deployment-manifest.json
+PS D:\h60106817\release> hdc shell
+# ls /data/local/tmp/avs
+bin  configs  runs  shaders  tests
+# ls /data/local/tmp/avs/bin
+avs-device-agent     avs-uart-relay    gpu-avs-workload
+avs-telemetry-agent  cpu-avs-workload
+# ls /data/local/tmp/avs/runs
+golden-cpu-20260829T075607Z-e7da6a7f  golden-gpu-20260831T095442Z-26b047c6
+golden-cpu-20260829T083911Z-86057049  smoke-cpu-single-NCH-005
+golden-cpu-20260829T085602Z-18abf699  smoke-gpu-single-NCH-005
+golden-cpu-20260831T095241Z-61829f30
+# ls /data/local/tmp/avs/configs
+cpu_mixed_big4.json        gpu_smoke_kirin9030.json   telemetry
+cpu_smoke_kirin9030.json   gpu_stress_kirin9030.json
+cpu_stress_kirin9030.json  gpu_vulkan_mixed.json
+# exit
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --json relay probe --platform kirin9030
+{
+  "baudrate": 9600,
+  "device_abi": {
+    "long_bit": "64",
+    "raw_checks": {
+      "getconf": {
+        "available": true,
+        "return_code": 0,
+        "stderr": "",
+        "stdout": "64"
+      },
+      "uname": {
+        "available": true,
+        "return_code": 0,
+        "stderr": "",
+        "stdout": "aarch64"
+      }
+    },
+    "uname_m": "aarch64"
+  },
+  "platform": "kirin9030",
+  "relay": {
+    "deployed_executable": true,
+    "remote": "/data/local/tmp/avs/bin/avs-uart-relay",
+    "self_test": {
+      "available": true,
+      "return_code": 0,
+      "stderr": "",
+      "stdout": "{\"relay\":\"avs-uart-relay\",\"version\":\"1.0.0\",\"self_test\":true,\"termios\":true,\"tcdrain\":true}"
+    },
+    "version": {
+      "available": true,
+      "return_code": 0,
+      "stderr": "",
+      "stdout": "avs-uart-relay 1.0.0 protocol uart-v2"
+    }
+  },
+  "supported": true,
+  "uart": "/dev/ttyHW0"
+}
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --device-uart $DEVICE_UART --json relay probe --platform kirin9030 --check-uart
+{
+  "baudrate": 9600,
+  "device_abi": {
+    "long_bit": "64",
+    "raw_checks": {
+      "getconf": {
+        "available": true,
+        "return_code": 0,
+        "stderr": "",
+        "stdout": "64"
+      },
+      "uname": {
+        "available": true,
+        "return_code": 0,
+        "stderr": "",
+        "stdout": "aarch64"
+      }
+    },
+    "uname_m": "aarch64"
+  },
+  "platform": "kirin9030",
+  "relay": {
+    "deployed_executable": true,
+    "remote": "/data/local/tmp/avs/bin/avs-uart-relay",
+    "self_test": {
+      "available": true,
+      "return_code": 0,
+      "stderr": "",
+      "stdout": "{\"relay\":\"avs-uart-relay\",\"version\":\"1.0.0\",\"self_test\":true,\"termios\":true,\"tcdrain\":true}"
+    },
+    "uart_check": {
+      "available": true,
+      "return_code": 0,
+      "stderr": "",
+      "stdout": "{\"uart\":\"/dev/ttyHW0\",\"baudrate\":9600,\"open\":true,\"termios\":true,\"tcdrain\":true}"
+    },
+    "version": {
+      "available": true,
+      "return_code": 0,
+      "stderr": "",
+      "stdout": "avs-uart-relay 1.0.0 protocol uart-v2"
+    }
+  },
+  "supported": true,
+  "uart": "/dev/ttyHW0"
+}
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE verify-deployment --profile cpu_stress_kirin9030
+complete: True
+verified: True
+manifest: D:\h60106817\release\output\deployment-verification.json
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE verify-deployment --profile gpu_stress_kirin9030
+complete: True
+verified: True
+manifest: D:\h60106817\release\output\deployment-verification.json
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json run --profile cpu_stress_kirin9030 --test-id MC-CPU-0831 --attempt-id MC-CPU-0831-001 --pc-artifacts full
+{
+  "exit_code": 3,
+  "repeat": 1,
+  "runs": [
+    {
+      "attempt_id": "MC-CPU-0831-001",
+      "device_evidence": "/data/local/tmp/avs/tests/MC-CPU-0831/MC-CPU-0831-001",
+      "device_spool": "retained",
+      "errors": [
+        {
+          "code": "truncated_frame",
+          "message": "UART-v2 stream ended inside an active frame",
+          "scope": "protocol"
+        },
+        {
+          "code": "AGENT_FINAL_MISSING",
+          "scope": "agent"
+        }
+      ],
+      "exit_code": 3,
+      "result": "D:\\h60106817\\release\\output\\MC-CPU-0831\\MC-CPU-0831-001\\result.json",
+      "run_id": "MC-CPU-0831-001",
+      "test_id": "MC-CPU-0831",
+      "verdict": "INFRA_ERROR"
+    }
+  ],
+  "test_id": "MC-CPU-0831",
+  "validation_mode": "error-only"
+}
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json run --profile gpu_stress_kirin9030 --test-id MC-GPU-0831 --attempt-id MC-GPU-0831-001 --pc-artifacts full
+{
+  "exit_code": 3,
+  "repeat": 1,
+  "runs": [
+    {
+      "attempt_id": "MC-GPU-0831-001",
+      "device_evidence": "/data/local/tmp/avs/tests/MC-GPU-0831/MC-GPU-0831-001",
+      "device_spool": "retained",
+      "errors": [
+        {
+          "code": "truncated_frame",
+          "message": "UART-v2 stream ended inside an active frame",
+          "scope": "protocol"
+        },
+        {
+          "code": "AGENT_FINAL_MISSING",
+          "scope": "agent"
+        }
+      ],
+      "exit_code": 3,
+      "result": "D:\\h60106817\\release\\output\\MC-GPU-0831\\MC-GPU-0831-001\\result.json",
+      "run_id": "MC-GPU-0831-001",
+      "test_id": "MC-GPU-0831",
+      "verdict": "INFRA_ERROR"
+    }
+  ],
+  "test_id": "MC-GPU-0831",
+  "validation_mode": "error-only"
+}
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json run --profile cpu_smoke_kirin9030 --test-id MC-SMOKE-0831 --attempt-id MC-SMOKE-0831-001
+{
+  "error": "device-agent transport command did not finish",
+  "exit_code": 4
+}
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE collect --test-id MC-CPU-0831 --verify-hashes
+test_id: MC-CPU-0831
+attempt_id: None
+collection: D:\h60106817\release\output\MC-CPU-0831\collection.json
+local: D:\h60106817\release\output\MC-CPU-0831\device-evidence
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE collect --test-id MC-GPU-0831 --verify-hashes
+test_id: MC-GPU-0831
+attempt_id: None
+collection: D:\h60106817\release\output\MC-GPU-0831\collection.json
+local: D:\h60106817\release\output\MC-GPU-0831\device-evidence
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE telemetry run --profile cpu_stress_kirin9030 --test-id TEL-0831 --attempt-id TEL-0831-001 --duration 30 --interval 5
+test_id: TEL-0831
+attempt_id: TEL-0831-001
+profile: cpu_stress_kirin9030
+device_output: /data/local/tmp/avs/tests/TEL-0831/TEL-0831-001/spool/telemetry.jsonl
+append_only: True
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE collect --test-id TEL-0831
+test_id: TEL-0831
+attempt_id: None
+collection: D:\h60106817\release\output\TEL-0831\collection.json
+local: D:\h60106817\release\output\TEL-0831\device-evidence
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART run --profile cpu_stress_kirin9030 --test-id TEL-RUN-0831 --attempt-id TEL-RUN-0831-001 --telemetry
+test_id: TEL-RUN-0831
+validation_mode: error-only
+repeat: 1
+exit_code: 3
+runs: [{"test_id": "TEL-RUN-0831", "attempt_id": "TEL-RUN-0831-001", "run_id": "TEL-RUN-0831-001", "verdict": "INFRA_ERROR", "exit_code": 3, "result": "D:\\h60106817\\release\\output\\TEL-RUN-0831\\TEL-RUN-0831-001\\result.json", "device_evidence": "/data/local/tmp/avs/tests/TEL-RUN-0831/TEL-RUN-0831-001", "device_spool": "retained", "errors": [{"scope": "protocol", "code": "truncated_frame", "message": "UART-v2 stream ended inside an active frame"}, {"scope": "agent", "code": "AGENT_FINAL_MISSING"}]}]
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE collect --test-id TEL-RUN-0831
+test_id: TEL-RUN-0831
+attempt_id: None
+collection: D:\h60106817\release\output\TEL-RUN-0831\collection.json
+local: D:\h60106817\release\output\TEL-RUN-0831\device-evidence
+PS D:\h60106817\release> hdc shell
+# ls /data/local/tmp/avs
+bin  configs  runs  shaders  tests
+# ls /data/local/tmp/avs/tests
+MC-CPU-0831  MC-GPU-0831  MC-SMOKE-0831  TEL-0831  TEL-RUN-0831
