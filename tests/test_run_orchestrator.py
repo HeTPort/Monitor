@@ -13,6 +13,7 @@ from src.events import build_event, encode_event
 from src.path_resolver import PathResolver
 from src.run_orchestrator import RunManifestBuilder, RunOrchestrator
 from src.transport import CommandResult
+from src.uart_protocol import encode_uart_frame
 
 
 def profile(source: Path) -> ProfileConfig:
@@ -291,17 +292,25 @@ class RunOrchestratorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             manifest = {
                 "schema_version": 1,
+                "test_id": "test-serial-order",
                 "run_id": "run-serial-order",
                 "overall_timeout_s": 10,
                 "heartbeat_timeout_s": 5,
                 "policy": {"thresholds": {}, "required_telemetry": []},
+                "serial_transport": {"protocol": "uart-v2", "max_frame_bytes": 512},
             }
             records = [
                 build_event(run_id=manifest["run_id"], seq=1, timestamp_ms=0, source="agent", event_type="agent_start", payload={}),
                 build_event(run_id=manifest["run_id"], seq=2, timestamp_ms=1, source="cpu-workload", event_type="summary", payload={"result": "PASS", "exit_code": 0}),
                 build_event(run_id=manifest["run_id"], seq=3, timestamp_ms=2, source="agent", event_type="agent_final", payload={"workload_exit_code": 0, "restoration_ok": True, "spool_complete": True}),
             ]
-            wire = bytearray(b"".join(encode_event(record) for record in records))
+            for record in records:
+                record["test_id"] = manifest["test_id"]
+            stale = encode_uart_frame(
+                build_event(run_id="old-run", seq=1, timestamp_ms=0, source="agent", event_type="agent_start", payload={})
+                | {"test_id": "old-test"}
+            )
+            wire = bytearray(b"delayed-old-tail\x00" + stale + b"".join(encode_uart_frame(record) for record in records))
 
             class FakeSerial:
                 opened = False
@@ -341,7 +350,9 @@ class RunOrchestratorTests(unittest.TestCase):
                     baudrate=9600,
                 )
             self.assertEqual(execution.result.verdict, "PASS")
-            self.assertGreaterEqual(FakeSerial.resets, 2)
+            # Clear only before launch. Clearing after FINAL can discard bytes
+            # from a following session on adapters that deliver asynchronously.
+            self.assertEqual(FakeSerial.resets, 1)
 
 
 if __name__ == "__main__":

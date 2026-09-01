@@ -41,7 +41,7 @@ class CLITests(unittest.TestCase):
         self.assertIn("config=1", version.stdout)
         help_result = self.run_cli("--help")
         self.assertEqual(help_result.returncode, 0, help_result.stderr)
-        for command in ("probe", "deploy", "verify-deployment", "telemetry", "smoke", "golden", "calibrate", "baseline", "run", "collect", "report"):
+        for command in ("probe", "relay", "deploy", "verify-deployment", "telemetry", "smoke", "golden", "calibrate", "baseline", "run", "collect", "report"):
             self.assertIn(command, help_result.stdout)
         self.assertNotIn("execute", help_result.stdout)
 
@@ -54,6 +54,10 @@ class CLITests(unittest.TestCase):
         self.assertIn("--test-id", run_help.stdout)
         self.assertNotIn("--no-deploy", run_help.stdout)
         self.assertNotIn("--run-id", run_help.stdout)
+
+        relay_help = self.run_cli("relay", "probe", "--help")
+        self.assertEqual(relay_help.returncode, 0, relay_help.stderr)
+        self.assertIn("--check-uart", relay_help.stdout)
 
     def test_pair_help_exposes_optional_platform_serial_config(self) -> None:
         result = self.run_cli("pair", "--help")

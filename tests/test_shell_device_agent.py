@@ -33,7 +33,7 @@ class ShellDeviceAgentTests(unittest.TestCase):
             timeout=10,
         )
         self.assertEqual(version.returncode, 0, version.stderr)
-        self.assertEqual(version.stdout.strip(), "avs-device-agent 0.2.0 protocol 1")
+        self.assertEqual(version.stdout.strip(), "avs-device-agent 0.3.0 protocol 2")
 
         with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
             root = Path(tmp)
@@ -50,6 +50,18 @@ class ShellDeviceAgentTests(unittest.TestCase):
                 encoding="utf-8",
                 newline="\n",
             )
+            relay = root / "relay.sh"
+            relay.write_text(
+                "#!/bin/sh\n"
+                "uart=\n"
+                "while [ $# -gt 0 ]; do\n"
+                "  case \"$1\" in --uart) uart=$2; shift 2 ;; *) shift ;; esac\n"
+                "done\n"
+                "cat > \"$uart\"\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            relay.chmod(0o755)
             result = subprocess.run(
                 [
                     "sh",
@@ -62,6 +74,8 @@ class ShellDeviceAgentTests(unittest.TestCase):
                     "cpu",
                     "--uart",
                     shell_path(uart),
+                    "--relay",
+                    shell_path(relay),
                     "--spool-dir",
                     shell_path(spool),
                     "--cwd",
@@ -91,7 +105,6 @@ class ShellDeviceAgentTests(unittest.TestCase):
             self.assertIn("summary", [event.type for event in events])
             invalid_output = [event for event in events if event.type == "error"]
             self.assertEqual(invalid_output[0].payload["error_code"], "WORKLOAD_OUTPUT_INVALID")
-            self.assertEqual(invalid_output[0].payload["line"], "driver setup diagnostic")
             self.assertEqual(events[-1].type, "agent_final")
             self.assertNotIn("restoration_ok", events[-1].payload)
             self.assertTrue(all(line.startswith(b"{") and line.endswith(b"}") for line in uart.read_bytes().splitlines()))

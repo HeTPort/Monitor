@@ -211,6 +211,70 @@ def cmd_probe(args: Namespace) -> int:
     return 0 if result["supported"] else int(RunExitCode.UNSUPPORTED)
 
 
+@command_boundary
+def cmd_relay_probe(args: Namespace) -> int:
+    """Inspect device ABI and, when deployed, exercise relay runtime capabilities."""
+    paths = make_paths(args)
+    platform = load_platform(paths, args.platform)
+    _apply_saved_pairing(args, paths)
+    if args.baudrate is None:
+        args.baudrate = int(platform.serial.get("baudrate", 9600))
+    if not args.device_uart:
+        candidates = list(platform.serial.get("uart_candidates", []))
+        args.device_uart = candidates[0] if candidates else None
+    relay_config = dict(platform.serial.get("relay", {}))
+    relay_remote = paths.remote(str(relay_config.get("remote_asset", "bin/avs-uart-relay")))
+    transport = _transport(args, paths)
+
+    def check(argv: tuple[str, ...], timeout_s: float = 10.0) -> dict[str, Any]:
+        result = transport.invoke(argv, timeout_s=timeout_s)
+        return {
+            "available": result.success,
+            "return_code": result.return_code,
+            "stdout": result.stdout.strip(),
+            "stderr": result.stderr.strip(),
+        }
+
+    machine = check(("uname", "-m"))
+    long_bit = check(("getconf", "LONG_BIT"))
+    executable = check(("test", "-x", str(relay_remote)))
+    payload: dict[str, Any] = {
+        "platform": platform.name,
+        "device_abi": {
+            "uname_m": machine["stdout"] if machine["available"] else None,
+            "long_bit": long_bit["stdout"] if long_bit["available"] else None,
+            "raw_checks": {"uname": machine, "getconf": long_bit},
+        },
+        "relay": {
+            "remote": str(relay_remote),
+            "deployed_executable": executable["available"],
+        },
+        "uart": args.device_uart,
+        "baudrate": args.baudrate,
+    }
+    if executable["available"]:
+        payload["relay"]["version"] = check((str(relay_remote), "--version"))
+        payload["relay"]["self_test"] = check((str(relay_remote), "--self-test"))
+        if args.check_uart:
+            if not args.device_uart:
+                raise ConfigError("relay probe --check-uart requires a device UART or platform candidate")
+            payload["relay"]["uart_check"] = check(
+                (str(relay_remote), "--check-uart", args.device_uart, "--baud", str(args.baudrate))
+            )
+        checks = [payload["relay"]["version"], payload["relay"]["self_test"]]
+        if "uart_check" in payload["relay"]:
+            checks.append(payload["relay"]["uart_check"])
+        payload["supported"] = all(item["available"] for item in checks)
+    else:
+        payload["supported"] = False
+        payload["next_action"] = (
+            "build native/uart_relay/avs_uart_relay.c with the workload OpenHarmony toolchain, "
+            f"stage it as {relay_config.get('local_asset', 'the configured relay.local_asset')}, then deploy and repeat"
+        )
+    print_command_result(args, payload)
+    return 0 if payload["supported"] else int(RunExitCode.UNSUPPORTED)
+
+
 def _resolve_baseline(args: Namespace, paths: PathResolver, profile: ProfileConfig) -> Baseline:
     registry = BaselineRegistry(paths.state_root)
     baseline_value = getattr(args, "baseline", None) or profile.baseline or "auto"
@@ -367,6 +431,18 @@ def _deployment_assets(args: Namespace, paths: PathResolver) -> list[AssetSpec]:
     if getattr(args, "baseline", None) and getattr(args, "target", None) == "all":
         raise ConfigError("--baseline requires --profile or one specific --target")
     for profile in _requested_deployment_profiles(args, paths):
+        platform = load_platform(paths, profile.platform)
+        relay = dict(platform.serial.get("relay", {}))
+        relay_local = str(relay.get("local_asset", f"tools/relay/{platform.name}/avs-uart-relay"))
+        relay_remote = paths.remote(str(relay.get("remote_asset", "bin/avs-uart-relay")))
+        relay_asset = AssetSpec(
+            paths.resolve_resource(relay_local, required=False),
+            relay_remote,
+            executable=True,
+            required=True,
+            kind="uart-relay",
+        )
+        planned[str(relay_asset.remote)] = relay_asset
         baseline = _resolve_baseline(args, paths, profile) if getattr(args, "baseline", None) else None
         if baseline is not None:
             RunManifestBuilder._validate_baseline(profile, baseline)
@@ -402,6 +478,12 @@ def _shell_agent_argv(agent_remote: PurePosixPath, manifest: Mapping[str, Any], 
         field(manifest["workload"].get("cwd", "/"), "workload.cwd"),
         "--baudrate",
         str(baudrate),
+        "--relay",
+        field(manifest["serial_transport"]["relay"], "serial_transport.relay"),
+        "--max-frame",
+        str(int(manifest["serial_transport"].get("max_frame_bytes", 512))),
+        "--safe-utilization",
+        str(int(float(manifest["serial_transport"].get("safe_utilization", 0.70)) * 100)),
         "--timeout",
         str(max(1, int(float(manifest.get("timeout_s", 300))))),
     ]
@@ -420,6 +502,13 @@ def _shell_agent_argv(agent_remote: PurePosixPath, manifest: Mapping[str, Any], 
     workload_argv = manifest.get("workload", {}).get("argv", [])
     if not isinstance(workload_argv, list) or not workload_argv:
         raise ConfigError("shell agent requires a non-empty workload argv list")
+    thresholds = manifest.get("policy", {}).get("thresholds", {})
+    performance = thresholds.get("performance", {}) if isinstance(thresholds, Mapping) else {}
+    if isinstance(performance, Mapping):
+        for metric in sorted(performance):
+            if not re.fullmatch(r"[A-Za-z0-9_.-]+", str(metric)):
+                raise ConfigError(f"baseline performance metric is not relay-safe: {metric!r}")
+            argv.extend(("--summary-metric", str(metric)))
     argv.append("--")
     argv.extend(field(value, "workload.argv") for value in workload_argv)
     return argv

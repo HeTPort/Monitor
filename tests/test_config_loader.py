@@ -85,6 +85,10 @@ class ConfigLoaderTests(unittest.TestCase):
         for serial, expected in (
             ({"baudrate": 0}, "positive integer"),
             ({"uart_candidates": "/dev/ttyVendor0"}, "list of non-empty strings"),
+            ({"protocol": "jsonl"}, "uart-v2"),
+            ({"max_frame_bytes": 10}, "64 to 4096"),
+            ({"safe_utilization": 1.5}, "at most 1"),
+            ({"relay": "binary"}, "expected mapping"),
         ):
             data = dict(base)
             data["serial"] = serial

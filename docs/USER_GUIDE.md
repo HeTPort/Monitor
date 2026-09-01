@@ -1,6 +1,6 @@
 # Monitor 用户指南
 
-版本 2.1，更新于 2026-08-31。
+版本 2.1，更新于 2026-09-01。
 
 ## 1. 先理解命令边界
 
@@ -10,6 +10,7 @@ Monitor 把一次性准备和每次测试分开：
 |---|---|---|
 | 本地检查 | `validate` | 检查配置、profile、baseline 和打包资源 |
 | 平台检查 | `probe` | 只读探测平台身份和能力 |
+| Relay/ABI 检查 | `relay probe` | 单独读取设备 ABI，并测试已部署 relay 的运行能力 |
 | 串口配对 | `pair` | 保存设备 UART 与 PC 串口的对应关系 |
 | 部署 | `deploy` | 将 agent、workload、配置和 telemetry plan 部署到设备 |
 | 部署核验 | `verify-deployment` | 只读核对已部署文件的哈希 |
@@ -70,7 +71,17 @@ $DEVICE_UART = '/dev/ttyHW0'
 & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART pair --platform kirin9030 --verify
 ```
 
-### 3.4 部署和核验
+### 3.4 Relay ABI 与构建
+
+在公司设备上先执行（未部署 relay 时返回“不支持”是预期的，但会给出 ABI 字段）：
+
+```powershell
+& $MON --transport hdc --device $DEVICE --json relay probe --platform kirin9030
+```
+
+使用与 workload 相同的 OpenHarmony Clang target/sysroot/ABI 编译 `native/uart_relay/avs_uart_relay.c`，把产物放到 `config/platforms/kirin9030.yaml` 的 `serial.relay.local_asset`。不要把 PC Linux/Windows 编译产物复制到板端。
+
+### 3.5 部署和核验
 
 普通 CPU/GPU 压力测试使用无 baseline 的 profile：
 
@@ -79,6 +90,7 @@ $DEVICE_UART = '/dev/ttyHW0'
 & $MON --transport hdc --device $DEVICE deploy --profile gpu_stress_kirin9030
 & $MON --transport hdc --device $DEVICE verify-deployment --profile cpu_stress_kirin9030
 & $MON --transport hdc --device $DEVICE verify-deployment --profile gpu_stress_kirin9030
+& $MON --transport hdc --device $DEVICE --device-uart $DEVICE_UART --json relay probe --platform kirin9030 --check-uart
 ```
 
 部署内容不是只封装在 PC 端 exe 内。exe 内携带资源，`deploy` 明确地把资源释放并复制到设备的 `/data/local/tmp/avs`；之后 `run` 只调用已经部署的文件。这样部署失败与运行失败可以分别诊断。
@@ -97,7 +109,7 @@ GPU：
 & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART run --profile gpu_stress_kirin9030 --test-id 0831-GPU-01
 ```
 
-此时 `validation_mode` 为 `error-only`。agent 启动 workload，把合法 workload 事件转发到指定 UART；PC 侧校验事件协议、test/attempt ID、序号、心跳、workload 结果和 agent 最终状态。退出码为 0 且 verdict 为 `PASS` 即闭环通过。
+此时 `validation_mode` 为 `error-only`。agent 启动 workload，完整日志只追加到设备，UART 只传紧凑 START/HEARTBEAT/ERROR/SUMMARY/FINAL。原生 relay 使用 COBS+CRC32、完整写入和 `tcdrain()`；PC 在本次 START 前丢弃跨 run 残留，START 后严格校验 test/attempt ID、序号和 CRC，并且必须收到本次 FINAL。退出码为 0 且 verdict 为 `PASS` 即闭环通过。这套计算使用实际 `--baudrate`，不以 9600 写死。
 
 `smoke` 没有另一套执行逻辑，只是强制不使用 baseline；该兼容别名已弃用。新命令直接使用短 profile：
 
@@ -120,6 +132,9 @@ GPU：
 /data/local/tmp/avs/tests/<test_id>/<attempt_id>/
   events.jsonl
   workload.log
+  workload-stderr.log
+  workload-diagnostics.log
+  relay.log
   final.json
   artifact-hashes.json
   spool/telemetry.jsonl       # 启用 telemetry 时

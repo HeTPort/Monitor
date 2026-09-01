@@ -238,6 +238,29 @@ class PlatformConfig:
             for candidate in uart_candidates
         ):
             raise ConfigError(f"{context}.serial.uart_candidates: expected a list of non-empty strings")
+        protocol = serial.get("protocol", "uart-v2")
+        if protocol != "uart-v2":
+            raise ConfigError(f"{context}.serial.protocol: expected uart-v2")
+        max_frame_bytes = serial.get("max_frame_bytes", 512)
+        if (
+            not isinstance(max_frame_bytes, int)
+            or isinstance(max_frame_bytes, bool)
+            or not 64 <= max_frame_bytes <= 4096
+        ):
+            raise ConfigError(f"{context}.serial.max_frame_bytes: expected integer from 64 to 4096")
+        safe_utilization = serial.get("safe_utilization", 0.70)
+        if (
+            not isinstance(safe_utilization, (int, float))
+            or isinstance(safe_utilization, bool)
+            or not 0 < float(safe_utilization) <= 1
+        ):
+            raise ConfigError(f"{context}.serial.safe_utilization: expected number greater than 0 and at most 1")
+        relay = serial.get("relay", {})
+        if not isinstance(relay, dict):
+            raise ConfigError(f"{context}.serial.relay: expected mapping")
+        for key in ("local_asset", "remote_asset"):
+            if key in relay and (not isinstance(relay[key], str) or not relay[key].strip()):
+                raise ConfigError(f"{context}.serial.relay.{key}: expected non-empty string")
         policy_glob = sections["cpu"].get("policy_glob")
         if policy_glob is not None and (not isinstance(policy_glob, str) or not policy_glob):
             raise ConfigError(f"{context}.cpu.policy_glob: expected non-empty string")

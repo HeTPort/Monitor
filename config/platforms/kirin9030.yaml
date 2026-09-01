@@ -27,6 +27,14 @@ serial:
   # 0831 pairing verified ttyHW0 with the PC side at 9600 baud.
   uart_candidates: [/dev/ttyHW0, /dev/ttyHW4, /dev/ttyHW5, /dev/ttyAMA0]
   baudrate: 9600
+  protocol: uart-v2
+  max_frame_bytes: 512
+  safe_utilization: 0.70
+  relay:
+    # Stage a binary built with the same OpenHarmony target/sysroot as workloads.
+    # The ABI is intentionally not guessed; use `relay probe` on the device.
+    local_asset: tools/relay/kirin9030/avs-uart-relay
+    remote_asset: bin/avs-uart-relay
 
 cpu:
   topology_glob: /sys/devices/system/cpu/cpu[0-9]*

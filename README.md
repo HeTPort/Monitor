@@ -7,6 +7,7 @@ Monitor 2.1 是一个面向 CPU/GPU 板级压力测试的最小运行与判定�
 ```powershell
 python main.py validate --package
 python main.py --transport hdc --device <DEVICE> probe --platform kirin9030 --full
+python main.py --transport hdc --device <DEVICE> relay probe --platform kirin9030
 python main.py --transport hdc --device <DEVICE> deploy --profile cpu_stress_kirin9030
 python main.py --transport hdc --device <DEVICE> verify-deployment --profile cpu_stress_kirin9030
 ```
@@ -18,6 +19,8 @@ python main.py --transport hdc --device <DEVICE> --pc-serial COM4 --device-uart 
 ```
 
 baseline 只在需要 checksum、golden 或阈值校验时通过 `--baseline` 显式启用。Telemetry 可以通过 `telemetry run` 独立采样，或在核心测试中用 `run --telemetry` 伴随启动；采样日志只追加到设备本地。所有设备证据按 `test_id/attempt_id` 保留，之后用 `collect --test-id ...` 一次性拉取。
+
+实时判定使用 UART v2：设备 agent 只提交紧凑的 START/HEARTBEAT/ERROR/SUMMARY/FINAL，原生 relay 负责 COBS、CRC32、完整写入和 `tcdrain()`；PC 在匹配本次 START 前丢弃旧 run 尾包，匹配后任何 CRC、序号或身份错误都失败关闭。该设计按配置的波特率计算时限，不只适用于 9600 baud。
 
 Monitor 不修改或恢复 governor、频率、CPU online、功耗策略和 affinity；这些属于未来独立调度模块。
 
@@ -33,7 +36,7 @@ Monitor 不修改或恢复 governor、频率、CPU online、功耗策略和 affi
 python -m unittest discover -s tests -v
 ```
 
-打包前必须把真实板端 workload 放在 `tools\cpu-avs-workload`、`tools\gpu-avs-workload`，GPU shader 放在 `tools\shaders\vulkan\`。构建：
+打包前必须把真实板端 workload 放在 `tools\cpu-avs-workload`、`tools\gpu-avs-workload`，GPU shader 放在 `tools\shaders\vulkan\`，并用相同 OpenHarmony ABI/toolchain 编译 `native\uart_relay\avs_uart_relay.c`，将产物放入平台配置的 `serial.relay.local_asset`。构建：
 
 ```powershell
 .\scripts\build.ps1

@@ -11,6 +11,7 @@ try {
     $requiredAssets = @(
         "tools\cpu-avs-workload",
         "tools\gpu-avs-workload",
+        "tools\relay\kirin9030\avs-uart-relay",
         "tools\shaders\vulkan\fullscreen.vert.spv",
         "tools\shaders\vulkan\workload.frag.spv"
     )

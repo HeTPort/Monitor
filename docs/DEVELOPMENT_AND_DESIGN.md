@@ -1,6 +1,6 @@
 # Monitor Development and Design
 
-Version 2.1 design, updated 2026-08-31.
+Version 2.1 design, updated 2026-09-01.
 
 ## 1. Purpose
 
@@ -20,7 +20,7 @@ Qualification, deployment, platform discovery, telemetry, reporting, and future 
 - A baseline is optional. Absence means error-only judgement, not an automatic baseline search.
 - `probe`, `deploy`, and `verify-deployment` are explicit preparation commands.
 - Monitor does not write governor, frequency, CPU-online, power-policy, or affinity state.
-- The workload agent owns workload launch and is the only UART writer.
+- The workload agent owns workload launch; the native relay is the only process that opens/writes the UART.
 - Telemetry is an independent device-local collector and never floods the verdict UART.
 - Device evidence is authoritative, append-only, grouped by test ID, and retained after PASS and FAIL.
 - PC raw serial/event persistence is optional; the PC always retains a compact result.
@@ -32,6 +32,7 @@ Qualification, deployment, platform discovery, telemetry, reporting, and future 
 |---|---|---|
 | `validate` | Parse and validate local profiles, platforms, assets, and optional baselines | Contact or modify the device |
 | `probe` | Discover platform identity and capabilities; save a snapshot | Deploy, run, or change policy state |
+| `relay probe` | Report device ABI and test deployed relay/termios/tcdrain without payload | Deploy a relay or launch a workload |
 | `pair` | Resolve device UART to PC serial port | Launch a workload |
 | `deploy` | Push selected versioned assets and telemetry plans; verify hashes | Start tests |
 | `verify-deployment` | Read-only remote hash verification | Push or remove files |
@@ -50,7 +51,7 @@ Qualification, deployment, platform discovery, telemetry, reporting, and future 
 PC CLI
   ├─ profile resolver
   ├─ optional baseline resolver
-  ├─ UART event decoder
+  ├─ UART-v2 COBS/CRC session decoder
   ├─ basic/baseline policy evaluator
   └─ compact PC artifact store
         │
@@ -62,8 +63,10 @@ Device
   ├─ avs-device-agent
   │    ├─ append agent/workload evidence
   │    ├─ launch workload
-  │    ├─ frame accepted workload JSONL
-  │    └─ sole UART writer
+  │    ├─ retain full accepted workload JSONL locally
+  │    └─ submit compact verdict events to a FIFO
+  ├─ avs-uart-relay
+  │    └─ frame, write-all, and tcdrain the UART
   ├─ cpu/gpu workload
   └─ avs-telemetry-agent (optional independent process)
        └─ append device-local telemetry.jsonl
@@ -86,6 +89,9 @@ Device layout:
 /data/local/tmp/avs/tests/<test-id>/<attempt-id>/spool/
   events.jsonl
   workload.log
+  workload-stderr.log
+  workload-diagnostics.log
+  relay.log
   telemetry.jsonl          # only when requested
   telemetry-agent.log      # only when requested
   final.json
@@ -142,12 +148,16 @@ sh avs-device-agent
   --spool-dir ...
   --cwd ...
   --baudrate N
+  --relay PATH
+  --max-frame N
+  --safe-utilization PERCENT
   --timeout N
+  [--summary-metric NAME ...]
   [--telemetry-agent PATH --telemetry-plan PATH --telemetry-interval N]
   -- WORKLOAD ARGS...
 ```
 
-It emits `agent_start` before launching optional telemetry or the workload. Workload stdout/stderr is appended to `workload.log`; recognized JSONL types are wrapped and sent to both `events.jsonl` and UART. Unrecognized lines become `WORKLOAD_OUTPUT_INVALID`. The agent ends with `agent_final` and a local `final.json`.
+It emits `agent_start` before launching optional telemetry or the workload. Workload stdout, stderr, and diagnostics are separate append-only files. Full recognized JSONL is wrapped into local `events.jsonl`; UART receives only compact lifecycle/verdict events. `DEBUG:`, `TRACE:`, and `INFO:` output is diagnostic, while other malformed stdout becomes `WORKLOAD_OUTPUT_INVALID`. Baseline threshold metric names are passed explicitly so the compact summary contains only fields required for live policy. The agent ends with `agent_final`, closes the relay FIFO, and waits for relay drain.
 
 Required UART lifecycle for a successful attempt:
 
@@ -156,6 +166,8 @@ agent_start
 workload start/heartbeat/.../summary
 agent_final
 ```
+
+Transport framing is `NUL + COBS(compact JSON + CRC32-LE) + NUL`, capped by the platform `max_frame_bytes`. Before a matching `agent_start`, PC discards corrupt or stale frames. After matching START it fails closed on CRC, session identity, sequence, or framing errors. FINAL—not HDC process completion plus a fixed delay—closes success. The native ISO-C/POSIX relay supports configured standard baud rates, handles partial/EINTR writes, and calls `tcdrain()` for every bounded frame.
 
 No `environment` or restoration event is required.
 
@@ -201,7 +213,7 @@ The collector accepts test/attempt IDs, target, output, plan, interval, duration
 - standalone through `telemetry run`;
 - alongside workload through `run --telemetry`.
 
-Telemetry failure is recorded locally and in `agent_final.telemetry_exit_code`; ordinary error-only workload judgement does not depend on telemetry.
+Telemetry failure is recorded locally and in `agent_final.telemetry_exit_code`. Telemetry is not required unless explicitly requested; an explicitly requested collector that produces zero samples is an infrastructure failure. The collector does not depend on `awk` or `tr`.
 
 ## 10. Future scheduler boundary
 
@@ -227,7 +239,7 @@ Monitor may record scheduler requirements and a supplied scheduler snapshot, but
 
 ## 11. Preparation and packaging
 
-PyInstaller packages the complete `device` directory, configuration, documentation, and staged workload assets. At runtime resources are extracted from `_MEI...`; `deploy` hashes and pushes selected files to stable device paths.
+PyInstaller packages the complete `device` directory, configuration, documentation, staged workload assets, and a staged relay binary. The relay is built from `native/uart_relay/avs_uart_relay.c` with the same OpenHarmony target/sysroot/ABI as workloads; no ABI is guessed by Python. `relay probe --platform ...` reports `uname -m`/word size and, after deployment, separately tests version, self-test, and an optional zero-payload UART open/configure/drain. At runtime resources are extracted from `_MEI...`; `deploy` hashes and pushes selected files to stable device paths.
 
 `deploy` also generates and deploys the telemetry plan for each selected profile. `verify-deployment` regenerates the same deterministic local plan and compares every selected remote hash without writing to the device.
 

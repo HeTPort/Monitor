@@ -24,6 +24,12 @@ transport:
   hdc_bin: hdc
 
 serial:
+  protocol: uart-v2
+  max_frame_bytes: 512
+  safe_utilization: 0.70
+  relay:
+    local_asset: tools/relay/kirin9020/avs-uart-relay
+    remote_asset: bin/avs-uart-relay
   uart_candidates: [/dev/ttyHW0, /dev/ttyHW4, /dev/ttyHW5, /dev/ttyAMA0]
   baudrate: 9600
 

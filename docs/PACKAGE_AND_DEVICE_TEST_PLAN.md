@@ -1,6 +1,6 @@
 # Monitor 2.1 打包与设备最小闭环测试计划
 
-更新于 2026-08-31。本计划用于 Kirin9030 实机验收，也可通过替换平台/profile 用于其他板卡。
+更新于 2026-09-01。本计划用于 Kirin9030 实机验收，也可通过替换平台/profile 用于其他板卡。
 
 ## 1. 本轮要证明什么
 
@@ -19,6 +19,7 @@ probe、pair、deploy 和 verify-deployment 是显式准备，不属于每次 `r
 - PC 能通过 HDC/ADB 调用设备 shell。
 - PC 与设备 UART 已物理连接。
 - workload 二进制与 GPU shader 已放入打包资源目录。
+- `avs-uart-relay` 已用与 workload 相同的 OpenHarmony ABI/toolchain 构建并放入平台配置的 `relay.local_asset`。
 - 测试者知道设备序列号、PC 串口和设备 UART；0831 记录优先使用 `/dev/ttyHW0`、9600 baud。
 - 网络和 GitHub 连接不在本计划判定范围内。
 
@@ -56,7 +57,7 @@ python main.py validate --package
 .\dist\monitor.exe --version
 ```
 
-通过条件：构建脚本退出 0，版本显示 2.1.0，打包校验没有缺少 agent、workload 或 shader。若源码仓库未提供真实板端二进制，PKG-02/03 必须标为“发布资源未就绪”，不能伪记为代码回归失败或设备失败。
+通过条件：构建脚本退出 0，版本显示 2.1.0，打包校验没有缺少 agent、relay、workload 或 shader。若源码仓库未提供真实板端二进制，PKG-02/03 必须标为“发布资源未就绪”，不能伪记为代码回归失败或设备失败。
 
 ## 4. 每个平台/BSP 做一次的准备
 
@@ -86,6 +87,22 @@ python main.py validate --package
 
 通过条件：显示设备 UART 到 PC COM 的成功映射，后续可省略显式串口参数并复用保存结果。
 
+### PRE-02A Relay ABI/运行能力（每个 BSP 做一次）
+
+部署前可先记录 ABI；此时 relay 未部署导致退出 5 是预期准备信息：
+
+```powershell
+& $MON --transport hdc --device $DEVICE --json relay probe --platform kirin9030
+```
+
+按输出 ABI 用 workload 的 OpenHarmony toolchain 构建并放到 `serial.relay.local_asset`。完成 PRE-03 部署后执行零负载检查：
+
+```powershell
+& $MON --transport hdc --device $DEVICE --device-uart $DEVICE_UART --json relay probe --platform kirin9030 --check-uart
+```
+
+通过条件：version、自检、UART open/termios/tcdrain 全部成功；检查不向 UART 发送测试负载。
+
 ### PRE-03 CPU/GPU 部署
 
 ```powershell
@@ -96,6 +113,7 @@ python main.py validate --package
 通过条件：两个命令均退出 0，部署清单 `complete=true` 且 `verified=true`。部署应包含：
 
 - `/data/local/tmp/avs/bin/avs-device-agent`
+- `/data/local/tmp/avs/bin/avs-uart-relay`
 - `/data/local/tmp/avs/bin/avs-telemetry-agent`
 - CPU/GPU workload
 - workload 配置、GPU shader
@@ -124,7 +142,7 @@ python main.py validate --package
 
 - 进程退出码为 0；
 - 输出 `validation_mode=error-only`、`verdict=PASS`；
-- UART 收到同一 attempt 的合法连续事件和 `agent_final`；
+- UART v2 收到同一 attempt 的合法连续紧凑事件和 `agent_final`；PC 结果记录 `agent_final_seen=true`；
 - 没有要求 baseline、probe 或 deploy。
 
 ### MC-02 GPU run
@@ -133,7 +151,7 @@ python main.py validate --package
 & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json run --profile gpu_stress_kirin9030 --test-id MC-GPU-0831 --attempt-id MC-GPU-0831-001 --pc-artifacts full
 ```
 
-通过条件与 MC-01 相同，workload 为 GPU profile。
+通过条件与 MC-01 相同，workload 为 GPU profile；`DEBUG:/TRACE:/INFO:` 进入设备 `workload-diagnostics.log`，不产生 DUT 错误。
 
 ### MC-03 短 profile 仍使用核心 run 链路
 

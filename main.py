@@ -257,6 +257,12 @@ Examples:
     probe_parser.add_argument('--full', action='store_true')
     probe_parser.add_argument('--require', action='append', default=[])
 
+    relay_parser = subparsers.add_parser('relay', help='Probe native UART relay ABI and runtime support')
+    relay_subparsers = relay_parser.add_subparsers(dest='relay_action', required=True)
+    relay_probe = relay_subparsers.add_parser('probe', help='Read device ABI and test an already deployed relay')
+    relay_probe.add_argument('--platform', required=True)
+    relay_probe.add_argument('--check-uart', action='store_true', help='Open/configure/drain the UART without sending payload')
+
     deploy_parser = subparsers.add_parser('deploy', help='Hash-verified device asset deployment')
     deploy_selection = deploy_parser.add_mutually_exclusive_group(required=True)
     deploy_selection.add_argument('--target', choices=['cpu', 'gpu', 'all'])
@@ -528,6 +534,7 @@ def main():
         cmd_list_profiles_v2,
         cmd_monitor_events,
         cmd_probe as cmd_probe_v2,
+        cmd_relay_probe,
         cmd_report as cmd_report_v2,
         cmd_run as cmd_run_v2,
         cmd_smoke as cmd_smoke_v2,
@@ -540,6 +547,7 @@ def main():
     # Dispatch to target services; pair and diagnostic monitor retain legacy adapters.
     command_handlers = {
         'probe': cmd_probe_v2,
+        'relay': cmd_relay_probe,
         'deploy': cmd_deploy_v2,
         'verify-deployment': cmd_verify_deployment_v2,
         'golden': cmd_golden_v2,

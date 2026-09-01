@@ -14,11 +14,12 @@ from typing import Any, Callable, Iterable, Iterator, Mapping
 
 from .artifact_store import ArtifactStore, atomic_write_json, sha256_file
 from .baselines import Baseline
-from .config_loader import ProfileConfig, document_sha256
+from .config_loader import PlatformConfig, ProfileConfig, document_sha256
 from .events import EventDecoder, EventProtocolError
 from .path_resolver import PathResolver
 from .policy_engine import PolicyEngine, PolicyLimits, PolicyResult
 from .transport import CommandResult, Transport
+from .uart_protocol import UART_PROTOCOL, UartV2Decoder, frame_wire_seconds
 
 
 class RunError(RuntimeError):
@@ -84,6 +85,16 @@ class RunManifestBuilder:
                 workload_argv.extend(("--golden-file", str(baseline.golden["remote_path"])))
 
         thresholds = json.loads(json.dumps(baseline.thresholds)) if baseline is not None else {}
+        platform_value = profile.platform
+        platform_candidate = (
+            platform_value
+            if Path(platform_value).suffix.lower() in {".json", ".yaml", ".yml"}
+            else f"config/platforms/{platform_value}.yaml"
+        )
+        platform_path = self.paths.resolve_input(platform_candidate, required=False)
+        platform = PlatformConfig.from_file(platform_path) if platform_path.exists() else None
+        platform_serial = platform.serial if platform is not None else {}
+        relay_config = dict(platform_serial.get("relay", {}))
         manifest: dict[str, Any] = {
             "schema_version": 1,
             "producer": {"name": "vmin_judge", "component": "RunManifestBuilder", "version": "2.1.0"},
@@ -103,6 +114,12 @@ class RunManifestBuilder:
             "heartbeat_timeout_s": heartbeat_timeout_s,
             "event_crc": False,
             "agent_backend": "posix-shell",
+            "serial_transport": {
+                "protocol": str(platform_serial.get("protocol", UART_PROTOCOL)),
+                "max_frame_bytes": int(platform_serial.get("max_frame_bytes", 512)),
+                "safe_utilization": float(platform_serial.get("safe_utilization", 0.70)),
+                "relay": str(self.paths.remote(relay_config.get("remote_asset", "bin/avs-uart-relay"))),
+            },
             "pc_artifacts": pc_artifacts,
             "workload": {
                 "argv": workload_argv,
@@ -236,7 +253,17 @@ class RunOrchestrator:
             store.write_json("deployment-manifest.json", dict(deployment))
         if "profile" in manifest:
             store.write_json("effective-profile.json", dict(manifest["profile"]))
-        decoder = EventDecoder(run_id)
+        serial_transport = manifest.get("serial_transport", {})
+        uart_v2 = isinstance(serial_transport, Mapping) and serial_transport.get("protocol") == UART_PROTOCOL
+        decoder = (
+            UartV2Decoder(
+                run_id,
+                test_id,
+                max_frame_bytes=int(serial_transport.get("max_frame_bytes", 512)),
+            )
+            if uart_v2
+            else EventDecoder(run_id)
+        )
         policy = PolicyEngine(self._limits(manifest))
         event_count = 0
         started = clock()
@@ -347,6 +374,9 @@ class RunOrchestrator:
             raise RunError("pyserial is required for a hardware run; install requirements.txt") from exc
         stop = threading.Event()
         timeout = float(manifest.get("overall_timeout_s", 300)) + 30.0
+        serial_transport = manifest.get("serial_transport", {})
+        max_frame_bytes = int(serial_transport.get("max_frame_bytes", 512)) if isinstance(serial_transport, Mapping) else 512
+        drain_grace_s = max(2.0, 3.0 * frame_wire_seconds(max_frame_bytes + 2, baudrate))
         with serial.Serial(port=pc_serial, baudrate=baudrate, timeout=0.1) as stream:
             if hasattr(stream, "reset_input_buffer"):
                 stream.reset_input_buffer()
@@ -354,14 +384,13 @@ class RunOrchestrator:
                 future: Future[CommandResult] = executor.submit(transport.invoke, agent_argv, timeout)
 
                 def serial_chunks() -> Iterator[bytes]:
-                    empty_reads_after_agent = 0
+                    agent_finished_at: float | None = None
                     while not stop.is_set():
                         chunk = bytes(stream.read(4096))
-                        if chunk:
-                            empty_reads_after_agent = 0
-                        elif future.done():
-                            empty_reads_after_agent += 1
-                            if empty_reads_after_agent >= 20:
+                        if future.done() and agent_finished_at is None:
+                            agent_finished_at = time.monotonic()
+                        if not chunk and agent_finished_at is not None:
+                            if time.monotonic() - agent_finished_at >= drain_grace_s:
                                 break
                         yield chunk
 
@@ -378,8 +407,6 @@ class RunOrchestrator:
                     launch_result = future.result(timeout=10.0)
                 except TimeoutError as exc:
                     raise RunError("device-agent transport command did not finish") from exc
-            if hasattr(stream, "reset_input_buffer"):
-                stream.reset_input_buffer()
             execution.launch_result = launch_result
             expected_exit = execution.result.workload_exit_code
             launch_invalid = (
