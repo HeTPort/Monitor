@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import io
 import json
 import subprocess
 import sys
 import tempfile
 import unittest
 from argparse import Namespace
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -14,9 +16,11 @@ from src.cli_commands import (
     _apply_saved_pairing,
     _concise_reason,
     cmd_smoke,
+    command_boundary,
 )
 from src.events import build_event, encode_event
 from src.path_resolver import PathResolver
+from src.run_orchestrator import RunInfrastructureError
 
 
 ROOT = Path(__file__).parents[1]
@@ -82,6 +86,17 @@ class CLITests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertIsNone(args.baseline)
         execute.assert_called_once_with(args, smoke=True)
+
+    def test_runtime_run_error_is_reported_as_infrastructure(self) -> None:
+        @command_boundary
+        def handler(_args):
+            raise RunInfrastructureError("device-agent transport command did not finish")
+
+        output = io.StringIO()
+        with redirect_stdout(output):
+            exit_code = handler(Namespace(json_output=True))
+        self.assertEqual(exit_code, 3)
+        self.assertEqual(json.loads(output.getvalue())["exit_code"], 3)
 
     def test_validate_reports_resolved_override_path_and_fingerprint(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

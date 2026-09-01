@@ -109,7 +109,9 @@ GPU：
 & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART run --profile gpu_stress_kirin9030 --test-id 0831-GPU-01
 ```
 
-此时 `validation_mode` 为 `error-only`。agent 启动 workload，完整日志只追加到设备，UART 只传紧凑 START/HEARTBEAT/ERROR/SUMMARY/FINAL。原生 relay 使用 COBS+CRC32、完整写入和 `tcdrain()`；PC 在本次 START 前丢弃跨 run 残留，START 后严格校验 test/attempt ID、序号和 CRC，并且必须收到本次 FINAL。退出码为 0 且 verdict 为 `PASS` 即闭环通过。这套计算使用实际 `--baudrate`，不以 9600 写死。
+此时 `validation_mode` 为 `error-only`。agent 启动 workload，完整日志只追加到设备，UART 只传紧凑 START/HEARTBEAT/ERROR/SUMMARY/FINAL。原生 relay 使用 COBS+CRC32、完整写入和 `tcdrain()`；FIFO 结束后还会写入平台 `serial.tail_guard_bytes` 配置的 NUL 尾垫（Kirin9030 默认 64 字节），把 FINAL 尾部推出 UART/DMA。PC 在本次 START 前丢弃跨 run 残留，START 后严格校验 test/attempt ID、序号和 CRC，并且必须收到本次 FINAL。退出码为 0 且 verdict 为 `PASS` 即闭环通过。等待时间使用实际 `--baudrate` 和 frame/guard 大小，不以 9600 写死。
+
+更新本功能后必须用 OpenHarmony toolchain 重新编译 relay、重新打包并执行 `deploy`；只替换 PC 端 exe 而保留设备上的 relay 1.0.0 不会获得尾部修复。`relay probe` 应显示 `avs-uart-relay 1.0.1`。agent/HDC 未能在运行结束时退出属于运行期基础设施错误，返回 3；PC 会主动终止仍在运行的 host transport，不再把它报成配置错误 4。
 
 `smoke` 没有另一套执行逻辑，只是强制不使用 baseline；该兼容别名已弃用。新命令直接使用短 profile：
 

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import tempfile
+import threading
+import time
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -11,7 +13,7 @@ from src.cli_commands import _shell_agent_argv
 from src.config_loader import ProfileConfig
 from src.events import build_event, encode_event
 from src.path_resolver import PathResolver
-from src.run_orchestrator import RunManifestBuilder, RunOrchestrator
+from src.run_orchestrator import RunInfrastructureError, RunManifestBuilder, RunOrchestrator
 from src.transport import CommandResult
 from src.uart_protocol import encode_uart_frame
 
@@ -86,6 +88,7 @@ class RunManifestTests(unittest.TestCase):
             self.assertFalse(manifest["scheduler"]["managed_by_monitor"])
             self.assertEqual(manifest["scheduler"]["requirements"]["governor"], "performance")
             self.assertFalse(manifest["telemetry"]["enabled"])
+            self.assertEqual(manifest["serial_transport"]["tail_guard_bytes"], 64)
             self.assertNotIn("kernel", manifest)
             self.assertFalse(manifest["event_crc"])
             agent_argv = _shell_agent_argv(PurePosixPath("/data/local/tmp/avs/bin/avs-device-agent"), manifest, 9600)
@@ -95,6 +98,7 @@ class RunManifestTests(unittest.TestCase):
             self.assertNotIn("--environment", agent_argv)
             self.assertNotIn("--telemetry-plan", agent_argv)
             self.assertEqual(agent_argv[agent_argv.index("--baudrate") + 1], "9600")
+            self.assertEqual(agent_argv[agent_argv.index("--tail-guard") + 1], "64")
             self.assertIn("--", agent_argv)
 
             error_only = RunManifestBuilder(paths).build(
@@ -353,6 +357,63 @@ class RunOrchestratorTests(unittest.TestCase):
             # Clear only before launch. Clearing after FINAL can discard bytes
             # from a following session on adapters that deliver asynchronously.
             self.assertEqual(FakeSerial.resets, 1)
+
+    def test_hardware_timeout_cancels_agent_without_waiting_for_worker_timeout(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = {
+                "schema_version": 1,
+                "test_id": "test-timeout",
+                "run_id": "run-timeout",
+                "overall_timeout_s": 0.02,
+                "heartbeat_timeout_s": 0.01,
+                "policy": {"thresholds": {}, "required_telemetry": []},
+                "serial_transport": {"protocol": "uart-v2", "max_frame_bytes": 512, "tail_guard_bytes": 64},
+            }
+
+            class EmptySerial:
+                def __init__(self, **_kwargs):
+                    pass
+
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *_args):
+                    pass
+
+                def reset_input_buffer(self):
+                    pass
+
+                def read(self, _size):
+                    time.sleep(0.005)
+                    return b""
+
+            class BlockingTransport:
+                def __init__(self):
+                    self.release = threading.Event()
+                    self.cancel_count = 0
+
+                def invoke(self, argv, _timeout_s):
+                    self.release.wait(5)
+                    return CommandResult(tuple(argv), -1, "", "cancelled", 0.0, timed_out=True)
+
+                def cancel_active(self):
+                    self.cancel_count += 1
+                    self.release.set()
+                    return 1
+
+            transport = BlockingTransport()
+            started = time.monotonic()
+            with patch.dict("sys.modules", {"serial": SimpleNamespace(Serial=EmptySerial)}):
+                with self.assertRaisesRegex(RunInfrastructureError, "did not finish"):
+                    RunOrchestrator(Path(tmp)).run_serial(
+                        manifest,
+                        transport=transport,
+                        agent_argv=["agent"],
+                        pc_serial="COM-test",
+                        baudrate=9600,
+                    )
+            self.assertGreaterEqual(transport.cancel_count, 1)
+            self.assertLess(time.monotonic() - started, 1.0)
 
 
 if __name__ == "__main__":

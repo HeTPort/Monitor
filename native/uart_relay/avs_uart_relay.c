@@ -9,8 +9,10 @@
 #include <termios.h>
 #include <unistd.h>
 
-#define RELAY_VERSION "1.0.0"
+#define RELAY_VERSION "1.0.1"
 #define DEFAULT_MAX_FRAME 512U
+#define DEFAULT_TAIL_GUARD 64U
+#define MAX_TAIL_GUARD 4096U
 #define INPUT_CAPACITY 4096U
 
 static uint32_t crc32_bytes(const unsigned char *data, size_t length) {
@@ -76,6 +78,16 @@ static int write_all(int fd, const unsigned char *data, size_t length) {
         if (written < 0 && errno == EINTR) continue;
         if (written <= 0) return -1;
         offset += (size_t)written;
+    }
+    return 0;
+}
+
+static int write_nul_guard(int fd, size_t length) {
+    static const unsigned char zeros[64] = {0};
+    while (length > 0) {
+        size_t chunk = length < sizeof(zeros) ? length : sizeof(zeros);
+        if (write_all(fd, zeros, chunk) != 0) return -1;
+        length -= chunk;
     }
     return 0;
 }
@@ -147,7 +159,7 @@ static int self_test(void) {
     return 0;
 }
 
-static int relay_stream(int fd, size_t max_frame) {
+static int relay_stream(int fd, size_t max_frame, size_t tail_guard) {
     char line[INPUT_CAPACITY];
     unsigned char payload[INPUT_CAPACITY + 4];
     unsigned char encoded[INPUT_CAPACITY + 32];
@@ -182,13 +194,24 @@ static int relay_stream(int fd, size_t max_frame) {
         }
     }
     if (ferror(stdin)) return 3;
-    return tcdrain(fd) == 0 ? 0 : 3;
+    /*
+     * Some UART/DMA drivers acknowledge tcdrain() while retaining a short
+     * terminal tail until a later write.  NUL is the COBS frame delimiter, so
+     * an EOF-only NUL guard safely pushes the final frame out; only disposable
+     * empty frames may remain buffered after close.
+     */
+    if (write_nul_guard(fd, tail_guard) != 0 || tcdrain(fd) != 0) {
+        perror("avs-uart-relay: UART EOF guard/drain");
+        return 3;
+    }
+    return 0;
 }
 
 int main(int argc, char **argv) {
     const char *uart = NULL;
     long baud = 9600;
     size_t max_frame = DEFAULT_MAX_FRAME;
+    size_t tail_guard = DEFAULT_TAIL_GUARD;
     int check_only = 0, fd, result;
     struct termios original;
     int i;
@@ -205,12 +228,15 @@ int main(int argc, char **argv) {
             baud = strtol(argv[++i], NULL, 10);
         } else if (strcmp(argv[i], "--max-frame") == 0 && i + 1 < argc) {
             max_frame = (size_t)strtoul(argv[++i], NULL, 10);
+        } else if (strcmp(argv[i], "--tail-guard") == 0 && i + 1 < argc) {
+            tail_guard = (size_t)strtoul(argv[++i], NULL, 10);
         } else {
-            fprintf(stderr, "usage: avs-uart-relay (--uart PATH|--check-uart PATH) [--baud N] [--max-frame N]\n");
+            fprintf(stderr, "usage: avs-uart-relay (--uart PATH|--check-uart PATH) [--baud N] [--max-frame N] [--tail-guard N]\n");
             return 2;
         }
     }
-    if (uart == NULL || baud <= 0 || max_frame < 64 || max_frame > INPUT_CAPACITY) return 2;
+    if (uart == NULL || baud <= 0 || max_frame < 64 || max_frame > INPUT_CAPACITY ||
+        tail_guard > MAX_TAIL_GUARD) return 2;
     fd = open(uart, O_WRONLY | O_NOCTTY);
     if (fd < 0) { perror("avs-uart-relay: open UART"); return 3; }
     if (configure_uart(fd, baud, &original) != 0) {
@@ -221,7 +247,7 @@ int main(int argc, char **argv) {
         printf("{\"uart\":\"%s\",\"baudrate\":%ld,\"open\":true,\"termios\":true,\"tcdrain\":%s}\n",
                uart, baud, result == 0 ? "true" : "false");
     } else {
-        result = relay_stream(fd, max_frame);
+        result = relay_stream(fd, max_frame, tail_guard);
     }
     (void)tcsetattr(fd, TCSANOW, &original);
     close(fd);

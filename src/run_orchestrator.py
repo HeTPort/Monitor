@@ -6,7 +6,7 @@ import json
 import threading
 import time
 import uuid
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import Future
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
@@ -24,6 +24,10 @@ from .uart_protocol import UART_PROTOCOL, UartV2Decoder, frame_wire_seconds
 
 class RunError(RuntimeError):
     pass
+
+
+class RunInfrastructureError(RunError):
+    """A runtime transport/orchestration failure, not invalid input."""
 
 
 def new_run_id(prefix: str = "run") -> str:
@@ -117,6 +121,7 @@ class RunManifestBuilder:
             "serial_transport": {
                 "protocol": str(platform_serial.get("protocol", UART_PROTOCOL)),
                 "max_frame_bytes": int(platform_serial.get("max_frame_bytes", 512)),
+                "tail_guard_bytes": int(platform_serial.get("tail_guard_bytes", 64)),
                 "safe_utilization": float(platform_serial.get("safe_utilization", 0.70)),
                 "relay": str(self.paths.remote(relay_config.get("remote_asset", "bin/avs-uart-relay"))),
             },
@@ -376,37 +381,52 @@ class RunOrchestrator:
         timeout = float(manifest.get("overall_timeout_s", 300)) + 30.0
         serial_transport = manifest.get("serial_transport", {})
         max_frame_bytes = int(serial_transport.get("max_frame_bytes", 512)) if isinstance(serial_transport, Mapping) else 512
-        drain_grace_s = max(2.0, 3.0 * frame_wire_seconds(max_frame_bytes + 2, baudrate))
+        tail_guard_bytes = int(serial_transport.get("tail_guard_bytes", 64)) if isinstance(serial_transport, Mapping) else 64
+        drain_grace_s = max(2.0, 3.0 * frame_wire_seconds(max_frame_bytes + tail_guard_bytes + 2, baudrate))
         with serial.Serial(port=pc_serial, baudrate=baudrate, timeout=0.1) as stream:
             if hasattr(stream, "reset_input_buffer"):
                 stream.reset_input_buffer()
-            with ThreadPoolExecutor(max_workers=1, thread_name_prefix="device-agent") as executor:
-                future: Future[CommandResult] = executor.submit(transport.invoke, agent_argv, timeout)
+            future: Future[CommandResult] = Future()
 
-                def serial_chunks() -> Iterator[bytes]:
-                    agent_finished_at: float | None = None
-                    while not stop.is_set():
-                        chunk = bytes(stream.read(4096))
-                        if future.done() and agent_finished_at is None:
-                            agent_finished_at = time.monotonic()
-                        if not chunk and agent_finished_at is not None:
-                            if time.monotonic() - agent_finished_at >= drain_grace_s:
-                                break
-                        yield chunk
-
+            def invoke_agent() -> None:
                 try:
-                    execution = self.evaluate_stream(
-                        manifest,
-                        serial_chunks(),
-                        capabilities=capabilities,
-                        deployment=deployment,
-                    )
-                finally:
-                    stop.set()
+                    future.set_result(transport.invoke(agent_argv, timeout))
+                except BaseException as exc:
+                    future.set_exception(exc)
+
+            agent_thread = threading.Thread(target=invoke_agent, name="device-agent", daemon=True)
+            agent_thread.start()
+
+            def serial_chunks() -> Iterator[bytes]:
+                agent_finished_at: float | None = None
+                while not stop.is_set():
+                    chunk = bytes(stream.read(4096))
+                    if future.done() and agent_finished_at is None:
+                        agent_finished_at = time.monotonic()
+                    if not chunk and agent_finished_at is not None:
+                        if time.monotonic() - agent_finished_at >= drain_grace_s:
+                            break
+                    yield chunk
+
+            try:
+                execution = self.evaluate_stream(
+                    manifest,
+                    serial_chunks(),
+                    capabilities=capabilities,
+                    deployment=deployment,
+                )
+                if not execution.result.agent_final_seen and not future.done():
+                    transport.cancel_active()
+                    raise RunInfrastructureError("device-agent transport command did not finish")
                 try:
                     launch_result = future.result(timeout=10.0)
                 except TimeoutError as exc:
-                    raise RunError("device-agent transport command did not finish") from exc
+                    transport.cancel_active()
+                    raise RunInfrastructureError("device-agent transport command did not finish") from exc
+            finally:
+                stop.set()
+                if not future.done():
+                    transport.cancel_active()
             execution.launch_result = launch_result
             expected_exit = execution.result.workload_exit_code
             launch_invalid = (

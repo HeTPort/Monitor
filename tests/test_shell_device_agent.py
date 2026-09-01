@@ -33,7 +33,7 @@ class ShellDeviceAgentTests(unittest.TestCase):
             timeout=10,
         )
         self.assertEqual(version.returncode, 0, version.stderr)
-        self.assertEqual(version.stdout.strip(), "avs-device-agent 0.3.0 protocol 2")
+        self.assertEqual(version.stdout.strip(), "avs-device-agent 0.3.1 protocol 2")
 
         with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
             root = Path(tmp)

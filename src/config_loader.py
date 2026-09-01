@@ -248,6 +248,13 @@ class PlatformConfig:
             or not 64 <= max_frame_bytes <= 4096
         ):
             raise ConfigError(f"{context}.serial.max_frame_bytes: expected integer from 64 to 4096")
+        tail_guard_bytes = serial.get("tail_guard_bytes", 64)
+        if (
+            not isinstance(tail_guard_bytes, int)
+            or isinstance(tail_guard_bytes, bool)
+            or not 0 <= tail_guard_bytes <= 4096
+        ):
+            raise ConfigError(f"{context}.serial.tail_guard_bytes: expected integer from 0 to 4096")
         safe_utilization = serial.get("safe_utilization", 0.70)
         if (
             not isinstance(safe_utilization, (int, float))

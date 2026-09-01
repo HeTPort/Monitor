@@ -150,6 +150,7 @@ sh avs-device-agent
   --baudrate N
   --relay PATH
   --max-frame N
+  --tail-guard N
   --safe-utilization PERCENT
   --timeout N
   [--summary-metric NAME ...]
@@ -168,6 +169,8 @@ agent_final
 ```
 
 Transport framing is `NUL + COBS(compact JSON + CRC32-LE) + NUL`, capped by the platform `max_frame_bytes`. Before a matching `agent_start`, PC discards corrupt or stale frames. After matching START it fails closed on CRC, session identity, sequence, or framing errors. FINAL—not HDC process completion plus a fixed delay—closes success. The native ISO-C/POSIX relay supports configured standard baud rates, handles partial/EINTR writes, and calls `tcdrain()` for every bounded frame.
+
+Some UART/DMA stacks retain a short EOF tail even after `tcdrain()` reports success. Therefore `serial.tail_guard_bytes` (default 64, valid 0–4096) is carried through the manifest and agent to the relay. At FIFO EOF the relay writes that many NUL delimiters and drains once more. This keeps the relay semantic-free: the receiver ignores empty delimiter frames, while the complete FINAL is pushed ahead of any bytes the driver may retain. PC post-agent grace includes the configured frame and guard wire time. A run whose transport worker remains active after UART evaluation is cancelled and reported as `INFRA_ERROR` rather than configuration error.
 
 No `environment` or restoration event is required.
 

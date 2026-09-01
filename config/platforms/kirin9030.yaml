@@ -29,6 +29,8 @@ serial:
   baudrate: 9600
   protocol: uart-v2
   max_frame_bytes: 512
+  # EOF NUL padding pushes the final short frame tail out of UART/DMA buffers.
+  tail_guard_bytes: 64
   safe_utilization: 0.70
   relay:
     # Stage a binary built with the same OpenHarmony target/sysroot as workloads.

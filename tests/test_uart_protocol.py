@@ -67,6 +67,37 @@ class UartProtocolTests(unittest.TestCase):
         self.assertAlmostEqual(frame_wire_seconds(512, 9600), 5120 / 9600)
         self.assertGreater(frame_wire_seconds(512, 1200), frame_wire_seconds(512, 115200))
 
+    def test_eof_nul_guard_releases_a_withheld_final_tail(self):
+        wire = encode_uart_frame(event("r", "t", 1, "agent_start")) + encode_uart_frame(
+            event("r", "t", 2, "agent_final", {"workload_exit_code": 0})
+        )
+
+        class WithholdingSink:
+            def __init__(self, withheld_bytes):
+                self.withheld_bytes = withheld_bytes
+                self.pending = b""
+                self.visible = bytearray()
+
+            def write(self, payload):
+                combined = self.pending + payload
+                split = max(0, len(combined) - self.withheld_bytes)
+                self.visible.extend(combined[:split])
+                self.pending = combined[split:]
+
+        sink = WithholdingSink(withheld_bytes=5)
+        sink.write(wire)
+        incomplete = UartV2Decoder("r", "t")
+        incomplete.feed(bytes(sink.visible))
+        with self.assertRaisesRegex(EventProtocolError, "inside an active frame"):
+            incomplete.finish()
+
+        sink.write(b"\x00" * 64)
+        decoder = UartV2Decoder("r", "t")
+        decoded = decoder.feed(bytes(sink.visible))
+        decoder.finish()
+        self.assertEqual([item.type for item in decoded], ["agent_start", "agent_final"])
+        self.assertTrue(decoder.final_seen)
+
 
 if __name__ == "__main__":
     unittest.main()

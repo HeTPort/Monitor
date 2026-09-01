@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import sys
+import threading
+import time
 import types
 import unittest
 from pathlib import Path
@@ -49,6 +52,26 @@ class HDCRemoteStatusTests(unittest.TestCase):
         command = run.call_args.args[0]
         self.assertIn("echo PAIR_1 > /dev/ttyHW0", command[-1])
         self.assertNotIn("printf", command[-1])
+
+    def test_cancel_active_terminates_the_host_transport_process(self) -> None:
+        transport = HDCTransport(Path(sys.executable))
+        results = []
+        worker = threading.Thread(
+            target=lambda: results.append(
+                transport._run([sys.executable, "-c", "import time; time.sleep(30)"], 30)
+            )
+        )
+        worker.start()
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline:
+            with transport._process_lock:
+                if transport._active_processes:
+                    break
+            time.sleep(0.01)
+        self.assertEqual(transport.cancel_active(), 1)
+        worker.join(timeout=2)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(len(results), 1)
 
 
 if __name__ == "__main__":

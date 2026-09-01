@@ -101,7 +101,7 @@ python main.py validate --package
 & $MON --transport hdc --device $DEVICE --device-uart $DEVICE_UART --json relay probe --platform kirin9030 --check-uart
 ```
 
-通过条件：version、自检、UART open/termios/tcdrain 全部成功；检查不向 UART 发送测试负载。
+通过条件：version 为 `avs-uart-relay 1.0.1`，自检、UART open/termios/tcdrain 全部成功；检查不向 UART 发送测试负载。平台配置应包含 `serial.tail_guard_bytes: 64`。本次修复改变了板端 relay 和 agent，旧部署必须重新执行 PRE-03，不能只替换 PC exe。
 
 ### PRE-03 CPU/GPU 部署
 
@@ -143,6 +143,7 @@ python main.py validate --package
 - 进程退出码为 0；
 - 输出 `validation_mode=error-only`、`verdict=PASS`；
 - UART v2 收到同一 attempt 的合法连续紧凑事件和 `agent_final`；PC 结果记录 `agent_final_seen=true`；
+- `serial.raw` 以完整 FINAL 分隔符结束，下一次 run 开头没有上一 attempt 的 FINAL 尾字节；EOF NUL guard 产生的空帧不计入事件数；
 - 没有要求 baseline、probe 或 deploy。
 
 ### MC-02 GPU run
@@ -169,7 +170,7 @@ python main.py validate --package
 & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json run --profile '<故障注入profile>' --test-id MC-NEG-0831 --attempt-id MC-NEG-0831-001 --pc-artifacts full
 ```
 
-通过条件：不能显示 PASS；DUT 明确失败退出 1、无有效 workload 结论退出 2、协议/agent/串口错误退出 3，并在 `result.json` 中给出简短原因。若当前发布包没有故障注入 profile，可用离线协议测试覆盖，设备项标记待补，不能用拔网线替代。
+通过条件：不能显示 PASS；DUT 明确失败退出 1、无有效 workload 结论退出 2、协议/agent/串口错误退出 3，并在 `result.json` 中给出简短原因。agent transport 未结束也必须退出 3，且 PC 命令不能继续等待到完整 HDC 超时时间。若当前发布包没有故障注入 profile，可用离线协议测试覆盖，设备项标记待补，不能用拔网线替代。
 
 ### MC-05 设备证据可拉取且默认保留
 

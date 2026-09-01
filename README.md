@@ -20,7 +20,7 @@ python main.py --transport hdc --device <DEVICE> --pc-serial COM4 --device-uart 
 
 baseline 只在需要 checksum、golden 或阈值校验时通过 `--baseline` 显式启用。Telemetry 可以通过 `telemetry run` 独立采样，或在核心测试中用 `run --telemetry` 伴随启动；采样日志只追加到设备本地。所有设备证据按 `test_id/attempt_id` 保留，之后用 `collect --test-id ...` 一次性拉取。
 
-实时判定使用 UART v2：设备 agent 只提交紧凑的 START/HEARTBEAT/ERROR/SUMMARY/FINAL，原生 relay 负责 COBS、CRC32、完整写入和 `tcdrain()`；PC 在匹配本次 START 前丢弃旧 run 尾包，匹配后任何 CRC、序号或身份错误都失败关闭。该设计按配置的波特率计算时限，不只适用于 9600 baud。
+实时判定使用 UART v2：设备 agent 只提交紧凑的 START/HEARTBEAT/ERROR/SUMMARY/FINAL，原生 relay 负责 COBS、CRC32、完整写入和 `tcdrain()`；输入 EOF 后再写入平台配置的 `tail_guard_bytes` 个 NUL，确保短 FINAL 尾部先于可丢弃的空分隔符离开 UART/DMA。PC 在匹配本次 START 前丢弃旧 run 尾包，匹配后任何 CRC、序号或身份错误都失败关闭。等待时间按实际波特率和 frame/guard 大小计算，不只适用于 9600 baud。
 
 Monitor 不修改或恢复 governor、频率、CPU online、功耗策略和 affinity；这些属于未来独立调度模块。
 

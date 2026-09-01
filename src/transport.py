@@ -6,6 +6,7 @@ import hashlib
 import os
 import shlex
 import subprocess
+import threading
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -73,6 +74,10 @@ class Transport(ABC):
     def pull(self, remote: PurePosixPath, local: Path, timeout_s: float = 60.0) -> TransferResult:
         raise NotImplementedError
 
+    def cancel_active(self) -> int:
+        """Request cancellation of active host-side transport processes."""
+        return 0
+
     def sha256(self, remote: PurePosixPath) -> str:
         for command in (("sha256sum", str(remote)), ("toybox", "sha256sum", str(remote))):
             result = self.invoke(command, timeout_s=30.0)
@@ -99,6 +104,8 @@ class SubprocessTransport(Transport):
     def __init__(self, tool: Path, *, serial: str | None = None):
         self.tool = tool.expanduser().resolve(strict=False)
         self.serial = serial
+        self._process_lock = threading.Lock()
+        self._active_processes: set[subprocess.Popen[str]] = set()
 
     @abstractmethod
     def _host_prefix(self) -> list[str]:
@@ -152,34 +159,62 @@ class SubprocessTransport(Transport):
     def _run(self, argv: Sequence[str], timeout_s: float) -> CommandResult:
         command = [str(item) for item in argv]
         started = time.monotonic()
+        process: subprocess.Popen[str] | None = None
         try:
-            completed = subprocess.run(
+            process = subprocess.Popen(
                 command,
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                timeout=timeout_s,
                 shell=False,
             )
+            with self._process_lock:
+                self._active_processes.add(process)
+            stdout, stderr = process.communicate(timeout=timeout_s)
             return CommandResult(
                 argv=tuple(command),
-                return_code=completed.returncode,
-                stdout=completed.stdout,
-                stderr=completed.stderr,
+                return_code=process.returncode,
+                stdout=stdout,
+                stderr=stderr,
                 duration_s=time.monotonic() - started,
             )
         except subprocess.TimeoutExpired as exc:
+            if process is not None:
+                process.kill()
+                stdout, stderr = process.communicate()
+            else:
+                stdout, stderr = "", ""
             return CommandResult(
                 argv=tuple(command),
                 return_code=-1,
-                stdout=(exc.stdout or "") if isinstance(exc.stdout, str) else "",
-                stderr=(exc.stderr or "") if isinstance(exc.stderr, str) else f"timeout after {timeout_s}s",
+                stdout=stdout or ((exc.stdout or "") if isinstance(exc.stdout, str) else ""),
+                stderr=stderr or ((exc.stderr or "") if isinstance(exc.stderr, str) else f"timeout after {timeout_s}s"),
                 duration_s=time.monotonic() - started,
                 timed_out=True,
             )
         except OSError as exc:
             raise TransportError(f"failed to execute {command[0]}: {exc}") from exc
+        finally:
+            if process is not None:
+                with self._process_lock:
+                    self._active_processes.discard(process)
+
+    def cancel_active(self) -> int:
+        """Terminate active ADB/HDC host processes so a timed-out run can return."""
+        with self._process_lock:
+            processes = tuple(self._active_processes)
+        cancelled = 0
+        for process in processes:
+            if process.poll() is not None:
+                continue
+            try:
+                process.terminate()
+                cancelled += 1
+            except OSError:
+                continue
+        return cancelled
 
     @staticmethod
     def _validate_argv(argv: Sequence[str]) -> list[str]:

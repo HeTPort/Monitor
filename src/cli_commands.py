@@ -30,7 +30,7 @@ from .qualification import (
     QualificationError,
     correctness_fingerprint,
 )
-from .run_orchestrator import RunError, RunManifestBuilder, RunOrchestrator, new_run_id
+from .run_orchestrator import RunError, RunInfrastructureError, RunManifestBuilder, RunOrchestrator, new_run_id
 from .transport import ADBTransport, HDCTransport, Transport, TransportError, TransportManager
 from .transport_probe import TransportProbeBackend
 
@@ -102,6 +102,10 @@ def command_boundary(handler):
         except CommandError as exc:
             print_command_result(args, {"error": str(exc), "exit_code": exc.exit_code})
             return exc.exit_code
+        except RunInfrastructureError as exc:
+            code = int(RunExitCode.INFRA_ERROR)
+            print_command_result(args, {"error": str(exc), "exit_code": code})
+            return code
         except (ConfigError, PathResolutionError, BaselineError, RunError, ValueError) as exc:
             code = int(RunExitCode.INVALID_CONFIGURATION)
             print_command_result(args, {"error": str(exc), "exit_code": code})
@@ -482,6 +486,8 @@ def _shell_agent_argv(agent_remote: PurePosixPath, manifest: Mapping[str, Any], 
         field(manifest["serial_transport"]["relay"], "serial_transport.relay"),
         "--max-frame",
         str(int(manifest["serial_transport"].get("max_frame_bytes", 512))),
+        "--tail-guard",
+        str(int(manifest["serial_transport"].get("tail_guard_bytes", 64))),
         "--safe-utilization",
         str(int(float(manifest["serial_transport"].get("safe_utilization", 0.70)) * 100)),
         "--timeout",

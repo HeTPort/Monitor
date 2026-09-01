@@ -17,3 +17,10 @@ cc -std=c11 -Wall -Wextra -Werror -O2 -o avs-uart-relay avs_uart_relay.c
 Device checks are exposed by `vmin_judge relay probe --platform PLATFORM`.
 They do not transmit a payload: version, self-test, and UART termios/tcdrain
 checks run independently of a workload.
+
+Runtime accepts `--tail-guard N` (default 64). After stdin reaches EOF, the
+relay writes N additional NUL delimiters and performs one final `tcdrain()`.
+This pushes a short terminal frame tail out of UART/DMA implementations whose
+successful `tcdrain()` does not make the final bytes externally observable.
+NUL-only empty frames are ignored by the UART-v2 receiver. Configure the value
+as `serial.tail_guard_bytes` in the platform YAML; zero disables the workaround.

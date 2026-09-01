@@ -2,7 +2,7 @@
 
 # POSIX workload supervisor. Full evidence stays append-only on device; only
 # compact lifecycle/verdict events are passed to the native UART relay.
-AGENT_VERSION=0.3.0
+AGENT_VERSION=0.3.1
 PROTOCOL_VERSION=2
 
 if [ "${1:-}" = "--version" ]; then
@@ -11,7 +11,7 @@ if [ "${1:-}" = "--version" ]; then
 fi
 
 test_id= attempt_id= target= uart= relay= spool_dir=
-workload_cwd=/ baudrate=9600 timeout_s=300 max_frame=512 safe_utilization=70
+workload_cwd=/ baudrate=9600 timeout_s=300 max_frame=512 tail_guard=64 safe_utilization=70
 summary_metrics= telemetry_agent= telemetry_plan= telemetry_interval_s=5
 
 while [ "$#" -gt 0 ]; do
@@ -26,6 +26,7 @@ while [ "$#" -gt 0 ]; do
         --baudrate) baudrate=${2:-}; shift 2 ;;
         --timeout) timeout_s=${2:-}; shift 2 ;;
         --max-frame) max_frame=${2:-}; shift 2 ;;
+        --tail-guard) tail_guard=${2:-}; shift 2 ;;
         --safe-utilization) safe_utilization=${2:-}; shift 2 ;;
         --summary-metric) summary_metrics="$summary_metrics ${2:-}"; shift 2 ;;
         --telemetry-agent) telemetry_agent=${2:-}; shift 2 ;;
@@ -39,7 +40,7 @@ done
 case "$test_id" in *[!A-Za-z0-9._:-]*|'') echo "avs-device-agent: invalid test id" >&2; exit 2 ;; esac
 case "$attempt_id" in *[!A-Za-z0-9._:-]*|'') echo "avs-device-agent: invalid attempt id" >&2; exit 2 ;; esac
 case "$target" in cpu|gpu) ;; *) echo "avs-device-agent: invalid target" >&2; exit 2 ;; esac
-for numeric in "$baudrate" "$timeout_s" "$max_frame" "$safe_utilization" "$telemetry_interval_s"; do
+for numeric in "$baudrate" "$timeout_s" "$max_frame" "$tail_guard" "$safe_utilization" "$telemetry_interval_s"; do
     case "$numeric" in *[!0-9]*|'') echo "avs-device-agent: invalid numeric option" >&2; exit 2 ;; esac
 done
 for metric in $summary_metrics; do
@@ -66,7 +67,7 @@ touch "$events_file" "$workload_log" "$workload_stderr" "$diagnostics_log" || ex
 rm -f "$timeout_flag" "$telemetry_stop" "$relay_fifo" "$workload_fifo"
 mkfifo "$relay_fifo" "$workload_fifo" || exit 3
 
-"$relay" --uart "$uart" --baud "$baudrate" --max-frame "$max_frame" < "$relay_fifo" \
+"$relay" --uart "$uart" --baud "$baudrate" --max-frame "$max_frame" --tail-guard "$tail_guard" < "$relay_fifo" \
     >> "$spool_dir/relay.log" 2>&1 &
 relay_pid=$!
 exec 3> "$relay_fifo" || exit 3
