@@ -1,0 +1,65 @@
+{
+  "agent_backend": "posix-shell",
+  "assets": [],
+  "attempt_id": "TEL-RUN-0901-001",
+  "baseline": null,
+  "device_attempt_dir": "/data/local/tmp/avs/tests/TEL-RUN-0901/TEL-RUN-0901-001",
+  "event_crc": false,
+  "heartbeat_timeout_s": 45.0,
+  "logs": {
+    "device_local": true,
+    "streamed_to_pc": false
+  },
+  "manifest_sha256": "7322ec3725752a2497d284c8590c2e1e51bb9cfef98f0043f3f9617153912996",
+  "overall_timeout_s": 300.0,
+  "pc_artifacts": "result",
+  "platform": "kirin9030",
+  "policy": {
+    "required_telemetry": [],
+    "thresholds": {}
+  },
+  "producer": {
+    "component": "RunManifestBuilder",
+    "name": "vmin_judge",
+    "version": "2.1.0"
+  },
+  "profile": {
+    "id": "cpu_stress_kirin9030",
+    "sha256": "ec7baa9bbab15fd09b638e9ebe683ae7b91151df4ffc623f8f31a453e3cc25f2"
+  },
+  "run_id": "TEL-RUN-0901-001",
+  "scheduler": {
+    "managed_by_monitor": false,
+    "requirements": {}
+  },
+  "schema_version": 1,
+  "serial_transport": {
+    "max_frame_bytes": 512,
+    "protocol": "uart-v2",
+    "relay": "/data/local/tmp/avs/bin/avs-uart-relay",
+    "safe_utilization": 0.7,
+    "tail_guard_bytes": 64
+  },
+  "spool_dir": "/data/local/tmp/avs/tests/TEL-RUN-0901/TEL-RUN-0901-001/spool",
+  "target": "cpu",
+  "telemetry": {
+    "agent": "/data/local/tmp/avs/bin/avs-telemetry-agent",
+    "device_local": true,
+    "enabled": true,
+    "interval_s": 5,
+    "plan": "/data/local/tmp/avs/configs/telemetry/cpu_stress_kirin9030.conf"
+  },
+  "test_id": "TEL-RUN-0901",
+  "timeout_s": 300.0,
+  "uart": "/dev/ttyHW0",
+  "validation_mode": "error-only",
+  "workload": {
+    "argv": [
+      "/data/local/tmp/avs/bin/cpu-avs-workload",
+      "--config",
+      "/data/local/tmp/avs/configs/cpu_stress_kirin9030.json"
+    ],
+    "config_path": "/data/local/tmp/avs/configs/cpu_stress_kirin9030.json",
+    "cwd": "/data/local/tmp/avs"
+  }
+}

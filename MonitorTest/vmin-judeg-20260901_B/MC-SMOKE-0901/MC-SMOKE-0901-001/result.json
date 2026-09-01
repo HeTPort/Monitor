@@ -1,0 +1,47 @@
+{
+  "agent_final_seen": true,
+  "artifacts": {
+    "complete": true,
+    "hash_manifest": "artifact-hashes.json",
+    "hashed_file_count": 2
+  },
+  "attempt_id": "MC-SMOKE-0901-001",
+  "baseline_id": null,
+  "completed_at": "2026-09-01T11:11:58.959877+00:00",
+  "device_evidence": "/data/local/tmp/avs/tests/MC-SMOKE-0901/MC-SMOKE-0901-001",
+  "dut_reasons": [
+    {
+      "code": "WORKLOAD_EXIT_NONZERO",
+      "evidence": {
+        "exit_code": 6
+      },
+      "scope": "workload",
+      "seq": 2
+    }
+  ],
+  "event_count": 2,
+  "exit_code": 1,
+  "infrastructure_reasons": [],
+  "liveness": {
+    "agent_final_seen": true,
+    "timed_out": false
+  },
+  "pc_artifacts": "result",
+  "producer": {
+    "component": "RunOrchestrator",
+    "name": "vmin_judge",
+    "version": "2.1.0"
+  },
+  "profile_id": "cpu_smoke_kirin9030",
+  "run_id": "MC-SMOKE-0901-001",
+  "schema_version": 1,
+  "telemetry_seen": [],
+  "terminal_summary_seen": false,
+  "test_id": "MC-SMOKE-0901",
+  "validation_mode": "error-only",
+  "verdict": "DUT_FAIL",
+  "warnings": [],
+  "workload_exit_code": 6,
+  "workload_result": null,
+  "workload_summary": null
+}
