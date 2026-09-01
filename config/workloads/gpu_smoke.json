@@ -13,7 +13,7 @@
   "iterations": 32,
   "texture_count": 1,
   "texture_size": "256x256",
-  "verify_mode": "golden-image",
+  "verify_mode": "none",
   "golden_file": "/data/local/tmp/avs/golden/gpu_smoke.rgba",
   "checksum_interval": 1,
   "gpu_timestamp": true,

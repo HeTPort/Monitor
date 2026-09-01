@@ -19,6 +19,7 @@ Monitor 把一次性准备和每次测试分开：
 | 独立遥测 | `telemetry run` | 不启动 workload、不占用 UART，只向设备文件追加采样 |
 | 证据拉取 | `collect` | 按 test ID 拉取设备本地日志，默认保留设备文件 |
 | 资格化 | `golden` / `calibrate` / `baseline` | 基于明确提供的合格运行生成并管理基线 |
+| 报告 | `report` | 从已有 PC `result.json` 生成 markdown/json/csv |
 
 `run` 不会隐式调用 `probe`、`deploy` 或 `verify-deployment`，也不会修改或恢复 governor、频率、CPU online、功耗策略和绑核状态。
 
@@ -83,17 +84,19 @@ $DEVICE_UART = '/dev/ttyHW0'
 
 ### 3.5 部署和核验
 
-普通 CPU/GPU 压力测试使用无 baseline 的 profile：
+部署和核验以 profile 为单位。普通 CPU/GPU 压力和 CPU smoke 使用无 baseline 的 profile：
 
 ```powershell
 & $MON --transport hdc --device $DEVICE deploy --profile cpu_stress_kirin9030
 & $MON --transport hdc --device $DEVICE deploy --profile gpu_stress_kirin9030
+& $MON --transport hdc --device $DEVICE deploy --profile cpu_smoke_kirin9030
 & $MON --transport hdc --device $DEVICE verify-deployment --profile cpu_stress_kirin9030
 & $MON --transport hdc --device $DEVICE verify-deployment --profile gpu_stress_kirin9030
+& $MON --transport hdc --device $DEVICE verify-deployment --profile cpu_smoke_kirin9030
 & $MON --transport hdc --device $DEVICE --device-uart $DEVICE_UART --json relay probe --platform kirin9030 --check-uart
 ```
 
-部署内容不是只封装在 PC 端 exe 内。exe 内携带资源，`deploy` 明确地把资源释放并复制到设备的 `/data/local/tmp/avs`；之后 `run` 只调用已经部署的文件。这样部署失败与运行失败可以分别诊断。
+部署内容不是只封装在 PC 端 exe 内。exe 内携带资源，`deploy` 明确地把资源释放并复制到设备的 `/data/local/tmp/avs`；之后 `run` 只调用已经部署的文件。一个 profile 的部署不会补齐另一个 profile 的专属 workload 配置和 telemetry plan。设备目录被清空或 run 更换 `--profile` 时，必须先对新 profile 执行 deploy/verify。这样部署失败与运行失败可以分别诊断。
 
 ## 4. 最小闭环：无 baseline 的错误判定
 
@@ -119,7 +122,7 @@ GPU：
 & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART run --profile cpu_smoke_kirin9030 --test-id 0831-SMOKE-01
 ```
 
-旧 `smoke` 命令暂时仍可调用并输出弃用提示，但不会生成 golden，也不会自动部署。`execute` 已删除。
+CPU/GPU positive smoke 的 workload `verify_mode` 均为 `none`；它们验证快速 error-only 闭环，不是故障注入或 baseline 校验。checksum/golden-image 只用于显式 baseline profile。旧 `smoke` 命令暂时仍可调用并输出弃用提示，但不会生成 golden，也不会自动部署。`execute` 已删除。
 
 ## 5. test ID、attempt ID 和证据位置
 

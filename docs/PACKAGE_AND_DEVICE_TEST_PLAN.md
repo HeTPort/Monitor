@@ -14,6 +14,53 @@ PC run -> 设备 agent -> workload -> 指定 UART -> PC 协议解析和判错
 
 probe、pair、deploy 和 verify-deployment 是显式准备，不属于每次 `run`。telemetry 是独立能力；baseline 是可选校验能力。Monitor 不负责修改或恢复 governor、频率、CPU online、功耗策略及 affinity。
 
+### 1.1 命令接口、作用和适用流程
+
+| 命令 | 作用 | 何时使用 | 不会做什么 |
+|---|---|---|---|
+| `validate` | 在 PC 解析配置、profile、baseline 和发布资源 | 打包前；profile/config 修改后 | 不连接或修改设备 |
+| `probe` | 只读识别平台并发现 CPU/GPU/telemetry 能力 | 每个平台、BSP/framework 版本做一次 | 不部署、不启动 workload、不写 sysfs |
+| `pair` | 验证并保存设备 UART 与 PC 串口映射 | 首次接线、端口或 BSP 改变时 | 不启动 agent/workload |
+| `relay probe` | 读取 ABI；检查已部署 relay 的 version/self-test/termios/tcdrain | relay 首次移植或重新编译后 | `--check-uart` 不发送测试负载 |
+| `deploy --profile P` | 部署 profile P 需要的 agent、relay、workload、配置、shader 和 telemetry plan | 第一次运行 P；P 的资源变化后；设备目录被清理后 | 不运行测试；不会部署其他 profile 的专属配置 |
+| `verify-deployment --profile P` | 只读比较 profile P 的本地/设备哈希 | deploy 后；正式 run 前 | 不补文件、不修复哈希 |
+| `run --profile P` | 启动已部署 agent/workload，接收 UART v2 并给出 PASS/FAIL | CPU/GPU 长压、短 smoke、负向测试、可选 baseline | 不隐式 probe/pair/deploy/verify，不修改设备策略 |
+| `smoke` | 兼容旧调用的短 profile 别名 | 只用于旧脚本迁移 | 已弃用；新流程统一使用 `run --profile ...smoke...` |
+| `telemetry run` | 单独启动设备本地追加式遥测 | 平台能力验收或需要独立采样时 | 不启动 workload、不占用判错 UART |
+| `collect` | 按 test/attempt ID 拉取设备证据，可校验哈希 | run/telemetry 后集中取证 | 默认不删除设备证据 |
+| `golden` / `calibrate` / `baseline` | 从明确提供的合格运行生成、校准、批准资格数据 | 需要 checksum/golden/阈值校验时 | 不属于普通 error-only 最小闭环 |
+| `report` | 从一个已有 PC `result.json` 生成 markdown/json/csv | 测试结束后本地汇总 | 不连接设备、不替代 `collect` |
+| `monitor` | 诊断性读取串口事件 | 排查独立串口/协议问题 | 没有完整 run manifest，不给 DUT verdict |
+| `simulate` | 离线重放事件/原始串口证据 | 协议回归、故障注入替代验证 | 不连接设备 |
+
+### 1.2 按目标选择测试流程
+
+| 流程 | 顺序 | 完成标准 |
+|---|---|---|
+| 发布包离线验收 | `validate` → 单元测试 → build | PKG-01～03 通过 |
+| 新平台/BSP 接入 | `probe` → `pair` → relay ABI/build → `relay probe --check-uart` | PRE-01、02、02A 通过 |
+| 普通最小闭环 | 对每个将运行的 profile 执行 `deploy` → `verify-deployment` → `run` → `collect` | PRE-03/04 和 MC-01～05 通过 |
+| 短时快速验证 | 部署/核验 smoke profile → `run --profile ...smoke...` → `collect` | MC-03 通过；仍走核心 run |
+| 独立遥测 | 部署/核验对应 profile → `telemetry run` → `collect` | TEL-01 通过 |
+| workload+遥测 | 部署/核验对应 profile → `run --telemetry` → `collect` | TEL-02 通过 |
+| baseline 资格化 | 合格样本 → `golden` → `calibrate` → `baseline approve` → 部署/核验对应 profile → `run --baseline` | 第 7 节通过 |
+| 负向判错 | 准备并部署明确失败的 profile → `run` → `collect` | MC-04 返回预期非 PASS；没有 profile 时用 `simulate` |
+| 报告生成 | 对 PC run 目录执行 `report` | 第 8 节报告文件生成成功 |
+
+### 1.3 Profile 选择与校验语义
+
+| Profile | 用途 | workload 配置 | verify_mode | 是否需要 baseline |
+|---|---|---|---|---|
+| `cpu_stress_kirin9030` | CPU 普通长压/最小闭环 | `cpu_stress.json` | `none` | 否 |
+| `gpu_stress_kirin9030` | GPU 普通长压/最小闭环 | `gpu_stress.json` | `none` | 否 |
+| `cpu_smoke_kirin9030` | CPU 短时正向闭环 | `cpu_smoke.json` | `none` | 否 |
+| `gpu_smoke_kirin9030` | GPU 短时正向闭环（可选） | `gpu_smoke.json` | `none` | 否 |
+| `cpu_mixed_big4` | CPU checksum 资格化 | `cpu_mixed_big4.json` | `checksum` | 是，显式传入 |
+| `gpu_vulkan_mixed` | GPU golden-image 资格化 | `gpu_vulkan_mixed.json` | `golden-image` | 是，显式传入 |
+| `<故障注入profile>` | MC-04 项目自备负向 profile | 项目自备 | 按预期故障设计 | 视设计而定 |
+
+仓库当前没有最后一行对应的实际文件；尖括号表示占位符。positive smoke 不是故障注入，也不应依赖 golden/checksum。
+
 ## 2. 测试前提
 
 - PC 能通过 HDC/ADB 调用设备 shell。
@@ -30,6 +77,8 @@ $MON = '.\dist\monitor.exe'
 $DEVICE = '<HDC设备序列号>'
 $PC_SERIAL = 'COM4'
 $DEVICE_UART = '/dev/ttyHW0'
+$SESSION = '0901C'       # 每轮改为新的唯一标识，避免与历史 test ID 混用
+$OUT = '.\output'
 ```
 
 从源码验证时使用 `$MON = 'python main.py'` 不适合 PowerShell 的 `& $MON` 多词调用；应直接把下面的 `& $MON` 替换成 `python main.py`。
@@ -59,9 +108,9 @@ python main.py validate --package
 
 通过条件：构建脚本退出 0，版本显示 2.1.0，打包校验没有缺少 agent、relay、workload 或 shader。若源码仓库未提供真实板端二进制，PKG-02/03 必须标为“发布资源未就绪”，不能伪记为代码回归失败或设备失败。
 
-## 4. 每个平台/BSP 做一次的准备
+## 4. 平台一次性准备与 profile 资产准备
 
-以下命令不应被 `run` 隐式重复。
+PRE-01、02、02A 通常每个平台/BSP 做一次；PRE-03、04 对每个将运行的 profile 做一次，并在资源变化或设备目录清空后重做。以下命令都不应被 `run` 隐式重复。
 
 ### PRE-01 平台身份和能力探测
 
@@ -103,30 +152,48 @@ python main.py validate --package
 
 通过条件：version 为 `avs-uart-relay 1.0.1`，自检、UART open/termios/tcdrain 全部成功；检查不向 UART 发送测试负载。平台配置应包含 `serial.tail_guard_bytes: 64`。本次修复改变了板端 relay 和 agent，旧部署必须重新执行 PRE-03，不能只替换 PC exe。
 
-### PRE-03 CPU/GPU 部署
+### PRE-03 按将要运行的 profile 部署
+
+`deploy` 的选择单位是 profile，不是 CPU/GPU 二进制。即使多个 profile 共用同一个 workload，profile 专属配置和 telemetry plan 仍必须分别部署。本计划的三个必测 profile：
 
 ```powershell
 & $MON --transport hdc --device $DEVICE deploy --profile cpu_stress_kirin9030
 & $MON --transport hdc --device $DEVICE deploy --profile gpu_stress_kirin9030
+& $MON --transport hdc --device $DEVICE deploy --profile cpu_smoke_kirin9030
 ```
 
-通过条件：两个命令均退出 0，部署清单 `complete=true` 且 `verified=true`。部署应包含：
+若还要运行 GPU smoke，再额外执行：
+
+```powershell
+& $MON --transport hdc --device $DEVICE deploy --profile gpu_smoke_kirin9030
+```
+
+通过条件：每个命令均退出 0，部署清单 `complete=true` 且 `verified=true`。部署应包含：
 
 - `/data/local/tmp/avs/bin/avs-device-agent`
 - `/data/local/tmp/avs/bin/avs-uart-relay`
 - `/data/local/tmp/avs/bin/avs-telemetry-agent`
 - CPU/GPU workload
 - workload 配置、GPU shader
-- 两个 profile 的 telemetry plan
+- 每个已选择 profile 的 workload 配置和 telemetry plan
+
+`output/deployment-manifest.json` 是共享的最新结果文件。需要保留逐 profile 部署记录时，在执行下一个 deploy 前复制并改名：
+
+```powershell
+Copy-Item "$OUT\deployment-manifest.json" "$OUT\deployment-cpu-stress-$SESSION.json"
+```
+
+设备目录被手工删除、换板、重新刷 BSP，或者 profile/workload/agent/relay/config/shader 任一资源改变后，必须重新执行对应 deploy。
 
 ### PRE-04 只读部署核验
 
 ```powershell
 & $MON --transport hdc --device $DEVICE verify-deployment --profile cpu_stress_kirin9030
 & $MON --transport hdc --device $DEVICE verify-deployment --profile gpu_stress_kirin9030
+& $MON --transport hdc --device $DEVICE verify-deployment --profile cpu_smoke_kirin9030
 ```
 
-通过条件：两个命令均退出 0，哈希一致；设备文件没有被重新部署或修改。
+通过条件：每个将要运行的 profile 均退出 0、哈希一致；设备文件没有被重新部署或修改。若 run 更换了 `--profile`，必须先核验新 profile，不能用另一个 profile 的成功核验代替。
 
 ## 5. 最小闭环验收
 
@@ -135,7 +202,7 @@ python main.py validate --package
 ### MC-01 CPU run
 
 ```powershell
-& $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json run --profile cpu_stress_kirin9030 --test-id MC-CPU-0831 --attempt-id MC-CPU-0831-001 --pc-artifacts full
+& $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json run --profile cpu_stress_kirin9030 --test-id "MC-CPU-$SESSION" --attempt-id "MC-CPU-$SESSION-001" --pc-artifacts full
 ```
 
 通过条件：
@@ -144,12 +211,12 @@ python main.py validate --package
 - 输出 `validation_mode=error-only`、`verdict=PASS`；
 - UART v2 收到同一 attempt 的合法连续紧凑事件和 `agent_final`；PC 结果记录 `agent_final_seen=true`；
 - `serial.raw` 以完整 FINAL 分隔符结束，下一次 run 开头没有上一 attempt 的 FINAL 尾字节；EOF NUL guard 产生的空帧不计入事件数；
-- 没有要求 baseline、probe 或 deploy。
+- `run` 命令本身没有隐式调用 baseline、probe、deploy 或 verify；对应 profile 的 PRE-03/04 已经显式完成。
 
 ### MC-02 GPU run
 
 ```powershell
-& $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json run --profile gpu_stress_kirin9030 --test-id MC-GPU-0831 --attempt-id MC-GPU-0831-001 --pc-artifacts full
+& $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json run --profile gpu_stress_kirin9030 --test-id "MC-GPU-$SESSION" --attempt-id "MC-GPU-$SESSION-001" --pc-artifacts full
 ```
 
 通过条件与 MC-01 相同，workload 为 GPU profile；`DEBUG:/TRACE:/INFO:` 进入设备 `workload-diagnostics.log`，不产生 DUT 错误。
@@ -157,17 +224,19 @@ python main.py validate --package
 ### MC-03 短 profile 仍使用核心 run 链路
 
 ```powershell
-& $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json run --profile cpu_smoke_kirin9030 --test-id MC-SMOKE-0831 --attempt-id MC-SMOKE-0831-001
+& $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json run --profile cpu_smoke_kirin9030 --test-id "MC-SMOKE-$SESSION" --attempt-id "MC-SMOKE-$SESSION-001" --pc-artifacts full
 ```
 
-通过条件：退出 0、`validation_mode=error-only`、`verdict=PASS`；设备事件中没有 golden 生成行为。它证明短测试也只使用同一条 run 链路。旧 `smoke` 仅作为弃用兼容别名，不纳入新测试命令。
+前置条件：必须已经对 `cpu_smoke_kirin9030` 单独执行 PRE-03/04。部署 `cpu_stress_kirin9030` 不能替代它，因为设备配置路径分别是 `configs/cpu_stress_kirin9030.json` 和 `configs/cpu_smoke_kirin9030.json`。
+
+通过条件：退出 0、`validation_mode=error-only`、`verdict=PASS`、`agent_final_seen=true`；设备事件中没有 golden 生成行为。`config/workloads/cpu_smoke.json` 的 `verify_mode` 必须为 `none`。它证明短测试也只使用同一条 run 链路。旧 `smoke` 仅作为弃用兼容别名，不纳入新测试命令。
 
 ### MC-04 错误能被判出
 
-使用一个明确返回非零或输出合法 `workload_result=FAIL` 的测试 profile，再执行：
+本仓库当前不提供具体故障注入 profile；下面的 `<故障注入profile>` 只是占位符，不能原样执行，也不能用正常的 `cpu_smoke_kirin9030` 代替。若项目另行提供一个明确返回非零、输出合法 `workload_result=FAIL` 或触发受控 verify 失败的 profile，先对它执行 deploy/verify，再执行：
 
 ```powershell
-& $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json run --profile '<故障注入profile>' --test-id MC-NEG-0831 --attempt-id MC-NEG-0831-001 --pc-artifacts full
+& $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json run --profile '<故障注入profile>' --test-id "MC-NEG-$SESSION" --attempt-id "MC-NEG-$SESSION-001" --pc-artifacts full
 ```
 
 通过条件：不能显示 PASS；DUT 明确失败退出 1、无有效 workload 结论退出 2、协议/agent/串口错误退出 3，并在 `result.json` 中给出简短原因。agent transport 未结束也必须退出 3，且 PC 命令不能继续等待到完整 HDC 超时时间。若当前发布包没有故障注入 profile，可用离线协议测试覆盖，设备项标记待补，不能用拔网线替代。
@@ -175,8 +244,9 @@ python main.py validate --package
 ### MC-05 设备证据可拉取且默认保留
 
 ```powershell
-& $MON --transport hdc --device $DEVICE collect --test-id MC-CPU-0831 --verify-hashes
-& $MON --transport hdc --device $DEVICE collect --test-id MC-GPU-0831 --verify-hashes
+& $MON --transport hdc --device $DEVICE collect --test-id "MC-CPU-$SESSION" --verify-hashes
+& $MON --transport hdc --device $DEVICE collect --test-id "MC-GPU-$SESSION" --verify-hashes
+& $MON --transport hdc --device $DEVICE collect --test-id "MC-SMOKE-$SESSION" --verify-hashes
 ```
 
 通过条件：
@@ -193,8 +263,8 @@ telemetry 不是最小闭环的前置条件，但应证明它能独立工作，�
 ### TEL-01 独立采样
 
 ```powershell
-& $MON --transport hdc --device $DEVICE telemetry run --profile cpu_stress_kirin9030 --test-id TEL-0831 --attempt-id TEL-0831-001 --duration 30 --interval 5
-& $MON --transport hdc --device $DEVICE collect --test-id TEL-0831
+& $MON --transport hdc --device $DEVICE telemetry run --profile cpu_stress_kirin9030 --test-id "TEL-$SESSION" --attempt-id "TEL-$SESSION-001" --duration 30 --interval 5
+& $MON --transport hdc --device $DEVICE collect --test-id "TEL-$SESSION"
 ```
 
 通过条件：设备 `spool/telemetry.jsonl` 追加至少一个合法 JSON 对象；对象包含同一 test/attempt ID；期间不启动 workload、不向 UART 输出。
@@ -202,8 +272,8 @@ telemetry 不是最小闭环的前置条件，但应证明它能独立工作，�
 ### TEL-02 伴随 workload
 
 ```powershell
-& $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART run --profile cpu_stress_kirin9030 --test-id TEL-RUN-0831 --attempt-id TEL-RUN-0831-001 --telemetry
-& $MON --transport hdc --device $DEVICE collect --test-id TEL-RUN-0831
+& $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART run --profile cpu_stress_kirin9030 --test-id "TEL-RUN-$SESSION" --attempt-id "TEL-RUN-$SESSION-001" --telemetry
+& $MON --transport hdc --device $DEVICE collect --test-id "TEL-RUN-$SESSION"
 ```
 
 通过条件：核心 UART 仍完成 PASS/FAIL 判定，telemetry 只出现在设备本地文件，不穿插到 UART 事件流。
@@ -213,10 +283,12 @@ telemetry 不是最小闭环的前置条件，但应证明它能独立工作，�
 只有需要 checksum/golden/阈值比较时才执行：
 
 ```powershell
-& $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL run --profile cpu_mixed_big4 --baseline '<approved-baseline-id>' --test-id BASELINE-CPU-0831
+& $MON --transport hdc --device $DEVICE deploy --profile cpu_mixed_big4 --baseline '<approved-baseline-id>'
+& $MON --transport hdc --device $DEVICE verify-deployment --profile cpu_mixed_big4 --baseline '<approved-baseline-id>'
+& $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART run --profile cpu_mixed_big4 --baseline '<approved-baseline-id>' --test-id "BASELINE-CPU-$SESSION" --attempt-id "BASELINE-CPU-$SESSION-001"
 ```
 
-通过条件：`validation_mode=baseline`，结果记录 baseline ID 和比较结果。baseline 缺失、未批准或与 profile 指纹不一致应在启动 workload 前失败。
+通过条件：`validation_mode=baseline`，结果记录 baseline ID 和比较结果。baseline 缺失、未批准或与 profile/workload 指纹不一致应在启动 workload 前失败。普通 smoke/stress 不应切换到 checksum/golden 模式；CPU checksum 和 GPU golden-image 只在这条显式 baseline 流程中使用。
 
 生成流程只能消费显式运行目录：
 
@@ -228,7 +300,25 @@ telemetry 不是最小闭环的前置条件，但应证明它能独立工作，�
 
 样本不够时 `calibrate` 必须失败，不能自行启动设备补样本。
 
-## 8. 不修改设备环境的审计
+## 8. 本地报告生成
+
+`report` 读取 PC 运行目录中的 `result.json`，不读取设备目录；因此它可以在所有测试结束、设备证据统一 collect 后一次性执行。示例：
+
+```powershell
+$RUN_DIR = "$OUT\MC-CPU-$SESSION\MC-CPU-$SESSION-001"
+& $MON report --run-dir $RUN_DIR --format markdown,json,csv
+```
+
+通过条件：命令退出 0，并在同一目录生成 `report.md`、`report.json` 和 `report.csv`。报告内容必须保留 verdict、退出码、profile、baseline（若有）、workload 结果以及 DUT/基础设施原因。`report` 不能替代 `collect`：前者处理 PC `result.json`，后者拉取设备 `events.jsonl`、workload 日志和 telemetry。
+
+适用方式：
+
+- 最小闭环完成后：对 MC-01～03 的 PC run 目录生成报告；
+- 负向测试后：确认报告没有把 DUT_FAIL/INFRA_ERROR 改成 PASS；
+- baseline 测试后：确认报告包含 baseline ID；
+- 仅 telemetry 的 TEL-01 没有 PC `result.json`，不适用 `report`。
+
+## 9. 不修改设备环境的审计
 
 在 PRE 和 MC 前后分别读取并保存以下状态（路径按平台 capability 调整）：
 
@@ -242,7 +332,7 @@ telemetry 不是最小闭环的前置条件，但应证明它能独立工作，�
 
 未来需要固定频率或 online 状态时，应由独立调度模块在测试前设置、审计并恢复；不能重新塞回 agent 或 `run`。
 
-## 9. 现场问题定位
+## 10. 现场问题定位
 
 ### run 卡住或零事件
 
@@ -255,20 +345,28 @@ telemetry 不是最小闭环的前置条件，但应证明它能独立工作，�
 5. 有 `agent_start` 无 workload 事件：看 `workload.log`、workload 路径/权限和配置。
 6. 有事件无 `agent_final`：看 timeout、workload 是否退出以及 agent 最终文件。
 
+### workload 很快退出且只有 agent_start/agent_final
+
+1. 查看 `result.json` 的 `workload_exit_code`；这不是 UART 卡住。
+2. 确认 run 使用的 profile 已单独执行 deploy/verify。
+3. 检查 manifest 中的 `workload.config_path`，并确认设备上同一路径存在。
+4. 用 `collect --test-id ... --verify-hashes` 拉取 `workload.log`、`workload-stderr.log` 和 `final.json`。
+5. positive smoke 的 `verify_mode` 应为 `none`；checksum/golden-image 必须进入显式 baseline 流程。
+
 不要先把网络或 GitHub 波动当作核心链路问题；运行判定依赖的是设备 shell、UART 和本地证据。
 
 ### telemetry 无数据
 
 先运行 `verify-deployment --profile ...`，再检查部署的 telemetry plan 和各候选只读路径。可选 metric 缺失不应阻止核心 run；显式启用 telemetry 而 collector 本身无法启动才是基础设施错误。
 
-## 10. 验收记录模板
+## 11. 验收记录模板
 
 | ID | 命令退出码 | verdict/结果 | test_id/attempt_id | 证据路径 | 结论 |
 |---|---:|---|---|---|---|
 | PRE-01 | | | | | |
 | PRE-02 | | | | | |
-| PRE-03 CPU/GPU | | | | | |
-| PRE-04 CPU/GPU | | | | | |
+| PRE-03 CPU/GPU/Smoke | | | | | |
+| PRE-04 CPU/GPU/Smoke | | | | | |
 | MC-01 | | | | | |
 | MC-02 | | | | | |
 | MC-03 | | | | | |
@@ -276,5 +374,7 @@ telemetry 不是最小闭环的前置条件，但应证明它能独立工作，�
 | MC-05 | | | | | |
 | TEL-01 | | | | | |
 | TEL-02 | | | | | |
+| BASELINE（如适用） | | | | | |
+| REPORT | | | | | |
 
 最终判定：PRE-01 至 PRE-04 是环境准备完成；MC-01 至 MC-05 全部通过是最小闭环完成；TEL、baseline 和报告生成按项目需要独立验收。

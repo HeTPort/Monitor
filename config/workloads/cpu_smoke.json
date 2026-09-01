@@ -9,7 +9,7 @@
   "iterations": 10000,
   "threads": 1,
   "working_set_kb": 64,
-  "verify_mode": "checksum",
+  "verify_mode": "none",
   "checksum_interval": 1,
   "heartbeat_interval": 1,
   "output_format": "jsonl"

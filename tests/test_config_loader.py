@@ -23,6 +23,19 @@ def valid_profile() -> dict:
 
 
 class ConfigLoaderTests(unittest.TestCase):
+    def test_positive_smoke_configs_are_error_only(self) -> None:
+        config_root = Path(__file__).parents[1] / "config" / "workloads"
+        expected_modes = {
+            "cpu_smoke.json": "none",
+            "gpu_smoke.json": "none",
+            "cpu_mixed_big4.json": "checksum",
+            "gpu_vulkan_mixed.json": "golden-image",
+        }
+        for name, expected in expected_modes.items():
+            with self.subTest(name=name):
+                document = json.loads((config_root / name).read_text(encoding="utf-8"))
+                self.assertEqual(document["verify_mode"], expected)
+
     def test_json_load_and_profile_validation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "profile.json"

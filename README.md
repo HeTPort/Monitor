@@ -12,6 +12,8 @@ python main.py --transport hdc --device <DEVICE> deploy --profile cpu_stress_kir
 python main.py --transport hdc --device <DEVICE> verify-deployment --profile cpu_stress_kirin9030
 ```
 
+部署和核验以 profile 为单位：若随后改用 `cpu_smoke_kirin9030`，必须再对该 profile 执行同样的 `deploy` 和 `verify-deployment`；`run` 不会隐式补部署。positive smoke 使用 `verify_mode=none`，checksum/golden-image 只进入显式 baseline 流程。
+
 无 baseline 的最小运行：
 
 ```powershell
