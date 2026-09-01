@@ -1,0 +1,57 @@
+{
+  "agent_final_seen": false,
+  "artifacts": {
+    "complete": true,
+    "hash_manifest": "artifact-hashes.json",
+    "hashed_file_count": 2
+  },
+  "attempt_id": "TEL-RUN-0831-001",
+  "baseline_id": null,
+  "completed_at": "2026-09-01T03:19:54.621781+00:00",
+  "device_evidence": "/data/local/tmp/avs/tests/TEL-RUN-0831/TEL-RUN-0831-001",
+  "dut_reasons": [],
+  "event_count": 0,
+  "exit_code": 3,
+  "infrastructure_reasons": [
+    {
+      "code": "malformed_json",
+      "message": "invalid JSON event: Expecting value",
+      "scope": "protocol"
+    },
+    {
+      "code": "AGENT_FINAL_MISSING",
+      "scope": "agent"
+    },
+    {
+      "agent_process_exit": 0,
+      "code": "AGENT_EXIT_MISMATCH",
+      "expected_workload_exit": null,
+      "scope": "agent-process",
+      "stderr": "",
+      "stdout": "",
+      "timed_out": false
+    }
+  ],
+  "liveness": {
+    "agent_final_seen": false,
+    "timed_out": false
+  },
+  "pc_artifacts": "result",
+  "producer": {
+    "component": "RunOrchestrator",
+    "name": "vmin_judge",
+    "version": "2.1.0"
+  },
+  "profile_id": "cpu_stress_kirin9030",
+  "run_id": "TEL-RUN-0831-001",
+  "schema_version": 1,
+  "telemetry_seen": [],
+  "terminal_summary_seen": false,
+  "test_id": "TEL-RUN-0831",
+  "validation_mode": "error-only",
+  "verdict": "INFRA_ERROR",
+  "warnings": [],
+  "workload_exit_code": null,
+  "workload_result": null,
+  "workload_summary": null
+}

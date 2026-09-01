@@ -12,4 +12,4 @@ telemetry:
   interval_ms: 5000
   required: [cpu.frequency, cpu.online, cpu.temperature, cpu.utilization]
   optional: [cpu.idle_residency, cpu.throttle, cpu.voltage]
-kernel_monitor: off
+kernel_monitor: "off"

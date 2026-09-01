@@ -66,7 +66,7 @@ class ArtifactStore:
         for name, value in (("run_id", run_id), ("test_id", test_id)):
             if value is not None and (not value or any(character in value for character in "\\/:*?\"<>|")):
                 raise ArtifactError(f"unsafe {name}: {value!r}")
-        root = output_root.expanduser().resolve()
+        root = output_root.expanduser().absolute()
         run_dir = root / test_id / run_id if test_id is not None else root / run_id
         if run_dir.exists() and any(run_dir.iterdir()) and not allow_existing_empty:
             raise ArtifactError(f"run directory already contains artifacts: {run_dir}")

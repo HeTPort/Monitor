@@ -1,0 +1,203 @@
+PS D:\h60106817\release> ls
+
+
+    目录: D:\h60106817\release
+
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a----          2026/9/1     10:21       18431118 vmin_judge.exe
+
+
+PS D:\h60106817\release> $DEVICE = '0123456789ABCDEF'
+PS D:\h60106817\release> $PC_SERIAL = 'COM6'
+PS D:\h60106817\release> $DEVICE_UART = '/dev/ttyHW0'
+PS D:\h60106817\release> $MON = 'D:\h60106817\release\vmin_judeg.exe'
+PS D:\h60106817\release> $MON = 'D:\h60106817\release\vmin_judge.exe'
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --json probe --platform kirin9030 --full
+{
+  "capabilities": "D:\\h60106817\\release\\output\\probes\\0123456789ABCDEF\\capabilities.json",
+  "required_missing": [],
+  "supported": true
+}
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART pair --platform kirin9030 --verify
+[OK] Pairing /dev/ttyHW0 -> COM6 @ 9600 baud (751.9 ms)
+[OK] Pairing verified
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE deploy --profile cpu_stress_kirin9030
+complete: True
+verified: True
+manifest: D:\h60106817\release\output\deployment-manifest.json
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE deploy --profile gpu_stress_kirin9030
+complete: True
+verified: True
+manifest: D:\h60106817\release\output\deployment-manifest.json
+PS D:\h60106817\release> hdc shell
+# ls /data/local/tmp/avs
+bin  configs  runs  shaders
+# ls /data/local/tmp/avs/bin
+avs-device-agent  avs-telemetry-agent  cpu-avs-workload  gpu-avs-workload
+# exit
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE verify-deployment --profile cpu_stress_kirin9030
+complete: True
+verified: True
+manifest: D:\h60106817\release\output\deployment-verification.json
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE verify-deployment --profile gpu_stress_kirin9030
+complete: True
+verified: True
+manifest: D:\h60106817\release\output\deployment-verification.json
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json run --profile cpu_stress_kirin9030 --test-id MC-CPU-0831 --attempt-id MC-CPU-0831-001 --pc-artifacts full
+{
+  "exit_code": 3,
+  "repeat": 1,
+  "runs": [
+    {
+      "attempt_id": "MC-CPU-0831-001",
+      "device_evidence": "/data/local/tmp/avs/tests/MC-CPU-0831/MC-CPU-0831-001",
+      "device_spool": "retained",
+      "errors": [
+        {
+          "code": "malformed_json",
+          "message": "invalid JSON event: Expecting ':' delimiter",
+          "scope": "protocol"
+        },
+        {
+          "code": "AGENT_FINAL_MISSING",
+          "scope": "agent"
+        },
+        {
+          "code": "AGENT_EXIT_MISMATCH",
+          "scope": "agent-process"
+        }
+      ],
+      "exit_code": 3,
+      "result": "D:\\h60106817\\release\\output\\MC-CPU-0831\\MC-CPU-0831-001\\result.json",
+      "run_id": "MC-CPU-0831-001",
+      "test_id": "MC-CPU-0831",
+      "verdict": "INFRA_ERROR"
+    }
+  ],
+  "test_id": "MC-CPU-0831",
+  "validation_mode": "error-only"
+}
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json run --profile gpu_stress_kirin9030 --test-id MC-GPU-0831 --attempt-id MC-GPU-0831-001 --pc-artifacts full
+{
+  "exit_code": 3,
+  "repeat": 1,
+  "runs": [
+    {
+      "attempt_id": "MC-GPU-0831-001",
+      "device_evidence": "/data/local/tmp/avs/tests/MC-GPU-0831/MC-GPU-0831-001",
+      "device_spool": "retained",
+      "errors": [
+        {
+          "code": "malformed_json",
+          "message": "invalid JSON event: Expecting value",
+          "scope": "protocol"
+        },
+        {
+          "code": "AGENT_FINAL_MISSING",
+          "scope": "agent"
+        },
+        {
+          "code": "AGENT_EXIT_MISMATCH",
+          "scope": "agent-process"
+        }
+      ],
+      "exit_code": 3,
+      "result": "D:\\h60106817\\release\\output\\MC-GPU-0831\\MC-GPU-0831-001\\result.json",
+      "run_id": "MC-GPU-0831-001",
+      "test_id": "MC-GPU-0831",
+      "verdict": "INFRA_ERROR"
+    }
+  ],
+  "test_id": "MC-GPU-0831",
+  "validation_mode": "error-only"
+}
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json run --profile cpu_smoke_kirin9030 --test-id MC-SMOKE-0831 --attempt-id MC-SMOKE-0831-001
+{
+  "exit_code": 3,
+  "repeat": 1,
+  "runs": [
+    {
+      "attempt_id": "MC-SMOKE-0831-001",
+      "device_evidence": "/data/local/tmp/avs/tests/MC-SMOKE-0831/MC-SMOKE-0831-001",
+      "device_spool": "retained",
+      "errors": [
+        {
+          "code": "malformed_json",
+          "message": "invalid JSON event: Expecting value",
+          "scope": "protocol"
+        },
+        {
+          "code": "AGENT_FINAL_MISSING",
+          "scope": "agent"
+        },
+        {
+          "code": "AGENT_EXIT_MISMATCH",
+          "scope": "agent-process"
+        }
+      ],
+      "exit_code": 3,
+      "result": "D:\\h60106817\\release\\output\\MC-SMOKE-0831\\MC-SMOKE-0831-001\\result.json",
+      "run_id": "MC-SMOKE-0831-001",
+      "test_id": "MC-SMOKE-0831",
+      "verdict": "INFRA_ERROR"
+    }
+  ],
+  "test_id": "MC-SMOKE-0831",
+  "validation_mode": "error-only"
+}
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json run --profile '<故障注入profile>' --test-id MC-NEG-0831 --attempt-id MC-NEG-0831-001 --pc-artifacts full
+{
+  "error": "input not found: config/profiles/<故障注入profile>.yaml; searched: D:\\h60106817\\release\\config\\profiles\\<故障注入profile>.yaml, C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI270882\\config\\profiles\\<故障注入profile>.yaml",
+  "exit_code": 4
+}
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE collect --test-id MC-CPU-0831 --verify-hashes
+test_id: MC-CPU-0831
+attempt_id: None
+collection: D:\h60106817\release\output\MC-CPU-0831\collection.json
+local: D:\h60106817\release\output\MC-CPU-0831\device-evidence
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE collect --test-id MC-GPU-0831 --verify-hashes
+test_id: MC-GPU-0831
+attempt_id: None
+collection: D:\h60106817\release\output\MC-GPU-0831\collection.json
+local: D:\h60106817\release\output\MC-GPU-0831\device-evidence
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE telemetry run --profile cpu_stress_kirin9030 --test-id TEL-0831 --attempt-id TEL-0831-001 --duration 30 --interval 5
+test_id: TEL-0831
+attempt_id: TEL-0831-001
+profile: cpu_stress_kirin9030
+device_output: /data/local/tmp/avs/tests/TEL-0831/TEL-0831-001/spool/telemetry.jsonl
+append_only: True
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE collect --test-id TEL-0831
+test_id: TEL-0831
+attempt_id: None
+collection: D:\h60106817\release\output\TEL-0831\collection.json
+local: D:\h60106817\release\output\TEL-0831\device-evidence
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART run --profile cpu_stress_kirin9030 --test-id TEL-RUN-0831 --attempt-id TEL-RUN-0831-001 --telemetry
+test_id: TEL-RUN-0831
+validation_mode: error-only
+repeat: 1
+exit_code: 3
+runs: [{"test_id": "TEL-RUN-0831", "attempt_id": "TEL-RUN-0831-001", "run_id": "TEL-RUN-0831-001", "verdict": "INFRA_ERROR", "exit_code": 3, "result": "D:\\h60106817\\release\\output\\TEL-RUN-0831\\TEL-RUN-0831-001\\result.json", "device_evidence": "/data/local/tmp/avs/tests/TEL-RUN-0831/TEL-RUN-0831-001", "device_spool": "retained", "errors": [{"scope": "protocol", "code": "malformed_json", "message": "invalid JSON event: Expecting value"}, {"scope": "agent", "code": "AGENT_FINAL_MISSING"}, {"scope": "agent-process", "code": "AGENT_EXIT_MISMATCH"}]}]
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE collect --test-id TEL-RUN-0831
+test_id: TEL-RUN-0831
+attempt_id: None
+collection: D:\h60106817\release\output\TEL-RUN-0831\collection.json
+local: D:\h60106817\release\output\TEL-RUN-0831\device-evidence
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL run --profile cpu_mixed_big4 --baseline '<approved-baseline-id>' --test-id BASELINE-CPU-0831
+error: invalid baseline id: '<approved-baseline-id>'
+exit_code: 4
+PS D:\h60106817\release> & $MON golden cpu --profile cpu_mixed_big4 --board-id BOARD-A --known-good --runs 2 --run-dir '<run1>' --run-dir '<run2>'
+error: [WinError 123] 文件名、目录名或卷标语法不正确。: 'D:\\h60106817\\release\\<run1>'
+exit_code: 3
+PS D:\h60106817\release> & $MON calibrate cpu --profile cpu_mixed_big4 --board-id BOARD-A --golden '<golden.json>' --runs 2 --run-dir '<run1>' --run-dir '<run2>'
+error: [WinError 123] 文件名、目录名或卷标语法不正确。: 'D:\\h60106817\\release\\<run1>'
+exit_code: 3
+PS D:\h60106817\release> & $MON baseline approve '<baseline-id>' --approver '<name>'
+error: invalid baseline id: '<baseline-id>'
+exit_code: 4
+PS D:\h60106817\release> hdc shell
+# ls /data/local/tmp/avs
+bin  configs  runs  shaders  tests
+# ls /data/local/tmp/avs/tests
+MC-CPU-0831  MC-GPU-0831  MC-SMOKE-0831  TEL-0831  TEL-RUN-0831
