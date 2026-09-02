@@ -1,0 +1,72 @@
+{
+  "agent_backend": "posix-shell",
+  "assets": [],
+  "attempt_id": "golden-cpu-20260902T091217Z-386fa122-attempt-20260902T091217Z-e9476695",
+  "baseline": null,
+  "device_attempt_dir": "/data/local/tmp/avs/tests/golden-cpu-20260902T091217Z-386fa122/golden-cpu-20260902T091217Z-386fa122-attempt-20260902T091217Z-e9476695",
+  "event_crc": false,
+  "heartbeat_timeout_s": 45.0,
+  "logs": {
+    "device_local": true,
+    "streamed_to_pc": false
+  },
+  "manifest_sha256": "ab48a7c787cb2e1fa84c8fb711db0329e5763a7c1f9819943bba34c86d4a2da6",
+  "overall_timeout_s": 300.0,
+  "pc_artifacts": "full",
+  "platform": "kirin9030",
+  "policy": {
+    "required_telemetry": [],
+    "thresholds": {}
+  },
+  "producer": {
+    "component": "RunManifestBuilder",
+    "name": "vmin_judge",
+    "version": "2.1.0"
+  },
+  "profile": {
+    "id": "cpu_qualification_kirin9030",
+    "sha256": "43f587cfc020f57b6f1f6b677d8a390cb1dd10bf2bc2c0567cdce503399b88d1"
+  },
+  "qualification": {
+    "generated_reference_disposition": "qualification-artifact",
+    "mode": "golden",
+    "production_baseline_allowed": false
+  },
+  "run_id": "golden-cpu-20260902T091217Z-386fa122-attempt-20260902T091217Z-e9476695",
+  "scheduler": {
+    "managed_by_monitor": false,
+    "requirements": {}
+  },
+  "schema_version": 1,
+  "serial_transport": {
+    "max_frame_bytes": 512,
+    "protocol": "uart-v2",
+    "relay": "/data/local/tmp/avs/bin/avs-uart-relay",
+    "safe_utilization": 0.7,
+    "tail_guard_bytes": 64
+  },
+  "spool_dir": "/data/local/tmp/avs/tests/golden-cpu-20260902T091217Z-386fa122/golden-cpu-20260902T091217Z-386fa122-attempt-20260902T091217Z-e9476695/spool",
+  "target": "cpu",
+  "telemetry": {
+    "agent": "/data/local/tmp/avs/bin/avs-telemetry-agent",
+    "device_local": true,
+    "enabled": true,
+    "interval_s": 5,
+    "plan": "/data/local/tmp/avs/configs/telemetry/cpu_qualification_kirin9030.conf"
+  },
+  "test_id": "golden-cpu-20260902T091217Z-386fa122",
+  "timeout_s": 300.0,
+  "uart": "/dev/ttyHW0",
+  "validation_mode": "error-only",
+  "workload": {
+    "argv": [
+      "/data/local/tmp/avs/bin/cpu-avs-workload",
+      "--config",
+      "/data/local/tmp/avs/configs/cpu_qualification_kirin9030.json",
+      "--generate-golden",
+      "true"
+    ],
+    "config_path": "/data/local/tmp/avs/configs/cpu_qualification_kirin9030.json",
+    "cwd": "/data/local/tmp/avs"
+  }
+}

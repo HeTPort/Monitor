@@ -1,0 +1,10 @@
+{
+  "attempt_id": null,
+  "bytes_transferred": 0,
+  "local": "D:\\h60106817\\release\\output\\TEL-RUN-0902B\\device-evidence",
+  "remote": "/data/local/tmp/avs/tests/TEL-RUN-0902B",
+  "remote_removed": false,
+  "schema_version": 1,
+  "test_id": "TEL-RUN-0902B",
+  "verified": false
+}

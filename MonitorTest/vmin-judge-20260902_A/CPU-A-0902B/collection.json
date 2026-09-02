@@ -1,0 +1,10 @@
+{
+  "attempt_id": null,
+  "bytes_transferred": null,
+  "local": "D:\\h60106817\\release\\output\\CPU-A-0902B\\device-evidence",
+  "remote": "/data/local/tmp/avs/tests/CPU-A-0902B",
+  "remote_removed": false,
+  "schema_version": 1,
+  "test_id": "CPU-A-0902B",
+  "verified": false
+}

@@ -1,0 +1,118 @@
+{
+  "assets": [
+    {
+      "action": "unchanged",
+      "executable": true,
+      "kind": "agent",
+      "local": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI268762\\device\\avs_device_agent.sh",
+      "local_sha256": "392b82ad6a5570281fc1f8cc28801f6497b3dda1397f84debb5ed395d99422cc",
+      "mode": "0755",
+      "remote": "/data/local/tmp/avs/bin/avs-device-agent",
+      "remote_sha256": "392b82ad6a5570281fc1f8cc28801f6497b3dda1397f84debb5ed395d99422cc",
+      "required": true,
+      "size": 10631,
+      "verified": true
+    },
+    {
+      "action": "unchanged",
+      "executable": true,
+      "kind": "uart-relay",
+      "local": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI268762\\tools\\relay\\kirin9030\\avs-uart-relay",
+      "local_sha256": "d997d8bc63cb2347dee11574333a6056d3c8ecd338a5714f1f4a6e518e40b7f1",
+      "mode": "0755",
+      "remote": "/data/local/tmp/avs/bin/avs-uart-relay",
+      "remote_sha256": "d997d8bc63cb2347dee11574333a6056d3c8ecd338a5714f1f4a6e518e40b7f1",
+      "required": true,
+      "size": 19304,
+      "verified": true
+    },
+    {
+      "action": "unchanged",
+      "executable": true,
+      "kind": "workload",
+      "local": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI268762\\tools\\gpu-avs-workload",
+      "local_sha256": "e97e7a1ac2cd6e3538456f8f601f2ca8f79729d003c626b05602c6067d6ce6dd",
+      "mode": "0755",
+      "remote": "/data/local/tmp/avs/bin/gpu-avs-workload",
+      "remote_sha256": "e97e7a1ac2cd6e3538456f8f601f2ca8f79729d003c626b05602c6067d6ce6dd",
+      "required": true,
+      "size": 1202864,
+      "verified": true
+    },
+    {
+      "action": "unchanged",
+      "executable": false,
+      "kind": "workload-config",
+      "local": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI268762\\config\\workloads\\gpu_smoke.json",
+      "local_sha256": "9e49426ecf7b24a89bbe13f4a57f43d399248c9d7f705ed110c077ea7915f44d",
+      "mode": null,
+      "remote": "/data/local/tmp/avs/configs/gpu_smoke_kirin9030.json",
+      "remote_sha256": "9e49426ecf7b24a89bbe13f4a57f43d399248c9d7f705ed110c077ea7915f44d",
+      "required": true,
+      "size": 539,
+      "verified": true
+    },
+    {
+      "action": "unchanged",
+      "executable": false,
+      "kind": "shader",
+      "local": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI268762\\tools\\shaders\\vulkan\\fullscreen.vert.spv",
+      "local_sha256": "e12aae1cfc3959515badec3c7b85433622e83c56fb7ad9f30bc92d9f65a4ed17",
+      "mode": null,
+      "remote": "/data/local/tmp/avs/shaders/vulkan/fullscreen.vert.spv",
+      "remote_sha256": "e12aae1cfc3959515badec3c7b85433622e83c56fb7ad9f30bc92d9f65a4ed17",
+      "required": true,
+      "size": 1352,
+      "verified": true
+    },
+    {
+      "action": "unchanged",
+      "executable": false,
+      "kind": "shader",
+      "local": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI268762\\tools\\shaders\\vulkan\\workload.frag.spv",
+      "local_sha256": "31ef0207fc83a5fc07769b4aac227eaa77c533341b021b40954a6cf7382bf37c",
+      "mode": null,
+      "remote": "/data/local/tmp/avs/shaders/vulkan/workload.frag.spv",
+      "remote_sha256": "31ef0207fc83a5fc07769b4aac227eaa77c533341b021b40954a6cf7382bf37c",
+      "required": true,
+      "size": 9184,
+      "verified": true
+    },
+    {
+      "action": "unchanged",
+      "executable": true,
+      "kind": "telemetry-agent",
+      "local": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI268762\\device\\avs_telemetry_agent.sh",
+      "local_sha256": "6d22bc405ec9c57fb71abd2287b7a0707750eecf4cbf04da725fb47553bc3fd5",
+      "mode": "0755",
+      "remote": "/data/local/tmp/avs/bin/avs-telemetry-agent",
+      "remote_sha256": "6d22bc405ec9c57fb71abd2287b7a0707750eecf4cbf04da725fb47553bc3fd5",
+      "required": true,
+      "size": 5098,
+      "verified": true
+    },
+    {
+      "action": "unchanged",
+      "executable": false,
+      "kind": "telemetry-plan",
+      "local": "D:\\h60106817\\release\\output\\prepared\\telemetry\\gpu_smoke_kirin9030.conf",
+      "local_sha256": "9bd5d6d8c9c1aea78d362664da6bb57d688c61671e90df978229b73217153f44",
+      "mode": null,
+      "remote": "/data/local/tmp/avs/configs/telemetry/gpu_smoke_kirin9030.conf",
+      "remote_sha256": "9bd5d6d8c9c1aea78d362664da6bb57d688c61671e90df978229b73217153f44",
+      "required": true,
+      "size": 699,
+      "verified": true
+    }
+  ],
+  "complete": true,
+  "created_at": "2026-09-02T08:32:44.595396+00:00",
+  "producer": {
+    "component": "DeploymentManager",
+    "name": "vmin_judge"
+  },
+  "removed_stale": [],
+  "schema_version": 1,
+  "transport": "hdc",
+  "verified": true
+}

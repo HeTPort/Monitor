@@ -1,0 +1,10 @@
+{
+  "attempt_id": "RPT-0902B-002",
+  "bytes_transferred": 0,
+  "local": "D:\\h60106817\\release\\output\\RPT-0902B\\device-evidence\\RPT-0902B-002",
+  "remote": "/data/local/tmp/avs/tests/RPT-0902B/RPT-0902B-002",
+  "remote_removed": true,
+  "schema_version": 1,
+  "test_id": "RPT-0902B",
+  "verified": true
+}

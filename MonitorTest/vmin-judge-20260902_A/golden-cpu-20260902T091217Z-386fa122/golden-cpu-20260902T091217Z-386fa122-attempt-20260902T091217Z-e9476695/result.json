@@ -1,0 +1,48 @@
+{
+  "agent_final_seen": false,
+  "artifacts": {
+    "complete": true,
+    "hash_manifest": "artifact-hashes.json",
+    "hashed_file_count": 4
+  },
+  "attempt_id": "golden-cpu-20260902T091217Z-386fa122-attempt-20260902T091217Z-e9476695",
+  "baseline_id": null,
+  "completed_at": "2026-09-02T09:13:09.026794+00:00",
+  "device_evidence": "/data/local/tmp/avs/tests/golden-cpu-20260902T091217Z-386fa122/golden-cpu-20260902T091217Z-386fa122-attempt-20260902T091217Z-e9476695",
+  "dut_reasons": [
+    {
+      "code": "HEARTBEAT_OR_SUMMARY_TIMEOUT",
+      "scope": "liveness"
+    }
+  ],
+  "event_count": 6,
+  "exit_code": 3,
+  "infrastructure_reasons": [
+    {
+      "code": "AGENT_FINAL_MISSING",
+      "scope": "agent"
+    }
+  ],
+  "liveness": {
+    "agent_final_seen": false,
+    "timed_out": true
+  },
+  "pc_artifacts": "full",
+  "producer": {
+    "component": "RunOrchestrator",
+    "name": "vmin_judge",
+    "version": "2.1.0"
+  },
+  "profile_id": "cpu_qualification_kirin9030",
+  "run_id": "golden-cpu-20260902T091217Z-386fa122-attempt-20260902T091217Z-e9476695",
+  "schema_version": 1,
+  "telemetry_seen": [],
+  "terminal_summary_seen": false,
+  "test_id": "golden-cpu-20260902T091217Z-386fa122",
+  "validation_mode": "error-only",
+  "verdict": "INFRA_ERROR",
+  "warnings": [],
+  "workload_exit_code": null,
+  "workload_result": null,
+  "workload_summary": null
+}

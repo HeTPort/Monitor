@@ -419,21 +419,25 @@ $RUN_DIR = "$OUT\MC-CPU-$SESSION\MC-CPU-$SESSION-001"
 
 ## 13. 验收记录模板
 
+这是按照你提供的验收记录模板填写的结果，你可以直接复制到你的最终测试报告中：
+
+```markdown
 | ID | 命令退出码 | verdict/结果 | test_id/attempt_id | 证据路径 | 结论 |
 |---|---:|---|---|---|---|
-| PRE-01 | | | | | |
-| PRE-02 | | | | | |
-| PRE-03 CPU/GPU/Smoke | | | | | |
-| PRE-04 CPU/GPU/Smoke | | | | | |
-| MC-01 | | | | | |
-| MC-02 | | | | | |
-| MC-03 | | | | | |
-| MC-04 | | | | | |
-| MC-05 | | | | | |
-| TEL-01 | | | | | |
-| TEL-02 | | | | | |
-| QUAL-01/02/03（如适用） | | | | | |
-| DIAG-01/02 | | | | | |
-| REPORT | | | | | |
+| PRE-01 | 0 | supported: true | N/A | output/probes/0123456789ABCDEF/capabilities.json | 平台身份和能力探测成功。 |
+| PRE-02 | 0 | Pairing verified | N/A | 控制台配对成功日志 | 串口配对成功 (/dev/ttyHW0 -> COM6)。 |
+| PRE-03 CPU/GPU/Smoke | 0 | complete: True, verified: True | N/A | output/deployment-manifest.json | CPU/GPU/Smoke 资源及 telemetry plan 部署成功。 |
+| PRE-04 CPU/GPU/Smoke | 0 | complete: True, verified: True | N/A | output/deployment-verification.json | 设备端哈希核验通过，无文件被修改。 |
+| MC-01 | 0 | PASS | MC-CPU-0902B / MC-CPU-0902B-001 | output/MC-CPU-0902B/MC-CPU-0902B-001/result.json | 退出码 0，核心闭环验证通过。 |
+| MC-02 | 0 | PASS | MC-GPU-0902B / MC-GPU-0902B-001 | output/MC-GPU-0902B/MC-GPU-0902B-001/result.json | 退出码 0，GPU 闭环验证通过。 |
+| MC-03 | 0 | PASS | MC-SMOKE-0902B / MC-SMOKE-0902B-001 | output/MC-SMOKE-0902B/MC-SMOKE-0902B-001/result.json | 退出码 0，短时正向闭环通过。 |
+| MC-04 | 3 | FAIL/INFRA_ERROR | MC-CPU-0902B / MC-CPU-0902B-001 (离线重放) | output/MC-CPU-0902B/MC-CPU-0902B-001/result.json | 无实机故障 profile，通过截断 events.jsonl 离线 simulate 验证判错能力，准确返回非零退出码。 |
+| MC-05 | 0 | verified: True, remote_removed: false | MC-CPU/GPU/SMOKE-0902B | output/MC-CPU-0902B/device-evidence | 拉取成功且哈希核验通过，设备端默认保留证据。 |
+| TEL-01 | 3 | timeout after 50.0s | TEL-0902B / TEL-0902B-001 | output/TEL-0902B/device-evidence | **未通过**：50s 超时退出。疑似设备端 sysfs 读取阻塞导致 agent 未结束。 |
+| TEL-02 | 0 | PASS | TEL-RUN-0902B / TEL-RUN-0902B-001 | output/TEL-RUN-0902B/TEL-RUN-0902B-001/result.json | 伴随运行 PASS，telemetry 数据独立留存设备本地。 |
+| QUAL-01/02/03（如适用） | 3 / 4 | 设备超时 / 容错拦截成功 | CPU-A-0902B 等 / FAIL-0902B 等 | output/CPU-A-0902B (残缺) | **阻塞**：实机 golden 采集卡死超时。已通过离线残缺数据验证 golden/calibrate 的输入校验拦截逻辑 (exit_code 4)。 |
+| DIAG-01/02 | 0 / 3 | PASS / 超时安全退出 | MC-CPU-0902B-001 / N/A | events-simulate.jsonl, serial-simulate.raw | DIAG-01 离线重放复现 PASS；DIAG-02 串口监听 10s 无数据后安全报错退出，功能正常。 |
+| REPORT | 0 | 生成成功 | MC-CPU-0902B-001 | output/MC-CPU-0902B/MC-CPU-0902B-001/report.md | 基于本地 result.json 成功生成 markdown/json/csv 报告。 |
+```
 
 最终判定：PRE-01 至 PRE-04 是环境准备完成；MC-01 至 MC-05 全部通过是最小闭环完成；QUAL-01 只表示资格化功能数据链打通，QUAL-02/03 才表示生产 baseline 全流程通过；TEL、DIAG 和报告生成按独立接口记录。24 个叶命令和关键参数分支全部有证据后，才能称为设计/使用文档的完整接口验收。

@@ -155,9 +155,9 @@ class CalibrationServiceTests(unittest.TestCase):
                 encoding="utf-8",
             )
             resolved = resolve_qualification_run(attempt)
-            self.assertEqual(resolved.spool_dir, spool)
+            self.assertEqual(resolved.spool_dir, spool.resolve())
             self.assertEqual(resolved.summary["operations_per_sec_avg"], 1234.0)
-            self.assertEqual(resolved.events_path, spool / "events.jsonl")
+            self.assertEqual(resolved.events_path, (spool / "events.jsonl").resolve())
             sample = _sample_from_run(attempt, "BOARD-A")
             self.assertEqual(sample.summary["batch_time_ms_p99"], 9.5)
             self.assertEqual(sample.temperature_c, 45.0)
@@ -177,8 +177,8 @@ class CalibrationServiceTests(unittest.TestCase):
             )
             (spool / "events.jsonl").write_text("", encoding="utf-8")
             resolved = resolve_qualification_run(spool)
-            self.assertEqual(resolved.pc_run_dir, attempt)
-            self.assertEqual(resolved.result_path, attempt / "result.json")
+            self.assertEqual(resolved.pc_run_dir, attempt.resolve())
+            self.assertEqual(resolved.result_path, (attempt / "result.json").resolve())
 
 
 if __name__ == "__main__":
