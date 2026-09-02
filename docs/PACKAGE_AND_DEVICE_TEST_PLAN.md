@@ -269,7 +269,7 @@ telemetry 不是最小闭环的前置条件，但应证明它能独立工作，�
 & $MON --transport hdc --device $DEVICE collect --test-id "TEL-$SESSION"
 ```
 
-通过条件：设备 `spool/telemetry.jsonl` 追加至少一个合法 JSON 对象；对象包含同一 test/attempt ID；期间不启动 workload、不向 UART 输出。
+通过条件：设备 `spool/telemetry.jsonl` 追加至少一个合法 JSON 对象；对象包含同一 test/attempt ID；期间不启动 workload、不向 UART 输出；30 秒 duration 在有限误差内结束，而不是因为一次 sysfs 遍历拖到 50 秒以上。
 
 ### TEL-02 伴随 workload
 
@@ -278,11 +278,13 @@ telemetry 不是最小闭环的前置条件，但应证明它能独立工作，�
 & $MON --transport hdc --device $DEVICE collect --test-id "TEL-RUN-$SESSION"
 ```
 
-通过条件：核心 UART 仍完成 PASS/FAIL 判定，telemetry 只出现在设备本地文件，不穿插到 UART 事件流。
+通过条件：核心 UART 仍完成 PASS/FAIL 判定，telemetry 只出现在设备本地文件，不穿插到 UART 事件流。另用一个会忽略 TERM/stop-file 的受控 collector 做单元或实验室测试：超过 shutdown grace 后必须出现 `TELEMETRY_SHUTDOWN_TIMEOUT`，但 `final.json` 和 UART `agent_final` 仍生成。
 
 ## 7. 资格化数据链与 baseline（非最小闭环）
 
 资格化 profile 必须先各自完成 PRE-03/04。`golden --runs N` 有两个互斥来源模式：不传 `--run-dir` 时实时采集 N 次并自动拉完整设备 attempt；传入时必须恰好 N 个。输出 JSON 的 `source_runs` 是可直接交给 `calibrate` 的规范化 PC 运行目录。禁止只传一部分目录再从设备补齐。
+
+live capture 中 `--qualification-id` 就是设备/PC `test_id`，每次运行或重试使用唯一 `attempt_id`。当前 CPU workload JSON 的 `timeout=75` 派生为：设备 workload guard 80 秒、summary 前 heartbeat 窗口 90 秒、summary 后 FINAL 窗口 20 秒、整体 300 秒。普通 `run` 的 heartbeat 仍为 45 秒。Monitor 的放宽只覆盖已知 golden 同步阶段；workload 后续仍应在该阶段持续发 heartbeat 并自行限制计算时间。
 
 ### QUAL-01 两板功能验收
 
@@ -304,6 +306,8 @@ telemetry 不是最小闭环的前置条件，但应证明它能独立工作，�
 通过条件：
 
 - 两次 live golden 均退出 0，`source_mode=live-capture`，每个 source run 同时有 PC `result.json` 和完整 `device-evidence/.../spool`；
+- live 输出的 `qualification_id` 与设备 `test_id` 一致，attempt 唯一；同一 ID 重试不覆盖既有 attempt/golden；
+- 合法 golden 在最后一条早期 heartbeat 后静默超过 45 秒、但在派生的 90 秒窗口内给出 summary 时不能误判；超过 90 秒必须有界失败；summary 后超过 20 秒无 FINAL 必须报 `AGENT_FINAL_TIMEOUT`；
 - 离线 golden 为 `source_mode=supplied`，两板 checksum 一致；少传一个 `--run-dir` 返回配置错误 4；
 - `workload-summary-full.json` 或设备 `workload.log` 含 `operations_per_sec_avg` 和 `batch_time_ms_p99`；telemetry 存在且样本未被 throttling/温度/缺字段规则拒绝；
 - calibrate 生成 draft，接受 2 个样本和 2 个 board ID；approve 后状态为 approved。
@@ -340,7 +344,7 @@ $RUN_DIR = "$OUT\MC-CPU-$SESSION\MC-CPU-$SESSION-001"
 & $MON --json simulate --raw-serial "$RUN_DIR\serial.raw" --profile cpu_stress_kirin9030
 ```
 
-通过条件：两次离线结果复现原 `result.json` 的 verdict/exit code；raw 路径能跳过 START 前旧 run/损坏帧，并在 START 后对 CRC、序号、身份和缺 FINAL 失败关闭。`--raw-serial --realtime` 必须返回配置错误 4；`--realtime` 只属于 `--events`。
+通过条件：两次离线结果复现原 `result.json` 的 verdict/exit code；raw 路径能跳过 START 前旧 run/损坏帧，并在 START 后对 CRC、序号、身份和缺 FINAL 失败关闭。`--raw-serial --realtime` 必须返回配置错误 4；`--realtime` 只属于 `--events`。对同一输入连续重放两次，两次都成功并获得不同 `replay_id`，结果均位于 `output/simulations/<replay-id>/...`，输入哈希一致，原 live `result.json`/`events.jsonl`/`serial.raw` 均不改变。
 
 ### DIAG-02 live monitor
 
@@ -396,6 +400,13 @@ $RUN_DIR = "$OUT\MC-CPU-$SESSION\MC-CPU-$SESSION-001"
 4. `events.jsonl` 为空：检查 agent 是否启动、已部署路径和 shell 退出信息。
 5. 有 `agent_start` 无 workload 事件：看 `workload.log`、workload 路径/权限和配置。
 6. 有事件无 `agent_final`：看 timeout、workload 是否退出以及 agent 最终文件。
+
+### live golden 超时
+
+1. 优先查看命令 JSON 返回的 `test_id`、`attempt_id`、`result_path`、verdict 和 reasons；不要只依据外层 HDC 取消信息。
+2. 直接执行 `collect --test-id '<returned-test-id>' --attempt-id '<returned-attempt-id>' --verify-hashes`；失败路径也会先做一次 best-effort 自动拉取。
+3. `WORKLOAD_DEADLINE_EXCEEDED` 表示 workload 超过设备 guard；`HEARTBEAT_OR_SUMMARY_TIMEOUT` 表示派生窗口内无 summary；`AGENT_FINAL_TIMEOUT` 表示已有 summary 但 agent/telemetry 未在收尾窗口结束。
+4. 如果 `result.json` 已有上述主原因，同时还有 `AGENT_TRANSPORT_CANCELLED_AFTER_VERDICT`，后者只是 PC 清理被取消 transport 的附加证据，不能遮蔽前者。
 
 ### workload 很快退出且只有 agent_start/agent_final
 

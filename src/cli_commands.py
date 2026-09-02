@@ -13,7 +13,7 @@ from dataclasses import replace
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable, Mapping
 
-from .artifact_store import ArtifactStore, atomic_write_bytes, atomic_write_json, sha256_file
+from .artifact_store import ArtifactError, ArtifactStore, atomic_write_bytes, atomic_write_json, sha256_file
 from .baselines import Baseline, BaselineError, BaselineRegistry
 from .config_loader import ConfigError, PlatformConfig, ProfileConfig, load_document, validate_workload_config
 from .deployment import AssetSpec, DeploymentError, DeploymentManager
@@ -41,9 +41,15 @@ CLI_VERSION = "2.1.0"
 
 
 class CommandError(RuntimeError):
-    def __init__(self, message: str, exit_code: int = int(RunExitCode.INFRA_ERROR)):
+    def __init__(
+        self,
+        message: str,
+        exit_code: int = int(RunExitCode.INFRA_ERROR),
+        details: Mapping[str, Any] | None = None,
+    ):
         super().__init__(message)
         self.exit_code = exit_code
+        self.details = dict(details or {})
 
 
 def make_paths(args: Namespace) -> PathResolver:
@@ -102,13 +108,13 @@ def command_boundary(handler):
         try:
             return int(handler(args))
         except CommandError as exc:
-            print_command_result(args, {"error": str(exc), "exit_code": exc.exit_code})
+            print_command_result(args, {"error": str(exc), "exit_code": exc.exit_code, **exc.details})
             return exc.exit_code
         except RunInfrastructureError as exc:
             code = int(RunExitCode.INFRA_ERROR)
             print_command_result(args, {"error": str(exc), "exit_code": code})
             return code
-        except (ConfigError, PathResolutionError, BaselineError, RunError, ValueError) as exc:
+        except (ConfigError, PathResolutionError, BaselineError, RunError, ArtifactError, ValueError) as exc:
             code = int(RunExitCode.INVALID_CONFIGURATION)
             print_command_result(args, {"error": str(exc), "exit_code": code})
             return code
@@ -506,6 +512,8 @@ def _shell_agent_argv(agent_remote: PurePosixPath, manifest: Mapping[str, Any], 
                 field(telemetry["plan"], "telemetry.plan"),
                 "--telemetry-interval",
                 str(max(1, int(telemetry.get("interval_s", 5)))),
+                "--telemetry-shutdown-timeout",
+                str(max(1, int(telemetry.get("shutdown_timeout_s", 10)))),
             )
         )
     workload_argv = manifest.get("workload", {}).get("argv", [])
@@ -613,6 +621,33 @@ def _apply_platform_serial(args: Namespace, paths: PathResolver, profile: Profil
         args.device_uart = candidates[0]
 
 
+def _qualification_deadlines(
+    args: Namespace,
+    paths: PathResolver,
+    profile: ProfileConfig,
+    mode: str,
+) -> tuple[float, float, float, float]:
+    """Return overall, device guard, pre-summary silence, and FINAL deadlines."""
+    overall_timeout = float(getattr(args, "overall_timeout", 300.0))
+    heartbeat_floor = float(getattr(args, "heartbeat_timeout", 45.0))
+    if mode != "golden":
+        return overall_timeout, overall_timeout, heartbeat_floor, overall_timeout
+    _, _, workload_config = _asset_plan(paths, profile, None)
+    try:
+        workload = json.loads(workload_config.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ConfigError(f"cannot read qualification workload timeout from {workload_config}: {exc}") from exc
+    timeout_value = workload.get("timeout", workload.get("timeout_s"))
+    if isinstance(timeout_value, bool) or not isinstance(timeout_value, (int, float)) or timeout_value <= 0:
+        raise ConfigError(f"qualification workload {workload_config} requires a positive timeout")
+    workload_guard = float(timeout_value) + 5.0
+    heartbeat_timeout = max(heartbeat_floor, workload_guard + 10.0)
+    final_timeout = 20.0
+    if overall_timeout <= 0 or heartbeat_floor <= 0:
+        raise ConfigError("qualification overall and heartbeat timeouts must be positive")
+    return overall_timeout, workload_guard, heartbeat_timeout, final_timeout
+
+
 def _execute_live_qualification(
     args: Namespace,
     paths: PathResolver,
@@ -621,6 +656,7 @@ def _execute_live_qualification(
     mode: str,
     count: int,
     golden: dict[str, Any] | None = None,
+    test_id: str | None = None,
 ) -> list[Path]:
     if count <= 0:
         return []
@@ -632,13 +668,12 @@ def _execute_live_qualification(
     effective_golden = dict(golden or {})
     agent_remote = paths.remote("bin/avs-device-agent")
     run_dirs: list[Path] = []
-    test_id = new_run_id(f"{mode}-{profile.target}")
+    test_id = test_id or new_run_id(f"{mode}-{profile.target}")
+    overall_timeout, workload_guard, heartbeat_timeout, final_timeout = _qualification_deadlines(
+        args, paths, profile, mode
+    )
     for repetition in range(count):
-        attempt_id = (
-            f"{test_id}-{repetition + 1:03d}"
-            if count > 1
-            else new_run_id(f"{test_id}-attempt")
-        )
+        attempt_id = new_run_id(f"{test_id}-{repetition + 1:03d}")
         manifest = RunManifestBuilder(paths).build_qualification(
             profile=profile,
             golden=effective_golden,
@@ -646,8 +681,10 @@ def _execute_live_qualification(
             mode=mode,
             test_id=test_id,
             attempt_id=attempt_id,
-            overall_timeout_s=float(getattr(args, "overall_timeout", 300.0)),
-            heartbeat_timeout_s=float(getattr(args, "heartbeat_timeout", 45.0)),
+            overall_timeout_s=overall_timeout,
+            heartbeat_timeout_s=heartbeat_timeout,
+            workload_guard_s=workload_guard,
+            final_timeout_s=final_timeout,
             device_uart=args.device_uart,
             telemetry_enabled=mode == "golden",
         )
@@ -658,16 +695,38 @@ def _execute_live_qualification(
             pc_serial=args.pc_serial,
             baudrate=args.baudrate,
         )
-        if execution.result.verdict != "PASS":
-            raise QualificationError(
-                f"live {mode} attempt {attempt_id} did not pass: {execution.result.verdict}; {execution.result_path}"
-            )
         run_dir = execution.result_path.parent
         evidence_dir = run_dir / "device-evidence"
-        transfer = transport.pull(PurePosixPath(manifest["device_attempt_dir"]), evidence_dir)
-        if not transfer.success:
+        transfer_error: str | None = None
+        try:
+            transfer = transport.pull(PurePosixPath(manifest["device_attempt_dir"]), evidence_dir)
+            if not transfer.success:
+                transfer_error = transfer.message
+        except (TransportError, OSError) as exc:
+            transfer_error = str(exc)
+        if execution.result.verdict != "PASS":
+            details: dict[str, Any] = {
+                "test_id": test_id,
+                "attempt_id": attempt_id,
+                "result_path": str(execution.result_path),
+                "device_evidence_remote": manifest["device_attempt_dir"],
+                "verdict": execution.result.verdict,
+                "result_exit_code": execution.result.exit_code,
+                "dut_reasons": execution.result.dut_reasons,
+                "infrastructure_reasons": execution.result.infrastructure_reasons,
+            }
+            if transfer_error is None:
+                details["device_evidence_local"] = str(evidence_dir)
+            else:
+                details["evidence_pull_error"] = transfer_error
+            raise CommandError(
+                f"live {mode} attempt {attempt_id} did not pass",
+                int(RunExitCode.INFRA_ERROR),
+                details,
+            )
+        if transfer_error is not None:
             raise QualificationError(
-                f"failed to collect complete qualification evidence for {attempt_id}: {transfer.message}"
+                f"failed to collect complete qualification evidence for {attempt_id}: {transfer_error}"
             )
         normalized = resolve_qualification_run(run_dir)
         if normalized.events_path is None:
@@ -773,6 +832,7 @@ def cmd_golden(args: Namespace) -> int:
         raise ConfigError(f"profile target is {profile.target}, command target is {args.golden_target}")
     if args.runs < 1:
         raise ConfigError("--runs must be at least 1")
+    qualification_id = args.qualification_id or new_run_id(f"golden-{profile.target}")
     run_specs = _qualified_run_specs(args.run_dir, args.board_id)
     if run_specs and len(run_specs) != args.runs:
         raise ConfigError(
@@ -780,7 +840,15 @@ def cmd_golden(args: Namespace) -> int:
             f"received {len(run_specs)}"
         )
     if not run_specs:
-        live = _execute_live_qualification(args, paths, profile, mode="golden", count=args.runs, golden=None)
+        live = _execute_live_qualification(
+            args,
+            paths,
+            profile,
+            mode="golden",
+            count=args.runs,
+            golden=None,
+            test_id=qualification_id,
+        )
         run_specs = [(args.board_id, run_dir) for run_dir in live]
     records: list[dict[str, Any]] = []
     for _, run_dir in run_specs[: args.runs]:
@@ -789,7 +857,6 @@ def cmd_golden(args: Namespace) -> int:
             raise QualificationError(f"expected one golden event in {run_dir}, found {len(found)}")
         records.append(found[0])
     service = GoldenService(paths.resolve_output("qualification"))
-    qualification_id = args.qualification_id or new_run_id(f"golden-{profile.target}")
     fields = _workload_fingerprint_fields(paths, profile)
     board_ids = [board_id for board_id, _ in run_specs[: args.runs]]
     if profile.target == "cpu":
@@ -1119,12 +1186,17 @@ def cmd_simulate(args: Namespace) -> int:
                 previous_timestamp = timestamp
                 yield line
         chunks = replay()
-    execution = RunOrchestrator(paths.output_root).evaluate_stream(manifest, chunks, save_raw=bool(args.raw_serial))
+    replay_id = new_run_id("replay")
+    replay_root = paths.output_root / "simulations" / replay_id
+    execution = RunOrchestrator(replay_root).evaluate_stream(manifest, chunks, save_raw=bool(args.raw_serial))
     print_command_result(
         args,
         {
             "test_id": test_id,
             "run_id": run_id,
+            "replay_id": replay_id,
+            "source": str(source),
+            "source_sha256": sha256_file(source),
             "verdict": execution.result.verdict,
             "exit_code": execution.result.exit_code,
             "result": str(execution.result_path),

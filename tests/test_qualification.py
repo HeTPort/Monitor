@@ -54,6 +54,20 @@ class GoldenServiceTests(unittest.TestCase):
                     board_ids=["b1", "b2"],
                 )
 
+    def test_cpu_golden_refuses_to_overwrite_existing_qualification(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            service = GoldenService(Path(tmp))
+            arguments = {
+                "qualification_id": "q-existing",
+                "profile": "cpu",
+                "fingerprint_fields": {"config": "same"},
+                "golden_records": [{"checksum": "0123456789abcdef"}],
+                "board_ids": ["BOARD-A"],
+            }
+            service.create_cpu(**arguments)
+            with self.assertRaisesRegex(QualificationError, "already exists"):
+                service.create_cpu(**arguments)
+
 
 class CalibrationServiceTests(unittest.TestCase):
     def test_rejects_bad_environment_and_proposes_margined_limits(self) -> None:

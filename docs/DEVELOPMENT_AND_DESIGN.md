@@ -153,12 +153,13 @@ sh avs-device-agent
   --tail-guard N
   --safe-utilization PERCENT
   --timeout N
+  --telemetry-shutdown-timeout N
   [--summary-metric NAME ...]
   [--telemetry-agent PATH --telemetry-plan PATH --telemetry-interval N]
   -- WORKLOAD ARGS...
 ```
 
-It emits `agent_start` before launching optional telemetry or the workload. Workload stdout, stderr, and diagnostics are separate append-only files. Full recognized JSONL is wrapped into local `events.jsonl`; UART receives only compact lifecycle/verdict events. `DEBUG:`, `TRACE:`, and `INFO:` output is diagnostic, while other malformed stdout becomes `WORKLOAD_OUTPUT_INVALID`. Baseline threshold metric names are passed explicitly so the compact summary contains only fields required for live policy. The agent ends with `agent_final`, closes the relay FIFO, and waits for relay drain.
+It emits `agent_start` before launching optional telemetry or the workload. Workload stdout, stderr, and diagnostics are separate append-only files. Full recognized JSONL is wrapped into local `events.jsonl`; UART receives only compact lifecycle/verdict events. `DEBUG:`, `TRACE:`, and `INFO:` output is diagnostic, while other malformed stdout becomes `WORKLOAD_OUTPUT_INVALID`. Baseline threshold metric names are passed explicitly so the compact summary contains only fields required for live policy. A workload that exceeds its manifest guard emits `WORKLOAD_DEADLINE_EXCEEDED`. The agent ends with `agent_final`, closes the relay FIFO, and waits for relay drain.
 
 Required UART lifecycle for a successful attempt:
 
@@ -216,7 +217,7 @@ The collector accepts test/attempt IDs, target, output, plan, interval, duration
 - standalone through `telemetry run`;
 - alongside workload through `run --telemetry`.
 
-Telemetry failure is recorded locally and in `agent_final.telemetry_exit_code`. Telemetry is not required unless explicitly requested; an explicitly requested collector that produces zero samples is an infrastructure failure. The collector does not depend on `awk` or `tr`.
+Telemetry failure is recorded locally and in `agent_final.telemetry_exit_code`. Telemetry is not required unless explicitly requested; an explicitly requested collector that produces zero samples is an infrastructure failure. The collector does not depend on `awk` or `tr`. It checks stop-file and wall-clock deadline before and after every path read and uses interruptible interval waits. The core agent applies the manifest `telemetry.shutdown_timeout_s` as a bounded grace period, then terminates a stuck collector and records `telemetry_timed_out=true`; this failure never suppresses `final.json` or UART FINAL.
 
 ## 10. Future scheduler boundary
 
@@ -278,6 +279,12 @@ explicit validate/probe/pair/deploy/verify
 
 `golden --runs N` accepts zero `--run-dir` values or exactly N values. Zero means live capture on an already prepared known-good device. Live capture enables the existing device-local telemetry collector, runs the qualification workload, pulls the complete device attempt directory, preserves the native full workload summary, and reports reusable PC directories in `source_runs`. A partial cohort is a configuration error; it is never completed from hardware implicitly.
 
+For live capture, the public `qualification_id` is also the device/PC `test_id`; each attempt appends a unique suffix. This makes the IDs returned by a failed command directly usable with `collect`. Existing CPU and GPU golden artifacts are fail-closed and are not overwritten by reusing a qualification ID.
+
+Qualification liveness has four distinct bounds. Let `T` be the validated workload JSON `timeout`: the device workload guard is `T + 5s`; the pre-summary heartbeat window is `max(default heartbeat, guard + 10s)`; after a valid workload summary, FINAL has a separate 20-second window; overall remains 300 seconds. For the current CPU profile (`T=75`) these are 80/90/20/300 seconds. Normal `run` retains its strict 45-second heartbeat window. This accommodates the workload's current synchronous golden phase without treating execution as unbounded. The preferred workload-side contract is still to emit heartbeats throughout golden computation and enforce its own deadline.
+
+If UART evaluation has already produced a verdict, cancelling a still-running HDC/ADB worker is appended as secondary infrastructure evidence instead of replacing the verdict with a transport exception. A failed live qualification returns structured `test_id`, `attempt_id`, `result_path`, remote/local evidence locations, verdict, and DUT/infrastructure reasons after a best-effort evidence pull.
+
 The normalization layer accepts any of these inputs:
 
 ```text
@@ -301,7 +308,7 @@ Kirin9030 uses dedicated `cpu_qualification_kirin9030` and `gpu_qualification_ki
 
 Core `run`, `simulate --raw-serial`, and `monitor` share the UART-v2 framing implementation. A diagnostic session decoder scans only until a valid matching START is discovered, discards stale/corrupt preamble frames, and then delegates to the fail-closed `UartV2Decoder` for CRC, frame-size, schema, identity, sequence, FINAL, and trailing-data checks.
 
-`simulate --events` remains a separate JSONL replay path and may use `--realtime`. `simulate --raw-serial` deterministically replays a stored NUL-delimited COBS+CRC capture and rejects `--realtime`; it builds the same serial-transport manifest expected by `RunOrchestrator`. `monitor` performs live session discovery and artifact capture but deliberately returns `NOT_EVALUATED`: without profile policy, workload process status, and a complete run manifest it is a protocol diagnostic, not a DUT judge.
+`simulate --events` remains a separate JSONL replay path and may use `--realtime`. `simulate --raw-serial` deterministically replays a stored NUL-delimited COBS+CRC capture and rejects `--realtime`; it builds the same serial-transport manifest expected by `RunOrchestrator`. Every replay writes below a unique `output/simulations/<replay-id>/<original-test-id>/<original-run-id>` namespace and records source path/hash. Original identities remain unchanged for protocol evaluation, while live artifacts are immutable. `monitor` performs live session discovery and artifact capture but deliberately returns `NOT_EVALUATED`: without profile policy, workload process status, and a complete run manifest it is a protocol diagnostic, not a DUT judge.
 
 Neither interface translates UART v2 through `awk`, `tr`, newline framing, or platform shell helpers. They operate on bytes on the PC, so HarmonyOS portability remains confined to the native relay and device agent.
 

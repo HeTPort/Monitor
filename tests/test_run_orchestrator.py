@@ -13,7 +13,7 @@ from src.cli_commands import _shell_agent_argv
 from src.config_loader import ProfileConfig
 from src.events import build_event, encode_event
 from src.path_resolver import PathResolver
-from src.run_orchestrator import RunInfrastructureError, RunManifestBuilder, RunOrchestrator
+from src.run_orchestrator import RunManifestBuilder, RunOrchestrator
 from src.transport import CommandResult
 from src.uart_protocol import encode_uart_frame
 
@@ -127,6 +127,26 @@ class RunManifestTests(unittest.TestCase):
             self.assertIsNone(qualification["baseline"])
             self.assertEqual(qualification["qualification"]["mode"], "golden")
             self.assertIn("--generate-golden", qualification["workload"]["argv"])
+
+            bounded = RunManifestBuilder(paths).build_qualification(
+                profile=current_profile,
+                golden={},
+                capabilities=None,
+                mode="golden",
+                test_id="GOLDEN-BOUNDED",
+                attempt_id="golden-bounded-1",
+                device_uart="/dev/ttyQualification7",
+                overall_timeout_s=300,
+                heartbeat_timeout_s=90,
+                workload_guard_s=80,
+                final_timeout_s=20,
+            )
+            self.assertEqual(bounded["timeout_s"], 80)
+            self.assertEqual(bounded["overall_timeout_s"], 300)
+            self.assertEqual(bounded["heartbeat_timeout_s"], 90)
+            self.assertEqual(bounded["final_timeout_s"], 20)
+            bounded_argv = _shell_agent_argv(PurePosixPath("/agent"), bounded, 9600)
+            self.assertEqual(bounded_argv[bounded_argv.index("--timeout") + 1], "80")
 
             smoke = RunManifestBuilder(paths).build_qualification(
                 profile=current_profile,
@@ -292,6 +312,65 @@ class RunOrchestratorTests(unittest.TestCase):
             self.assertEqual(execution.result.verdict, "INFRA_ERROR")
             self.assertTrue(any(reason["code"] == "HEARTBEAT_OR_SUMMARY_TIMEOUT" for reason in execution.result.dut_reasons))
 
+    def test_golden_can_cross_normal_heartbeat_window_with_derived_silence_budget(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = {
+                "schema_version": 1,
+                "run_id": "golden-silent",
+                "overall_timeout_s": 100,
+                "heartbeat_timeout_s": 90,
+                "final_timeout_s": 20,
+                "policy": {"thresholds": {}, "required_telemetry": []},
+            }
+            start = build_event(
+                run_id=manifest["run_id"], seq=1, timestamp_ms=0,
+                source="agent", event_type="agent_start", payload={},
+            )
+            summary = build_event(
+                run_id=manifest["run_id"], seq=2, timestamp_ms=60,
+                source="cpu-workload", event_type="summary", payload={"result": "PASS", "exit_code": 0},
+            )
+            final = build_event(
+                run_id=manifest["run_id"], seq=3, timestamp_ms=61,
+                source="agent", event_type="agent_final", payload={"workload_exit_code": 0, "spool_complete": True},
+            )
+            ticks = iter([0.0, 0.0, 50.0, 60.0])
+            execution = RunOrchestrator(Path(tmp)).evaluate_stream(
+                manifest,
+                [encode_event(start), b"", encode_event(summary) + encode_event(final)],
+                clock=lambda: next(ticks),
+            )
+            self.assertEqual(execution.result.verdict, "PASS")
+
+    def test_summary_switches_to_bounded_agent_final_deadline(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = {
+                "schema_version": 1,
+                "run_id": "final-timeout",
+                "overall_timeout_s": 100,
+                "heartbeat_timeout_s": 5,
+                "final_timeout_s": 20,
+                "policy": {"thresholds": {}, "required_telemetry": []},
+            }
+            records = [
+                build_event(run_id=manifest["run_id"], seq=1, timestamp_ms=0, source="agent", event_type="agent_start", payload={}),
+                build_event(
+                    run_id=manifest["run_id"], seq=2, timestamp_ms=1,
+                    source="cpu-workload", event_type="summary", payload={"result": "PASS", "exit_code": 0},
+                ),
+            ]
+            ticks = iter([0.0, 0.0, 1.0, 22.0])
+            execution = RunOrchestrator(Path(tmp)).evaluate_stream(
+                manifest,
+                [encode_event(records[0]), encode_event(records[1]), b""],
+                clock=lambda: next(ticks),
+            )
+            self.assertEqual(execution.result.verdict, "INFRA_ERROR")
+            self.assertTrue(any(reason["code"] == "AGENT_FINAL_TIMEOUT" for reason in execution.result.infrastructure_reasons))
+            document = __import__("json").loads(execution.result_path.read_text(encoding="utf-8"))
+            self.assertEqual(document["liveness"]["timeout_phase"], "post-summary-final")
+            self.assertFalse(any(reason["code"] == "HEARTBEAT_OR_SUMMARY_TIMEOUT" for reason in execution.result.dut_reasons))
+
     def test_hardware_run_opens_and_clears_serial_before_agent_launch(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             manifest = {
@@ -404,14 +483,23 @@ class RunOrchestratorTests(unittest.TestCase):
             transport = BlockingTransport()
             started = time.monotonic()
             with patch.dict("sys.modules", {"serial": SimpleNamespace(Serial=EmptySerial)}):
-                with self.assertRaisesRegex(RunInfrastructureError, "did not finish"):
-                    RunOrchestrator(Path(tmp)).run_serial(
-                        manifest,
-                        transport=transport,
-                        agent_argv=["agent"],
-                        pc_serial="COM-test",
-                        baudrate=9600,
-                    )
+                execution = RunOrchestrator(Path(tmp)).run_serial(
+                    manifest,
+                    transport=transport,
+                    agent_argv=["agent"],
+                    pc_serial="COM-test",
+                    baudrate=9600,
+                )
+            self.assertEqual(execution.result.verdict, "INFRA_ERROR")
+            self.assertTrue(any(
+                reason["code"] == "AGENT_TRANSPORT_CANCELLED_AFTER_VERDICT"
+                for reason in execution.result.infrastructure_reasons
+            ))
+            result = __import__("json").loads(execution.result_path.read_text(encoding="utf-8"))
+            self.assertTrue(any(
+                reason["code"] == "AGENT_TRANSPORT_CANCELLED_AFTER_VERDICT"
+                for reason in result["infrastructure_reasons"]
+            ))
             self.assertGreaterEqual(transport.cancel_count, 1)
             self.assertLess(time.monotonic() - started, 1.0)
 

@@ -169,7 +169,7 @@ PC 默认使用 `--pc-artifacts result`，保留判定所需的紧凑结果。�
 & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL run --profile cpu_stress_kirin9030 --test-id 0831-CPU-TEL-01 --telemetry
 ```
 
-两种方式调用同一个 `avs-telemetry-agent` 和同一份 profile telemetry plan。采样只追加到设备本地 `spool/telemetry.jsonl`，不混入判错 UART。普通 error-only 运行不把 telemetry 缺失当作 DUT 错误；显式请求 `--telemetry` 但 collector 未部署属于基础设施错误。
+两种方式调用同一个 `avs-telemetry-agent` 和同一份 profile telemetry plan。采样只追加到设备本地 `spool/telemetry.jsonl`，不混入判错 UART。collector 在每个 metric/path 读取前后检查 stop-file 和 wall-clock deadline，采样间隔也可中断。伴随 workload 结束后，agent 只给 telemetry 有限的停止宽限期；超时会终止 collector、记录 `TELEMETRY_SHUTDOWN_TIMEOUT`，但仍继续写 `final.json` 并发送 `agent_final`。普通 error-only 运行不把 telemetry 缺失当作 DUT 错误；显式请求 `--telemetry` 但 collector 未部署属于基础设施错误。
 
 ## 7. 拉取和报告
 
@@ -212,6 +212,16 @@ PC 默认使用 `--pc-artifacts result`，保留判定所需的紧凑结果。�
 
 命令 JSON 输出中的 `source_runs` 是后续 `calibrate` 可直接复用的 PC 运行目录。每个目录可包含 PC `result.json`，以及 sibling `device-evidence/<attempt>/spool`；也可直接传已 collect 的 `spool`。资格化优先从设备 `workload.log` 的原生 summary 读取完整性能指标，UART 上的紧凑 summary 不需要扩大。
 
+live capture 中，命令的 `--qualification-id` 同时作为设备和 PC 的顶层 `test_id`；每一次运行或重试生成新的 `attempt_id`，不会覆盖已有证据。因此失败后可直接使用命令 JSON 返回的两个 ID 执行：
+
+```powershell
+& $MON --transport hdc --device $DEVICE collect --test-id '<qualification-id>' --attempt-id '<returned-attempt-id>' --verify-hashes
+```
+
+Monitor 对 live golden 区分四个 deadline：设备 workload guard、收到 summary 前的 heartbeat 静默窗口、summary 后等待 `agent_final` 的短窗口，以及整体上限。以当前 CPU JSON 的 `timeout=75` 为例，分别为 80、90、20 和 300 秒。普通 `run` 仍严格使用 45 秒 heartbeat；这个放宽只适用于 `--generate-golden` 的已知同步计算阶段。workload 超过 80 秒会由设备 agent 报 `WORKLOAD_DEADLINE_EXCEEDED`，summary 后超过 20 秒没有 FINAL 会报 `AGENT_FINAL_TIMEOUT`，不会无限等待。
+
+live golden 失败仍会尽力自动拉取设备 evidence，并在 JSON 中返回 `test_id`、`attempt_id`、PC `result_path`、设备 evidence 路径、原始 verdict/reason 以及附加 transport 状态。UART/策略结果是主错误；HDC 因前述错误被取消只作为次级基础设施原因，不再遮蔽原始超时。外部 workload 最终仍应在 golden 主计算阶段持续发 heartbeat，并自行执行它声明的 deadline；Monitor 的动态窗口负责兼容和防误杀，而不是把无界计算当成成功。
+
 ### 8.1 两块板的功能验收（快速证明数据链）
 
 先分别在 BOARD-A 和 BOARD-B 上部署并核验 `cpu_qualification_kirin9030`，每块板实时采集一次 golden。保存两次输出里的 `source_runs[0]`，再做跨板一致性 golden 和最小两样本校准：
@@ -250,7 +260,7 @@ GPU 使用同样流程，但换成 `gpu_qualification_kirin9030` 和 `golden gpu
 & $MON --json simulate --raw-serial '<run>/serial.raw' --profile cpu_stress_kirin9030
 ```
 
-两种输入应复现原运行的 verdict/exit code；`--realtime` 不能和 `--raw-serial` 同用。`monitor` 直接从 `$PC_SERIAL` 发现并解码一段 UART v2 会话，可保存 raw 证据，但因为没有完整 run manifest，只输出诊断结果 `NOT_EVALUATED`，不能替代 `run`：
+两种输入应复现原运行的 verdict/exit code；`--realtime` 不能和 `--raw-serial` 同用。每次重放分配唯一 `replay_id`，写入 `output/simulations/<replay-id>/<original-test-id>/<original-attempt-id>`，并记录输入路径与 SHA-256；UART 身份仍按原 test/attempt 校验，但不会写回或覆盖 live 运行目录。`monitor` 直接从 `$PC_SERIAL` 发现并解码一段 UART v2 会话，可保存 raw 证据，但因为没有完整 run manifest，只输出诊断结果 `NOT_EVALUATED`，不能替代 `run`：
 
 ```powershell
 & $MON --pc-serial $PC_SERIAL --baudrate 115200 --json monitor --save-raw --timeout 60

@@ -2,7 +2,7 @@
 
 # POSIX workload supervisor. Full evidence stays append-only on device; only
 # compact lifecycle/verdict events are passed to the native UART relay.
-AGENT_VERSION=0.3.1
+AGENT_VERSION=0.3.2
 PROTOCOL_VERSION=2
 
 if [ "${1:-}" = "--version" ]; then
@@ -12,7 +12,7 @@ fi
 
 test_id= attempt_id= target= uart= relay= spool_dir=
 workload_cwd=/ baudrate=9600 timeout_s=300 max_frame=512 tail_guard=64 safe_utilization=70
-summary_metrics= telemetry_agent= telemetry_plan= telemetry_interval_s=5
+summary_metrics= telemetry_agent= telemetry_plan= telemetry_interval_s=5 telemetry_shutdown_s=10
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -32,6 +32,7 @@ while [ "$#" -gt 0 ]; do
         --telemetry-agent) telemetry_agent=${2:-}; shift 2 ;;
         --telemetry-plan) telemetry_plan=${2:-}; shift 2 ;;
         --telemetry-interval) telemetry_interval_s=${2:-}; shift 2 ;;
+        --telemetry-shutdown-timeout) telemetry_shutdown_s=${2:-}; shift 2 ;;
         --) shift; break ;;
         *) echo "avs-device-agent: unsupported option: $1" >&2; exit 2 ;;
     esac
@@ -40,7 +41,7 @@ done
 case "$test_id" in *[!A-Za-z0-9._:-]*|'') echo "avs-device-agent: invalid test id" >&2; exit 2 ;; esac
 case "$attempt_id" in *[!A-Za-z0-9._:-]*|'') echo "avs-device-agent: invalid attempt id" >&2; exit 2 ;; esac
 case "$target" in cpu|gpu) ;; *) echo "avs-device-agent: invalid target" >&2; exit 2 ;; esac
-for numeric in "$baudrate" "$timeout_s" "$max_frame" "$tail_guard" "$safe_utilization" "$telemetry_interval_s"; do
+for numeric in "$baudrate" "$timeout_s" "$max_frame" "$tail_guard" "$safe_utilization" "$telemetry_interval_s" "$telemetry_shutdown_s"; do
     case "$numeric" in *[!0-9]*|'') echo "avs-device-agent: invalid numeric option" >&2; exit 2 ;; esac
 done
 for metric in $summary_metrics; do
@@ -199,12 +200,31 @@ watchdog_pid= workload_pid=
 
 timed_out=false
 [ -f "$timeout_flag" ] && timed_out=true
+if [ "$timed_out" = true ]; then
+    emit_local "$target-workload" error '{"origin":"workload","error_code":"WORKLOAD_DEADLINE_EXCEEDED"}'
+    emit_wire "$target-workload" error '{"origin":"workload","error_code":"WORKLOAD_DEADLINE_EXCEEDED"}'
+fi
+telemetry_timed_out=false
 if [ -n "$telemetry_pid" ]; then
     touch "$telemetry_stop" 2>/dev/null || true
-    wait "$telemetry_pid"
+    telemetry_deadline=$(( $(now_s) + telemetry_shutdown_s ))
+    while kill -0 "$telemetry_pid" 2>/dev/null; do
+        [ "$(now_s)" -ge "$telemetry_deadline" ] && break
+        sleep 1
+    done
+    if kill -0 "$telemetry_pid" 2>/dev/null; then
+        telemetry_timed_out=true
+        kill "$telemetry_pid" 2>/dev/null || true
+        sleep 1
+        kill -9 "$telemetry_pid" 2>/dev/null || true
+    fi
+    wait "$telemetry_pid" 2>/dev/null
     telemetry_exit=$?
     telemetry_pid=
-    if [ "$telemetry_exit" -ne 0 ]; then
+    if [ "$telemetry_timed_out" = true ]; then
+        emit_local agent error '{"origin":"agent","error_code":"TELEMETRY_SHUTDOWN_TIMEOUT"}'
+        emit_wire agent error '{"origin":"agent","error_code":"TELEMETRY_SHUTDOWN_TIMEOUT"}'
+    elif [ "$telemetry_exit" -ne 0 ]; then
         emit_local agent error '{"origin":"agent","error_code":"TELEMETRY_COLLECTION_FAILED"}'
         emit_wire agent error '{"origin":"agent","error_code":"TELEMETRY_COLLECTION_FAILED"}'
     fi
@@ -212,11 +232,11 @@ fi
 
 telemetry_json=null
 [ -n "$telemetry_exit" ] && telemetry_json=$telemetry_exit
-final_payload="{\"workload_exit_code\":$workload_exit,\"summary_seen\":$summary_seen,\"timed_out\":$timed_out,\"spool_complete\":true,\"telemetry_exit_code\":$telemetry_json}"
+final_payload="{\"workload_exit_code\":$workload_exit,\"summary_seen\":$summary_seen,\"timed_out\":$timed_out,\"spool_complete\":true,\"telemetry_exit_code\":$telemetry_json,\"telemetry_timed_out\":$telemetry_timed_out}"
 emit_local agent agent_final "$final_payload" || true
 emit_wire agent agent_final "$final_payload" || true
-printf '{"schema_version":1,"test_id":"%s","attempt_id":"%s","workload_exit_code":%s,"summary_seen":%s,"timed_out":%s,"telemetry_exit_code":%s}\n' \
-    "$test_id" "$attempt_id" "$workload_exit" "$summary_seen" "$timed_out" "$telemetry_json" > "$final_file"
+printf '{"schema_version":1,"test_id":"%s","attempt_id":"%s","workload_exit_code":%s,"summary_seen":%s,"timed_out":%s,"telemetry_exit_code":%s,"telemetry_timed_out":%s}\n' \
+    "$test_id" "$attempt_id" "$workload_exit" "$summary_seen" "$timed_out" "$telemetry_json" "$telemetry_timed_out" > "$final_file"
 
 if command -v sha256sum >/dev/null 2>&1; then
     {

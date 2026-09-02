@@ -138,6 +138,7 @@ class RunManifestBuilder:
                 "plan": str(self.paths.remote(f"configs/telemetry/{profile.name}.conf")),
                 "agent": str(self.paths.remote("bin/avs-telemetry-agent")),
                 "interval_s": max(1, (int(profile.telemetry.get("interval_ms", 5000)) + 999) // 1000),
+                "shutdown_timeout_s": 10,
             },
             "logs": {"device_local": True, "streamed_to_pc": False},
             "policy": {"thresholds": thresholds, "required_telemetry": []},
@@ -159,6 +160,8 @@ class RunManifestBuilder:
         kernel_mode: str | None = None,
         overall_timeout_s: float = 300.0,
         heartbeat_timeout_s: float = 45.0,
+        workload_guard_s: float | None = None,
+        final_timeout_s: float | None = None,
         kernel_rules_path: Path | None = None,
         device_uart: str | None = None,
         pc_artifacts: str = "full",
@@ -186,6 +189,16 @@ class RunManifestBuilder:
             "production_baseline_allowed": False,
             "generated_reference_disposition": "qualification-artifact" if mode == "golden" else "not-generated",
         }
+        if workload_guard_s is not None:
+            if workload_guard_s <= 0:
+                raise RunError("qualification workload guard must be positive")
+            manifest["timeout_s"] = float(workload_guard_s)
+            manifest["qualification"]["workload_guard_s"] = float(workload_guard_s)
+        if final_timeout_s is not None:
+            if final_timeout_s <= 0:
+                raise RunError("qualification FINAL timeout must be positive")
+            manifest["final_timeout_s"] = float(final_timeout_s)
+            manifest["qualification"]["final_timeout_s"] = float(final_timeout_s)
         argv = manifest["workload"]["argv"]
         if mode == "golden":
             argv.extend(("--generate-golden", "true"))
@@ -276,10 +289,13 @@ class RunOrchestrator:
         last_workload_activity = started
         overall_timeout = float(manifest.get("overall_timeout_s", manifest.get("timeout_s", 300)))
         heartbeat_timeout = float(manifest.get("heartbeat_timeout_s", 45))
+        final_timeout = float(manifest.get("final_timeout_s", overall_timeout))
         timed_out = False
+        timeout_phase: str | None = None
         final_seen = False
         agent_started = False
         workload_completed = False
+        workload_completed_at: float | None = None
         protocol_failed = False
         try:
             for chunk in chunks:
@@ -290,8 +306,26 @@ class RunOrchestrator:
                     and not protocol_failed
                     and now - last_workload_activity > heartbeat_timeout
                 )
-                if now - started > overall_timeout or heartbeat_expired:
+                final_expired = (
+                    workload_completed_at is not None
+                    and not final_seen
+                    and not protocol_failed
+                    and now - workload_completed_at > final_timeout
+                )
+                overall_expired = now - started > overall_timeout
+                if overall_expired or heartbeat_expired or final_expired:
                     timed_out = True
+                    if final_expired or (overall_expired and workload_completed):
+                        timeout_phase = "post-summary-final"
+                        policy.infrastructure_failure(
+                            "agent",
+                            "AGENT_FINAL_TIMEOUT",
+                            f"agent_final was not received within {final_timeout:g}s after workload summary",
+                        )
+                    elif heartbeat_expired:
+                        timeout_phase = "pre-summary-heartbeat"
+                    else:
+                        timeout_phase = "overall"
                     break
                 if not chunk:
                     continue
@@ -329,6 +363,7 @@ class RunOrchestrator:
                         last_workload_activity = now
                     if event.type == "summary":
                         workload_completed = True
+                        workload_completed_at = now
                         store.write_json("workload-summary.json", event.payload)
                     if event.type == "agent_final":
                         final_seen = True
@@ -354,7 +389,14 @@ class RunOrchestrator:
                 "event_count": event_count,
                 "device_evidence": manifest.get("device_attempt_dir"),
                 "pc_artifacts": mode,
-                "liveness": {"timed_out": timed_out, "agent_final_seen": final_seen},
+                "liveness": {
+                    "timed_out": timed_out,
+                    "timeout_phase": timeout_phase,
+                    "heartbeat_timeout_s": heartbeat_timeout,
+                    "final_timeout_s": final_timeout,
+                    "overall_timeout_s": overall_timeout,
+                    "agent_final_seen": final_seen,
+                },
                 **result.to_dict(),
             }
             result_path = store.finalize(result_document)
@@ -409,6 +451,8 @@ class RunOrchestrator:
                             break
                     yield chunk
 
+            transport_reason: dict[str, Any] | None = None
+            launch_result: CommandResult | None = None
             try:
                 execution = self.evaluate_stream(
                     manifest,
@@ -418,24 +462,43 @@ class RunOrchestrator:
                 )
                 if not execution.result.agent_final_seen and not future.done():
                     transport.cancel_active()
-                    raise RunInfrastructureError("device-agent transport command did not finish")
+                    transport_reason = {
+                        "scope": "transport",
+                        "code": "AGENT_TRANSPORT_CANCELLED_AFTER_VERDICT",
+                        "message": "device-agent transport was cancelled after UART evaluation completed",
+                    }
                 try:
-                    launch_result = future.result(timeout=10.0)
-                except TimeoutError as exc:
+                    launch_result = future.result(timeout=10.0 if execution.result.agent_final_seen else 0.25)
+                except TimeoutError:
                     transport.cancel_active()
-                    raise RunInfrastructureError("device-agent transport command did not finish") from exc
+                    transport_reason = transport_reason or {
+                        "scope": "transport",
+                        "code": "AGENT_TRANSPORT_DID_NOT_FINISH",
+                        "message": "device-agent transport did not finish after UART evaluation completed",
+                    }
+                except BaseException as exc:
+                    transport_reason = {
+                        "scope": "transport",
+                        "code": "AGENT_TRANSPORT_EXCEPTION",
+                        "message": str(exc),
+                    }
             finally:
                 stop.set()
                 if not future.done():
                     transport.cancel_active()
             execution.launch_result = launch_result
-            expected_exit = execution.result.workload_exit_code
-            launch_invalid = (
-                not launch_result.transport_ok
-                or expected_exit is None
-                or launch_result.return_code != expected_exit
-            )
-            if launch_invalid:
+            if transport_reason is not None:
+                self._record_infrastructure_reason(execution, transport_reason)
+            if launch_result is not None and execution.result.agent_final_seen:
+                expected_exit = execution.result.workload_exit_code
+                launch_invalid = (
+                    not launch_result.transport_ok
+                    or expected_exit is None
+                    or launch_result.return_code != expected_exit
+                )
+            else:
+                launch_invalid = False
+            if launch_invalid and launch_result is not None:
                 reason = {
                     "scope": "agent-process",
                     "code": "AGENT_EXIT_MISMATCH",
@@ -445,29 +508,37 @@ class RunOrchestrator:
                     "stdout": launch_result.stdout,
                     "stderr": launch_result.stderr,
                 }
-                execution.result.verdict = "INFRA_ERROR"
-                execution.result.exit_code = 3
-                execution.result.infrastructure_reasons.append(reason)
-                document = json.loads(execution.result_path.read_text(encoding="utf-8"))
-                document["verdict"] = "INFRA_ERROR"
-                document["exit_code"] = 3
-                document.setdefault("infrastructure_reasons", []).append(reason)
-                hashes = {
-                    path.relative_to(execution.result_path.parent).as_posix(): sha256_file(path)
-                    for path in sorted(execution.result_path.parent.rglob("*"))
-                    if path.is_file() and path.name not in {"artifact-hashes.json", "result.json"}
-                }
-                atomic_write_json(
-                    execution.result_path.parent / "artifact-hashes.json",
-                    {"schema_version": 1, "sha256": hashes},
-                )
-                document["artifacts"] = {
-                    "complete": True,
-                    "hash_manifest": "artifact-hashes.json",
-                    "hashed_file_count": len(hashes),
-                }
-                atomic_write_json(execution.result_path, document)
+                self._record_infrastructure_reason(execution, reason)
             return execution
+
+    @staticmethod
+    def _record_infrastructure_reason(execution: RunExecution, reason: Mapping[str, Any]) -> None:
+        normalized = dict(reason)
+        if normalized not in execution.result.infrastructure_reasons:
+            execution.result.infrastructure_reasons.append(normalized)
+        execution.result.verdict = "INFRA_ERROR"
+        execution.result.exit_code = 3
+        document = json.loads(execution.result_path.read_text(encoding="utf-8"))
+        document["verdict"] = "INFRA_ERROR"
+        document["exit_code"] = 3
+        reasons = document.setdefault("infrastructure_reasons", [])
+        if normalized not in reasons:
+            reasons.append(normalized)
+        hashes = {
+            path.relative_to(execution.result_path.parent).as_posix(): sha256_file(path)
+            for path in sorted(execution.result_path.parent.rglob("*"))
+            if path.is_file() and path.name not in {"artifact-hashes.json", "result.json"}
+        }
+        atomic_write_json(
+            execution.result_path.parent / "artifact-hashes.json",
+            {"schema_version": 1, "sha256": hashes},
+        )
+        document["artifacts"] = {
+            "complete": True,
+            "hash_manifest": "artifact-hashes.json",
+            "hashed_file_count": len(hashes),
+        }
+        atomic_write_json(execution.result_path, document)
 
     @staticmethod
     def _limits(manifest: Mapping[str, Any]) -> PolicyLimits:

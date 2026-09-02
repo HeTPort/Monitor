@@ -145,6 +145,11 @@ class PolicyEngine:
     def protocol_failure(self, error: EventProtocolError) -> None:
         self.infrastructure_reasons.append({"scope": "protocol", "code": error.kind, "message": str(error)})
 
+    def infrastructure_failure(self, scope: str, code: str, message: str) -> None:
+        reason = {"scope": scope, "code": code, "message": message}
+        if reason not in self.infrastructure_reasons:
+            self.infrastructure_reasons.append(reason)
+
     def invalid_configuration(self, message: str) -> None:
         self._pre_run_exit = RunExitCode.INVALID_CONFIGURATION
         self.infrastructure_reasons.append({"scope": "configuration", "code": "INVALID_CONFIGURATION", "message": message})

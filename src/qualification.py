@@ -65,6 +65,8 @@ class GoldenService:
             "records": records,
         }
         path = self._golden_dir(qualification_id) / "cpu-golden.json"
+        if path.exists():
+            raise QualificationError(f"CPU golden destination already exists: {path}")
         atomic_write_json(path, manifest)
         manifest["manifest_path"] = str(path)
         manifest["manifest_sha256"] = sha256_file(path)

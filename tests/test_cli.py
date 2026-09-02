@@ -15,6 +15,8 @@ from src.cli_commands import (
     _apply_platform_serial,
     _apply_saved_pairing,
     _concise_reason,
+    _qualification_deadlines,
+    cmd_golden,
     cmd_monitor_events,
     cmd_smoke,
     command_boundary,
@@ -319,6 +321,83 @@ class CLITests(unittest.TestCase):
         self.assertIn("--readback-name", gpu.stdout)
         self.assertNotIn("--accept-checksum", gpu.stdout)
 
+    def test_live_golden_uses_qualification_id_as_test_id_and_derived_deadlines(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workload_binary = root / "cpu-avs-workload"
+            workload_binary.write_bytes(b"cpu-workload")
+            workload_config = root / "cpu-workload.json"
+            document = valid_workload_document("cpu", "checksum")
+            document["timeout"] = 75
+            workload_config.write_text(json.dumps(document), encoding="utf-8")
+            profile_path = root / "cpu-profile.json"
+            profile_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "name": "cpu_live_qualification",
+                        "target": "cpu",
+                        "platform": "kirin9020",
+                        "workload": {
+                            "binary": str(workload_binary),
+                            "remote_binary": "bin/cpu-avs-workload",
+                            "config": str(workload_config),
+                        },
+                        "scheduler_requirements": {},
+                        "baseline": None,
+                        "telemetry": {"required": [], "optional": []},
+                        "kernel_monitor": "off",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            source_spool = root / "captured" / "spool"
+            source_spool.mkdir(parents=True)
+            (source_spool / "events.jsonl").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "test_id": "QUAL-LIVE",
+                        "run_id": "QUAL-LIVE-001-test",
+                        "seq": 1,
+                        "timestamp_ms": 1,
+                        "source": "cpu-workload",
+                        "type": "golden",
+                        "payload": {"checksum": "0123456789abcdef"},
+                    }
+                ) + "\n",
+                encoding="utf-8",
+            )
+            args = Namespace(
+                known_good=True,
+                config_dir=None,
+                state_dir=str(root / "state"),
+                output_dir=str(root / "output"),
+                device_root="/data/local/tmp/avs",
+                profile=str(profile_path),
+                golden_target="cpu",
+                runs=1,
+                board_id="BOARD-A",
+                run_dir=[],
+                qualification_id="QUAL-LIVE",
+                accept_checksum=None,
+                json_output=True,
+            )
+            paths = PathResolver.create(
+                output_dir=str(root / "output"),
+                state_dir=str(root / "state"),
+                entrypoint=MAIN,
+            )
+            profile = __import__("src.config_loader", fromlist=["ProfileConfig"]).ProfileConfig.from_file(profile_path)
+            self.assertEqual(_qualification_deadlines(args, paths, profile, "golden"), (300.0, 80.0, 90.0, 20.0))
+            output = io.StringIO()
+            with patch("src.cli_commands._execute_live_qualification", return_value=[source_spool]) as execute:
+                with redirect_stdout(output):
+                    exit_code = cmd_golden(args)
+            self.assertEqual(exit_code, 0, output.getvalue())
+            self.assertEqual(execute.call_args.kwargs["test_id"], "QUAL-LIVE")
+            self.assertEqual(json.loads(output.getvalue())["qualification_id"], "QUAL-LIVE")
+
     def test_simulate_and_report_from_a_different_cwd(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -336,12 +415,24 @@ class CLITests(unittest.TestCase):
             ]
             events_path.write_bytes(b"".join(encode_event(record) for record in records))
             output = root / "results"
+            live_dir = output / "cli-sim"
+            live_dir.mkdir(parents=True)
+            live_marker = live_dir / "live-marker.txt"
+            live_marker.write_text("preserve", encoding="utf-8")
             simulate = self.run_cli(
                 "--output-dir", str(output), "--json", "simulate", "--events", str(events_path), cwd=root
             )
             self.assertEqual(simulate.returncode, 0, simulate.stderr)
             simulated = json.loads(simulate.stdout)
             self.assertEqual(simulated["verdict"], "PASS")
+            self.assertIn("simulations", Path(simulated["result"]).parts)
+            self.assertEqual(simulated["source_sha256"], __import__("hashlib").sha256(events_path.read_bytes()).hexdigest())
+            repeated = self.run_cli(
+                "--output-dir", str(output), "--json", "simulate", "--events", str(events_path), cwd=root
+            )
+            self.assertEqual(repeated.returncode, 0, repeated.stderr)
+            self.assertNotEqual(json.loads(repeated.stdout)["replay_id"], simulated["replay_id"])
+            self.assertEqual(live_marker.read_text(encoding="utf-8"), "preserve")
             run_dir = Path(simulated["result"]).parent
             report = self.run_cli("--json", "report", "--run-dir", str(run_dir), "--format", "markdown,json", cwd=root)
             self.assertEqual(report.returncode, 0, report.stderr)

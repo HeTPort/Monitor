@@ -2,7 +2,7 @@
 
 # Independent append-only collector. Uses POSIX shell plus sed only; notably no
 # awk or tr, which are absent on the tested HarmonyOS image.
-TELEMETRY_VERSION=0.2.0
+TELEMETRY_VERSION=0.2.1
 
 if [ "${1:-}" = "--version" ]; then
     echo "avs-telemetry-agent $TELEMETRY_VERSION schema 1"
@@ -38,6 +38,15 @@ started_s=$(date +%s 2>/dev/null || echo 0)
 
 now_ms() { seconds=$(date +%s 2>/dev/null || echo 0); echo $((seconds * 1000)); }
 json_escape() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+
+should_stop() {
+    [ -n "$stop_file" ] && [ -e "$stop_file" ] && return 0
+    if [ "$duration_s" -gt 0 ]; then
+        current_s=$(date +%s 2>/dev/null || echo 0)
+        [ $((current_s - started_s)) -ge "$duration_s" ] && return 0
+    fi
+    return 1
+}
 
 numeric_value() {
     set -- $1
@@ -75,8 +84,10 @@ proc_stat_value() {
 
 append_value() {
     metric=$1 parser=$2 source_path=$3
+    should_stop && return 2
     [ -r "$source_path" ] || return 0
     IFS= read -r raw < "$source_path" || raw=
+    should_stop && return 2
     raw=${raw%"$carriage_return"}
     case "$parser" in
         proc_stat_utilization) value_json=$(proc_stat_value "$source_path") || return 0 ;;
@@ -99,25 +110,33 @@ append_value() {
 sample_once() {
     carriage_return=$(printf '\r')
     while IFS='|' read -r metric parser path_pattern; do
+        should_stop && return 1
         metric=${metric%"$carriage_return"}
         parser=${parser%"$carriage_return"}
         path_pattern=${path_pattern%"$carriage_return"}
         case "$metric" in ''|'#'*) continue ;; esac
         [ -n "$parser" ] && [ -n "$path_pattern" ] || continue
         for source_path in $path_pattern; do
+            should_stop && return 1
             [ -e "$source_path" ] || continue
             append_value "$metric" "$parser" "$source_path"
+            append_status=$?
+            [ "$append_status" -eq 2 ] && return 1
         done
     done < "$plan"
 }
 
 while :; do
-    [ -n "$stop_file" ] && [ -e "$stop_file" ] && break
-    sample_once
-    current_s=$(date +%s 2>/dev/null || echo 0)
-    if [ "$duration_s" -gt 0 ] && [ $((current_s - started_s)) -ge "$duration_s" ]; then break; fi
+    should_stop && break
+    sample_once || break
+    should_stop && break
     [ "$duration_s" -eq 0 ] && [ -z "$stop_file" ] && break
-    sleep "$interval_s"
+    slept_s=0
+    while [ "$slept_s" -lt "$interval_s" ]; do
+        should_stop && break
+        sleep 1
+        slept_s=$((slept_s + 1))
+    done
 done
 
 if [ "$seq" -eq 0 ]; then
