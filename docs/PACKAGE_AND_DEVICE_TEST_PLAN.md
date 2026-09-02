@@ -1,6 +1,6 @@
 # Monitor 2.1 打包与设备最小闭环测试计划
 
-更新于 2026-09-01。本计划用于 Kirin9030 实机验收，也可通过替换平台/profile 用于其他板卡。
+更新于 2026-09-02。本计划用于 Kirin9030 实机验收，也可通过替换平台/profile 用于其他板卡。
 
 ## 1. 本轮要证明什么
 
@@ -28,7 +28,7 @@ probe、pair、deploy 和 verify-deployment 是显式准备，不属于每次 `r
 | `smoke` | 兼容旧调用的短 profile 别名 | 只用于旧脚本迁移 | 已弃用；新流程统一使用 `run --profile ...smoke...` |
 | `telemetry run` | 单独启动设备本地追加式遥测 | 平台能力验收或需要独立采样时 | 不启动 workload、不占用判错 UART |
 | `collect` | 按 test/attempt ID 拉取设备证据，可校验哈希 | run/telemetry 后集中取证 | 默认不删除设备证据 |
-| `golden` / `calibrate` / `baseline` | 从明确提供的合格运行生成、校准、批准资格数据 | 需要 checksum/golden/阈值校验时 | 不属于普通 error-only 最小闭环 |
+| `golden` / `calibrate` / `baseline` | 实时采集或消费完整合格运行，生成、校准、批准资格数据 | 需要 checksum/golden/阈值校验时 | 不属于普通 error-only 最小闭环；不会接受半个 supplied cohort |
 | `report` | 从一个已有 PC `result.json` 生成 markdown/json/csv | 测试结束后本地汇总 | 不连接设备、不替代 `collect` |
 | `monitor` | 诊断性读取串口事件 | 排查独立串口/协议问题 | 没有完整 run manifest，不给 DUT verdict |
 | `simulate` | 离线重放事件/原始串口证据 | 协议回归、故障注入替代验证 | 不连接设备 |
@@ -55,6 +55,8 @@ probe、pair、deploy 和 verify-deployment 是显式准备，不属于每次 `r
 | `gpu_stress_kirin9030` | GPU 普通长压/最小闭环 | `gpu_stress.json` | `none` | 否 |
 | `cpu_smoke_kirin9030` | CPU 短时正向闭环 | `cpu_smoke.json` | `none` | 否 |
 | `gpu_smoke_kirin9030` | GPU 短时正向闭环（可选） | `gpu_smoke.json` | `none` | 否 |
+| `cpu_qualification_kirin9030` | Kirin9030 CPU checksum/阈值资格化 | `cpu_qualification_kirin9030.json` | `checksum` | 生成阶段否；合格运行显式传入 |
+| `gpu_qualification_kirin9030` | Kirin9030 GPU readback/阈值资格化 | `gpu_qualification_kirin9030.json` | `golden-image` | 生成阶段否；合格运行显式传入 |
 | `cpu_mixed_big4` | CPU checksum 资格化 | `cpu_mixed_big4.json` | `checksum` | 是，显式传入 |
 | `gpu_vulkan_mixed` | GPU golden-image 资格化 | `gpu_vulkan_mixed.json` | `golden-image` | 是，显式传入 |
 | `<故障注入profile>` | MC-04 项目自备负向 profile | 项目自备 | 按预期故障设计 | 视设计而定 |
@@ -278,29 +280,79 @@ telemetry 不是最小闭环的前置条件，但应证明它能独立工作，�
 
 通过条件：核心 UART 仍完成 PASS/FAIL 判定，telemetry 只出现在设备本地文件，不穿插到 UART 事件流。
 
-## 7. baseline 校验（非最小闭环）
+## 7. 资格化数据链与 baseline（非最小闭环）
 
-只有需要 checksum/golden/阈值比较时才执行：
+资格化 profile 必须先各自完成 PRE-03/04。`golden --runs N` 有两个互斥来源模式：不传 `--run-dir` 时实时采集 N 次并自动拉完整设备 attempt；传入时必须恰好 N 个。输出 JSON 的 `source_runs` 是可直接交给 `calibrate` 的规范化 PC 运行目录。禁止只传一部分目录再从设备补齐。
 
-```powershell
-& $MON --transport hdc --device $DEVICE deploy --profile cpu_mixed_big4 --baseline '<approved-baseline-id>'
-& $MON --transport hdc --device $DEVICE verify-deployment --profile cpu_mixed_big4 --baseline '<approved-baseline-id>'
-& $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART run --profile cpu_mixed_big4 --baseline '<approved-baseline-id>' --test-id "BASELINE-CPU-$SESSION" --attempt-id "BASELINE-CPU-$SESSION-001"
-```
+### QUAL-01 两板功能验收
 
-通过条件：`validation_mode=baseline`，结果记录 baseline ID 和比较结果。baseline 缺失、未批准或与 profile/workload 指纹不一致应在启动 workload 前失败。普通 smoke/stress 不应切换到 checksum/golden 模式；CPU checksum 和 GPU golden-image 只在这条显式 baseline 流程中使用。
-
-生成流程只能消费显式运行目录：
+在 BOARD-A 上部署/核验 `cpu_qualification_kirin9030` 后执行：
 
 ```powershell
-& $MON golden cpu --profile cpu_mixed_big4 --board-id BOARD-A --known-good --runs 2 --run-dir '<run1>' --run-dir '<run2>'
-& $MON calibrate cpu --profile cpu_mixed_big4 --board-id BOARD-A --golden '<golden.json>' --runs 2 --run-dir '<run1>' --run-dir '<run2>'
-& $MON baseline approve '<baseline-id>' --approver '<name>'
+& $MON --transport hdc --device '<BOARD-A设备>' --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json golden cpu --profile cpu_qualification_kirin9030 --board-id BOARD-A --known-good --runs 1 --qualification-id "CPU-A-$SESSION"
 ```
 
-样本不够时 `calibrate` 必须失败，不能自行启动设备补样本。
+在 BOARD-B 上重复 deploy/verify，并执行同样命令（`--device`、`--board-id BOARD-B`、qualification ID 相应替换）。从两次 JSON 输出保存 `$A_RUN = source_runs[0]`、`$B_RUN = source_runs[0]`，然后离线合并正确性并校准：
 
-## 8. 本地报告生成
+```powershell
+& $MON --json golden cpu --profile cpu_qualification_kirin9030 --board-id BOARD-A --known-good --runs 2 --qualification-id "CPU-2BOARD-$SESSION" --run-dir "BOARD-A=$A_RUN" --run-dir "BOARD-B=$B_RUN"
+& $MON --json calibrate cpu --profile cpu_qualification_kirin9030 --board-id BOARD-A --golden '<上一命令 golden_manifest>' --runs 2 --min-accepted 2 --baseline-id "CPU-FUNCTIONAL-$SESSION" --run-dir "BOARD-A=$A_RUN" --run-dir "BOARD-B=$B_RUN"
+& $MON baseline show "CPU-FUNCTIONAL-$SESSION"
+& $MON baseline approve "CPU-FUNCTIONAL-$SESSION" --approver '<name>'
+```
+
+通过条件：
+
+- 两次 live golden 均退出 0，`source_mode=live-capture`，每个 source run 同时有 PC `result.json` 和完整 `device-evidence/.../spool`；
+- 离线 golden 为 `source_mode=supplied`，两板 checksum 一致；少传一个 `--run-dir` 返回配置错误 4；
+- `workload-summary-full.json` 或设备 `workload.log` 含 `operations_per_sec_avg` 和 `batch_time_ms_p99`；telemetry 存在且样本未被 throttling/温度/缺字段规则拒绝；
+- calibrate 生成 draft，接受 2 个样本和 2 个 board ID；approve 后状态为 approved。
+
+GPU 按相同顺序改用 `gpu_qualification_kirin9030`、`golden gpu` 和 `calibrate gpu`。额外通过条件是每个 source run 有 `gpu-golden.rgba`，两份 raw readback 字节完全一致，完整 summary 有 `fps_avg` 和 `frame_time_p99_ms`。
+
+`--min-accepted 2` 只证明命令、证据归一化、指标抽取和 registry 的功能数据链，不是生产基线。
+
+### QUAL-02 生产 cohort
+
+生产资格化必须使用默认 `config/policies/calibration.yaml`：至少 20 个被接受样本、至少 2 块板，不传 `--min-accepted 2`。每个输入写成 `BOARD_ID=<source-run-or-spool>`，`--runs` 必须与输入总数完全相等。任何缺 telemetry、throttling、温度范围外、DUT 非 PASS 或缺性能指标的样本都应被拒绝；接受数或板数不足时命令必须失败而不能启动硬件补样本。
+
+通过条件：审阅 `proposed-baseline.json` 的 accepted/rejected、分布和阈值后才执行 `baseline approve`；`baseline list/show/export/import/deprecate` 分别完成状态查询、可移植 bundle 哈希校验和生命周期审计。
+
+### QUAL-03 已批准 baseline 运行
+
+```powershell
+& $MON --transport hdc --device $DEVICE deploy --profile cpu_qualification_kirin9030 --baseline '<approved-baseline-id>'
+& $MON --transport hdc --device $DEVICE verify-deployment --profile cpu_qualification_kirin9030 --baseline '<approved-baseline-id>'
+& $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART run --profile cpu_qualification_kirin9030 --baseline '<approved-baseline-id>' --test-id "BASELINE-CPU-$SESSION" --attempt-id "BASELINE-CPU-$SESSION-001"
+```
+
+通过条件：`validation_mode=baseline`，结果记录 baseline ID 和比较结果。baseline 缺失、未批准、平台/profile/workload/correctness 指纹不一致应在启动 workload 前失败。普通 smoke/stress 始终保持 `verify_mode=none`。
+
+## 8. UART v2 诊断接口
+
+### DIAG-01 离线 JSONL 与 raw 重放
+
+对一个已完成的 `--pc-artifacts full` 运行执行：
+
+```powershell
+$RUN_DIR = "$OUT\MC-CPU-$SESSION\MC-CPU-$SESSION-001"
+& $MON --json simulate --events "$RUN_DIR\events.jsonl" --profile cpu_stress_kirin9030
+& $MON --json simulate --raw-serial "$RUN_DIR\serial.raw" --profile cpu_stress_kirin9030
+```
+
+通过条件：两次离线结果复现原 `result.json` 的 verdict/exit code；raw 路径能跳过 START 前旧 run/损坏帧，并在 START 后对 CRC、序号、身份和缺 FINAL 失败关闭。`--raw-serial --realtime` 必须返回配置错误 4；`--realtime` 只属于 `--events`。
+
+### DIAG-02 live monitor
+
+使用受控 UART-v2 发送源或单独的一次 agent 输出；确保 `run` 没有占用同一 COM 口：
+
+```powershell
+& $MON --pc-serial $PC_SERIAL --baudrate 115200 --json monitor --save-raw --timeout 60
+```
+
+通过条件：发现一段 UART-v2 START/FINAL 会话，保存的 raw/decoded evidence 可再次被 simulate 读取；结果明确为 `NOT_EVALUATED`，不能显示 DUT PASS/FAIL。分别以平台计划中的固定波特率测试，不把 9600 写死为唯一值。
+
+## 9. 本地报告生成
 
 `report` 读取 PC 运行目录中的 `result.json`，不读取设备目录；因此它可以在所有测试结束、设备证据统一 collect 后一次性执行。示例：
 
@@ -318,7 +370,7 @@ $RUN_DIR = "$OUT\MC-CPU-$SESSION\MC-CPU-$SESSION-001"
 - baseline 测试后：确认报告包含 baseline ID；
 - 仅 telemetry 的 TEL-01 没有 PC `result.json`，不适用 `report`。
 
-## 9. 不修改设备环境的审计
+## 10. 不修改设备环境的审计
 
 在 PRE 和 MC 前后分别读取并保存以下状态（路径按平台 capability 调整）：
 
@@ -332,7 +384,7 @@ $RUN_DIR = "$OUT\MC-CPU-$SESSION\MC-CPU-$SESSION-001"
 
 未来需要固定频率或 online 状态时，应由独立调度模块在测试前设置、审计并恢复；不能重新塞回 agent 或 `run`。
 
-## 10. 现场问题定位
+## 11. 现场问题定位
 
 ### run 卡住或零事件
 
@@ -359,7 +411,13 @@ $RUN_DIR = "$OUT\MC-CPU-$SESSION\MC-CPU-$SESSION-001"
 
 先运行 `verify-deployment --profile ...`，再检查部署的 telemetry plan 和各候选只读路径。可选 metric 缺失不应阻止核心 run；显式启用 telemetry 而 collector 本身无法启动才是基础设施错误。
 
-## 11. 验收记录模板
+## 12. 公共接口覆盖清单
+
+最终全量验收应逐项记录以下 24 个叶命令路径，不能用“最小闭环已过”替代未执行接口：`pair`、`monitor`、`simulate`、`list-profiles`、`validate`、`probe`、`relay probe`、`deploy`、`verify-deployment`、`golden cpu`、`golden gpu`、`calibrate cpu`、`calibrate gpu`、`smoke`、`baseline list`、`baseline show`、`baseline approve`、`baseline deprecate`、`baseline export`、`baseline import`、`run`、`telemetry run`、`collect`、`report`。
+
+除叶命令存在性外，还要覆盖这些关键分支：`run --pc-artifacts result/full`、自动 attempt/显式 attempt/`--repeat`、CPU/GPU smoke、baseline 有/无、telemetry 独立/伴随、collect 全 test/单 attempt/哈希验证/验证后删除、report markdown/json/csv、golden live/supplied/partial-reject、calibrate 功能/生产 cohort，以及退出码 0～6 的可控场景。没有安全故障 profile 时，退出码与协议负向分支使用 `simulate` 和单元测试，不用断网代替。
+
+## 13. 验收记录模板
 
 | ID | 命令退出码 | verdict/结果 | test_id/attempt_id | 证据路径 | 结论 |
 |---|---:|---|---|---|---|
@@ -374,7 +432,8 @@ $RUN_DIR = "$OUT\MC-CPU-$SESSION\MC-CPU-$SESSION-001"
 | MC-05 | | | | | |
 | TEL-01 | | | | | |
 | TEL-02 | | | | | |
-| BASELINE（如适用） | | | | | |
+| QUAL-01/02/03（如适用） | | | | | |
+| DIAG-01/02 | | | | | |
 | REPORT | | | | | |
 
-最终判定：PRE-01 至 PRE-04 是环境准备完成；MC-01 至 MC-05 全部通过是最小闭环完成；TEL、baseline 和报告生成按项目需要独立验收。
+最终判定：PRE-01 至 PRE-04 是环境准备完成；MC-01 至 MC-05 全部通过是最小闭环完成；QUAL-01 只表示资格化功能数据链打通，QUAL-02/03 才表示生产 baseline 全流程通过；TEL、DIAG 和报告生成按独立接口记录。24 个叶命令和关键参数分支全部有证据后，才能称为设计/使用文档的完整接口验收。

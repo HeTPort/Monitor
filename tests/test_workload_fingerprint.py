@@ -21,7 +21,12 @@ class WorkloadFingerprintTests(unittest.TestCase):
             agent_path = root / "device" / "avs_device_agent.sh"
             for path in (profile_path, config_path, binary_path, shader_path, agent_path):
                 path.parent.mkdir(parents=True, exist_ok=True)
-            config_path.write_text("{}", encoding="utf-8")
+            config_path.write_text(
+                '{"api":"vulkan","verify_mode":"none","output_format":"jsonl",'
+                '"duration":1,"timeout":2,"iterations":1,"heartbeat_interval":1,'
+                '"warmup":0,"width":1,"height":1,"gpu_timeout_ms":1}',
+                encoding="utf-8",
+            )
             binary_path.write_bytes(b"workload-v1")
             shader_path.write_bytes(b"shader-v1")
             agent_path.write_text("# agent", encoding="utf-8")

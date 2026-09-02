@@ -16,6 +16,126 @@ from .events import EventEnvelope, EventProtocolError
 UART_PROTOCOL = "uart-v2"
 
 
+def _decode_uart_record(encoded: bytes) -> dict[str, Any]:
+    decoded = cobs_decode(encoded)
+    if len(decoded) < 5:
+        raise EventProtocolError("short_frame", "UART-v2 frame has no JSON payload and CRC")
+    payload, supplied = decoded[:-4], int.from_bytes(decoded[-4:], "little")
+    actual = zlib.crc32(payload) & 0xFFFFFFFF
+    if supplied != actual:
+        raise EventProtocolError("transport_crc_mismatch", "UART-v2 transport CRC does not match")
+    try:
+        record = json.loads(payload.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise EventProtocolError("invalid_frame_json", f"UART-v2 payload is not UTF-8 JSON: {exc}") from exc
+    if not isinstance(record, dict):
+        raise EventProtocolError("invalid_frame_json", "UART-v2 JSON payload must be an object")
+    return record
+
+
+def discover_uart_session(
+    data: bytes,
+    *,
+    expected_run_id: str | None = None,
+    expected_test_id: str | None = None,
+    max_frame_bytes: int = 512,
+) -> tuple[str, str] | None:
+    """Return ``(test_id, run_id)`` for the first matching valid START frame.
+
+    Invalid and stale preamble segments are deliberately ignored. Once a
+    session is selected, UartV2Decoder provides the fail-closed active-state
+    validation.
+    """
+
+    if not isinstance(data, bytes):
+        raise TypeError("UART-v2 discovery accepts bytes")
+    for encoded in data.split(b"\x00"):
+        if not encoded or len(encoded) > max_frame_bytes:
+            continue
+        try:
+            record = _decode_uart_record(encoded)
+        except EventProtocolError:
+            continue
+        run_id = record.get("run_id")
+        test_id = record.get("test_id")
+        if (
+            record.get("type") != "agent_start"
+            or record.get("seq") != 1
+            or not isinstance(run_id, str)
+            or not run_id
+            or not isinstance(test_id, str)
+            or not test_id
+        ):
+            continue
+        if expected_run_id is not None and run_id != expected_run_id:
+            continue
+        if expected_test_id is not None and test_id != expected_test_id:
+            continue
+        return test_id, run_id
+    return None
+
+
+class UartV2SessionDecoder:
+    """Discover a UART-v2 START frame, then decode that session fail-closed."""
+
+    def __init__(
+        self,
+        *,
+        expected_run_id: str | None = None,
+        expected_test_id: str | None = None,
+        max_frame_bytes: int = 512,
+    ) -> None:
+        self.expected_run_id = expected_run_id
+        self.expected_test_id = expected_test_id
+        self.max_frame_bytes = max_frame_bytes
+        self._pending = bytearray()
+        self._decoder: UartV2Decoder | None = None
+
+    @property
+    def run_id(self) -> str | None:
+        return self._decoder.run_id if self._decoder is not None else None
+
+    @property
+    def test_id(self) -> str | None:
+        return self._decoder.test_id if self._decoder is not None else None
+
+    @property
+    def active(self) -> bool:
+        return bool(self._decoder and self._decoder.active)
+
+    @property
+    def final_seen(self) -> bool:
+        return bool(self._decoder and self._decoder.final_seen)
+
+    def feed(self, data: bytes) -> list[EventEnvelope]:
+        if self._decoder is not None:
+            return self._decoder.feed(data)
+        self._pending.extend(data)
+        session = discover_uart_session(
+            bytes(self._pending),
+            expected_run_id=self.expected_run_id,
+            expected_test_id=self.expected_test_id,
+            max_frame_bytes=self.max_frame_bytes,
+        )
+        if session is None:
+            maximum_preamble = self.max_frame_bytes * 16
+            if len(self._pending) > maximum_preamble:
+                del self._pending[:-maximum_preamble]
+            return []
+        test_id, run_id = session
+        self._decoder = UartV2Decoder(run_id, test_id, max_frame_bytes=self.max_frame_bytes)
+        pending = bytes(self._pending)
+        self._pending.clear()
+        return self._decoder.feed(pending)
+
+    def finish(self) -> None:
+        if self._decoder is None:
+            if any(self._pending):
+                raise EventProtocolError("session_not_found", "no matching UART-v2 agent_start frame was found")
+            return
+        self._decoder.finish()
+
+
 def cobs_encode(data: bytes) -> bytes:
     output = bytearray((0,))
     code_index = 0
@@ -152,17 +272,4 @@ class UartV2Decoder:
 
     @staticmethod
     def _decode_record(encoded: bytes) -> dict[str, Any]:
-        decoded = cobs_decode(encoded)
-        if len(decoded) < 5:
-            raise EventProtocolError("short_frame", "UART-v2 frame has no JSON payload and CRC")
-        payload, supplied = decoded[:-4], int.from_bytes(decoded[-4:], "little")
-        actual = zlib.crc32(payload) & 0xFFFFFFFF
-        if supplied != actual:
-            raise EventProtocolError("transport_crc_mismatch", "UART-v2 transport CRC does not match")
-        try:
-            record = json.loads(payload.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-            raise EventProtocolError("invalid_frame_json", f"UART-v2 payload is not UTF-8 JSON: {exc}") from exc
-        if not isinstance(record, dict):
-            raise EventProtocolError("invalid_frame_json", "UART-v2 JSON payload must be an object")
-        return record
+        return _decode_uart_record(encoded)

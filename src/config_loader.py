@@ -6,11 +6,13 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
+from pathlib import PurePosixPath
 from typing import Any, Mapping, Sequence
 
 
 SUPPORTED_SCHEMA_VERSION = 1
 VALID_TARGETS = {"cpu", "gpu"}
+VALID_VERIFY_MODES = {"cpu": {"none", "checksum"}, "gpu": {"none", "golden-image"}}
 
 
 class ConfigError(ValueError):
@@ -68,6 +70,55 @@ def require_schema_version(data: Mapping[str, Any], context: str) -> int:
             f"supported={SUPPORTED_SCHEMA_VERSION}"
         )
     return version
+
+
+def validate_workload_config(
+    path: Path,
+    target: str,
+    *,
+    device_root: PurePosixPath = PurePosixPath("/data/local/tmp/avs"),
+) -> dict[str, Any]:
+    """Validate the workload JSON contract used by deployed CPU/GPU binaries."""
+
+    resolved = path.expanduser().resolve(strict=True)
+    try:
+        document = json.loads(resolved.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ConfigError(f"invalid workload JSON {resolved}: {exc}") from exc
+    if not isinstance(document, dict):
+        raise ConfigError(f"workload configuration root must be a mapping: {resolved}")
+    if target not in VALID_VERIFY_MODES:
+        raise ConfigError(f"unsupported workload target: {target}")
+    api = document.get("api")
+    expected_api = "cpu" if target == "cpu" else "vulkan"
+    if api != expected_api:
+        raise ConfigError(f"workload {resolved}.api must be {expected_api!r} for target {target}")
+    verify_mode = document.get("verify_mode")
+    if verify_mode not in VALID_VERIFY_MODES[target]:
+        raise ConfigError(
+            f"workload {resolved}.verify_mode must be one of {sorted(VALID_VERIFY_MODES[target])}"
+        )
+    if document.get("output_format") != "jsonl":
+        raise ConfigError(f"workload {resolved}.output_format must be 'jsonl'")
+    positive_fields = ["duration", "timeout", "iterations", "heartbeat_interval"]
+    positive_fields.extend(["threads", "working_set_kb"] if target == "cpu" else ["width", "height", "gpu_timeout_ms"])
+    for name in positive_fields:
+        value = document.get(name)
+        if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+            raise ConfigError(f"workload {resolved}.{name} must be a positive integer")
+    warmup = document.get("warmup")
+    if not isinstance(warmup, int) or isinstance(warmup, bool) or warmup < 0:
+        raise ConfigError(f"workload {resolved}.warmup must be a non-negative integer")
+    if target == "gpu" and verify_mode == "golden-image":
+        golden_value = document.get("golden_file")
+        if not isinstance(golden_value, str) or not golden_value:
+            raise ConfigError(f"workload {resolved}.golden_file is required for golden-image verification")
+        golden_path = PurePosixPath(golden_value)
+        if not golden_path.is_absolute() or not golden_path.is_relative_to(device_root):
+            raise ConfigError(
+                f"workload {resolved}.golden_file must be an absolute path below {device_root}"
+            )
+    return document
 
 
 @dataclass(frozen=True)

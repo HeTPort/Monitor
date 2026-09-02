@@ -5,7 +5,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from src.config_loader import ConfigError, PlatformConfig, ProfileConfig, document_sha256, load_document
+from src.config_loader import (
+    ConfigError,
+    PlatformConfig,
+    ProfileConfig,
+    document_sha256,
+    load_document,
+    validate_workload_config,
+)
 
 
 def valid_profile() -> dict:
@@ -30,11 +37,38 @@ class ConfigLoaderTests(unittest.TestCase):
             "gpu_smoke.json": "none",
             "cpu_mixed_big4.json": "checksum",
             "gpu_vulkan_mixed.json": "golden-image",
+            "cpu_qualification_kirin9030.json": "checksum",
+            "gpu_qualification_kirin9030.json": "golden-image",
         }
         for name, expected in expected_modes.items():
             with self.subTest(name=name):
                 document = json.loads((config_root / name).read_text(encoding="utf-8"))
                 self.assertEqual(document["verify_mode"], expected)
+
+    def test_all_bundled_workloads_have_target_compatible_schema(self) -> None:
+        config_root = Path(__file__).parents[1] / "config" / "workloads"
+        for path in sorted(config_root.glob("*.json")):
+            target = "gpu" if path.name.startswith("gpu_") else "cpu"
+            with self.subTest(path=path.name):
+                document = validate_workload_config(path, target)
+                self.assertEqual(document["output_format"], "jsonl")
+
+    def test_workload_validation_rejects_target_and_golden_path_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "gpu.json"
+            document = {
+                "api": "cpu", "verify_mode": "golden-image", "output_format": "jsonl",
+                "duration": 1, "timeout": 2, "iterations": 1, "heartbeat_interval": 1,
+                "warmup": 0, "width": 1, "height": 1, "gpu_timeout_ms": 1,
+                "golden_file": "relative.rgba",
+            }
+            path.write_text(json.dumps(document), encoding="utf-8")
+            with self.assertRaisesRegex(ConfigError, "api must be 'vulkan'"):
+                validate_workload_config(path, "gpu")
+            document["api"] = "vulkan"
+            path.write_text(json.dumps(document), encoding="utf-8")
+            with self.assertRaisesRegex(ConfigError, "absolute path"):
+                validate_workload_config(path, "gpu")
 
     def test_json_load_and_profile_validation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -207,8 +207,8 @@ Examples:
     # ─────────────────────────────────────────────────────────────────
     monitor_parser = subparsers.add_parser(
         'monitor',
-        help='Monitor serial port in real-time',
-        description='Start monitoring a serial port for test output'
+        help='Diagnostically decode a live UART-v2 stream',
+        description='Discover and decode one UART-v2 session; diagnostic only, no DUT verdict'
     )
     monitor_parser.add_argument('--save-raw', action='store_true')
     monitor_parser.add_argument('--expected-run-id')
@@ -220,15 +220,15 @@ Examples:
     # ─────────────────────────────────────────────────────────────────
     simulate_parser = subparsers.add_parser(
         'simulate',
-        help='Simulate from log file',
-        description='Process a log file as if it were live serial output'
+        help='Replay stored JSONL events or a UART-v2 raw capture',
+        description='Evaluate stored evidence offline without contacting a device'
     )
     simulate_input = simulate_parser.add_mutually_exclusive_group(required=True)
     simulate_input.add_argument('--events', help='Framed events.jsonl to replay')
-    simulate_input.add_argument('--raw-serial', help='Raw serial capture to decode')
+    simulate_input.add_argument('--raw-serial', help='Deterministically discover and replay one UART-v2 session')
     simulate_parser.add_argument('--profile', help='Profile policy context')
     simulate_parser.add_argument('--baseline', help='Approved baseline ID')
-    simulate_parser.add_argument('--realtime', action='store_true')
+    simulate_parser.add_argument('--realtime', action='store_true', help='Pace JSONL --events replay; not valid with --raw-serial')
 
     # ─────────────────────────────────────────────────────────────────
     # list-profiles command
@@ -282,10 +282,16 @@ Examples:
     for target in ('cpu', 'gpu'):
         target_parser = golden_subparsers.add_parser(target)
         target_parser.add_argument('--profile', required=True)
-        target_parser.add_argument('--runs', type=int, default=10, help='Total qualified runs to consume or capture')
+        target_parser.add_argument('--runs', type=int, default=10, help='Exact number of qualified runs to consume or capture')
         target_parser.add_argument('--board-id', required=True)
         target_parser.add_argument('--known-good', action='store_true', required=True, help='Acknowledge that the source board is known-good')
-        target_parser.add_argument('--run-dir', action='append', default=[], metavar='[BOARD_ID=]PATH')
+        target_parser.add_argument(
+            '--run-dir',
+            action='append',
+            default=[],
+            metavar='[BOARD_ID=]PATH',
+            help='Supply exactly --runs collected runs, or omit all values for live capture',
+        )
         target_parser.add_argument('--qualification-id')
         if target == 'cpu':
             target_parser.add_argument('--accept-checksum')
@@ -303,7 +309,13 @@ Examples:
         target_parser.add_argument('--min-accepted', type=int)
         target_parser.add_argument('--policy', default='config/policies/calibration.yaml')
         target_parser.add_argument('--golden', required=True, metavar='MANIFEST', help='Golden manifest file')
-        target_parser.add_argument('--run-dir', action='append', default=[], metavar='[BOARD_ID=]PATH')
+        target_parser.add_argument(
+            '--run-dir',
+            action='append',
+            default=[],
+            metavar='[BOARD_ID=]PATH',
+            help='One collected run; repeat exactly --runs times (BOARD_ID prefix supports multi-board cohorts)',
+        )
         target_parser.add_argument('--baseline-id')
 
     smoke_parser = subparsers.add_parser(

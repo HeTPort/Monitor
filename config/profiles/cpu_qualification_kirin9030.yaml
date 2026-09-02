@@ -1,0 +1,15 @@
+schema_version: 1
+name: cpu_qualification_kirin9030
+target: cpu
+platform: kirin9030
+workload:
+  binary: ../../tools/cpu-avs-workload
+  remote_binary: bin/cpu-avs-workload
+  config: ../workloads/cpu_qualification_kirin9030.json
+scheduler_requirements: {}
+baseline: null
+telemetry:
+  interval_ms: 5000
+  required: [cpu.frequency, cpu.online, cpu.temperature, cpu.utilization]
+  optional: [cpu.idle_residency, cpu.throttle, cpu.voltage]
+kernel_monitor: "off"

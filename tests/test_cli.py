@@ -15,16 +15,43 @@ from src.cli_commands import (
     _apply_platform_serial,
     _apply_saved_pairing,
     _concise_reason,
+    cmd_monitor_events,
     cmd_smoke,
     command_boundary,
 )
 from src.events import build_event, encode_event
 from src.path_resolver import PathResolver
 from src.run_orchestrator import RunInfrastructureError
+from src.uart_protocol import encode_uart_frame
 
 
 ROOT = Path(__file__).parents[1]
 MAIN = ROOT / "main.py"
+
+
+def valid_workload_document(target: str, verify_mode: str) -> dict:
+    document = {
+        "api": "cpu" if target == "cpu" else "vulkan",
+        "verify_mode": verify_mode,
+        "output_format": "jsonl",
+        "duration": 1,
+        "warmup": 0,
+        "timeout": 2,
+        "iterations": 1,
+        "heartbeat_interval": 1,
+    }
+    if target == "cpu":
+        document.update({"threads": 1, "working_set_kb": 1})
+    else:
+        document.update(
+            {
+                "width": 1,
+                "height": 1,
+                "gpu_timeout_ms": 1,
+                "golden_file": "/data/local/tmp/avs/golden/test.rgba",
+            }
+        )
+    return document
 
 
 class CLITests(unittest.TestCase):
@@ -119,7 +146,7 @@ class CLITests(unittest.TestCase):
             workload = override / "workload.bin"
             workload.write_bytes(b"workload")
             workload_config = override / "workload.json"
-            workload_config.write_text("{}", encoding="utf-8")
+            workload_config.write_text(json.dumps(valid_workload_document("cpu", "none")), encoding="utf-8")
             profile_path = override / "profile.json"
             profile_path.write_text(
                 json.dumps(
@@ -328,6 +355,283 @@ class CLITests(unittest.TestCase):
             )
             self.assertEqual(invalid_report.returncode, 4, invalid_report.stderr)
             self.assertFalse((run_dir / "report.json").exists())
+
+    def test_simulate_uart_v2_raw_capture(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw_path = root / "serial.raw"
+            records = [
+                build_event(
+                    run_id="raw-attempt", seq=1, timestamp_ms=0,
+                    source="agent", event_type="agent_start", payload={},
+                ),
+                build_event(
+                    run_id="raw-attempt", seq=2, timestamp_ms=1,
+                    source="cpu-workload", event_type="summary",
+                    payload={"result": "PASS", "exit_code": 0},
+                ),
+                build_event(
+                    run_id="raw-attempt", seq=3, timestamp_ms=2,
+                    source="agent", event_type="agent_final",
+                    payload={"workload_exit_code": 0, "spool_complete": True},
+                ),
+            ]
+            for record in records:
+                record["test_id"] = "raw-test"
+            raw_path.write_bytes(b"old-tail\x00" + b"".join(encode_uart_frame(record) for record in records))
+            result = self.run_cli(
+                "--output-dir", str(root / "results"), "--json", "simulate", "--raw-serial", str(raw_path)
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["run_id"], "raw-attempt")
+            self.assertEqual(payload["test_id"], "raw-test")
+            self.assertEqual(payload["verdict"], "PASS")
+
+    def test_monitor_decodes_uart_v2_but_does_not_issue_dut_verdict(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            records = [
+                build_event(
+                    run_id="monitor-attempt", seq=1, timestamp_ms=0,
+                    source="agent", event_type="agent_start", payload={},
+                ),
+                build_event(
+                    run_id="monitor-attempt", seq=2, timestamp_ms=1,
+                    source="agent", event_type="agent_final",
+                    payload={"workload_exit_code": 0, "spool_complete": True},
+                ),
+            ]
+            for record in records:
+                record["test_id"] = "monitor-test"
+            chunks = [b"stale\x00", *[encode_uart_frame(record) for record in records]]
+
+            class FakeSerialStream:
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *_args):
+                    return False
+
+                def read(self, _size):
+                    return chunks.pop(0) if chunks else b""
+
+            class FakeSerialModule:
+                @staticmethod
+                def Serial(**_kwargs):
+                    return FakeSerialStream()
+
+            args = Namespace(
+                schema_version=1,
+                state_dir=str(root / "state"),
+                output_dir=str(root / "output"),
+                config_dir=None,
+                device_root="/data/local/tmp/avs",
+                pc_serial="COM-FAKE",
+                baudrate=115200,
+                expected_run_id=None,
+                save_raw=True,
+                timeout=0.1,
+                json_output=True,
+            )
+            output = io.StringIO()
+            with patch.dict(sys.modules, {"serial": FakeSerialModule}), redirect_stdout(output):
+                exit_code = cmd_monitor_events(args)
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(output.getvalue())
+            self.assertEqual(payload["verdict"], "NOT_EVALUATED")
+            self.assertTrue(payload["agent_final_seen"])
+            result_dir = Path(payload["result"]).parent
+            self.assertTrue((result_dir / "serial.raw").exists())
+
+    def test_cpu_golden_calibration_and_draft_baseline_from_collected_runs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output = root / "output"
+            state = root / "state"
+            policy_path = root / "calibration-policy.json"
+            policy_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "minimum_boards": 2,
+                        "minimum_accepted_samples": 2,
+                        "rejection": {"reject_telemetry_gaps": True, "reject_throttled_samples": True},
+                        "limits": {
+                            "throughput": {"margin_percent": 5.0},
+                            "latency": {"margin_percent": 10.0},
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            workload_binary = root / "cpu-avs-workload"
+            workload_binary.write_bytes(b"cpu-workload")
+            workload_config = root / "cpu-workload.json"
+            workload_config.write_text(
+                json.dumps(valid_workload_document("cpu", "checksum")), encoding="utf-8"
+            )
+            profile_path = root / "cpu-profile.json"
+            profile_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "name": "cpu_cli_qualification",
+                        "target": "cpu",
+                        "platform": "kirin9020",
+                        "workload": {
+                            "binary": str(workload_binary),
+                            "remote_binary": "bin/cpu-avs-workload",
+                            "config": str(workload_config),
+                        },
+                        "scheduler_requirements": {},
+                        "baseline": None,
+                        "telemetry": {"required": [], "optional": []},
+                        "kernel_monitor": "off",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            golden_spools = []
+            for index in range(2):
+                spool = root / f"golden-{index}" / "spool"
+                spool.mkdir(parents=True)
+                event = {
+                    "schema_version": 1,
+                    "run_id": f"golden-{index}",
+                    "seq": 1,
+                    "timestamp_ms": index,
+                    "source": "cpu-workload",
+                    "type": "golden",
+                    "payload": {"checksum": "0123456789abcdef"},
+                }
+                (spool / "events.jsonl").write_text(json.dumps(event) + "\n", encoding="utf-8")
+                golden_spools.append(spool)
+
+            partial = self.run_cli(
+                "--output-dir", str(output), "--json", "golden", "cpu",
+                "--profile", str(profile_path), "--board-id", "BOARD-A", "--known-good",
+                "--runs", "2", "--run-dir", str(golden_spools[0]),
+            )
+            self.assertEqual(partial.returncode, 4, partial.stderr)
+            self.assertIn("exactly 2", partial.stdout)
+
+            golden = self.run_cli(
+                "--output-dir", str(output), "--json", "golden", "cpu",
+                "--profile", str(profile_path), "--board-id", "BOARD-A", "--known-good",
+                "--runs", "2", "--run-dir", str(golden_spools[0]), "--run-dir", str(golden_spools[1]),
+                "--qualification-id", "CLI-CPU-GOLDEN",
+            )
+            self.assertEqual(golden.returncode, 0, golden.stdout or golden.stderr)
+            golden_path = Path(json.loads(golden.stdout)["golden_manifest"])
+            self.assertTrue(golden_path.exists())
+
+            sample_dirs = []
+            for index in range(2):
+                test_root = root / f"sample-{index}"
+                attempt = test_root / f"attempt-{index}"
+                spool = test_root / "device-evidence" / attempt.name / "spool"
+                attempt.mkdir(parents=True)
+                spool.mkdir(parents=True)
+                (attempt / "result.json").write_text(
+                    json.dumps({"run_id": attempt.name, "verdict": "PASS"}), encoding="utf-8"
+                )
+                summary = {
+                    "type": "summary", "result": "PASS", "exit_code": 0,
+                    "operations_per_sec_avg": 1000.0 + index,
+                    "batch_time_ms_p99": 10.0 + index,
+                }
+                (spool / "workload.log").write_text(json.dumps(summary) + "\n", encoding="utf-8")
+                telemetry = {"payload": {"metric": "cpu.temperature", "value": 45.0}}
+                (spool / "telemetry.jsonl").write_text(json.dumps(telemetry) + "\n", encoding="utf-8")
+                sample_dirs.append(attempt)
+
+            calibrate = self.run_cli(
+                "--output-dir", str(output), "--state-dir", str(state), "--json", "calibrate", "cpu",
+                "--profile", str(profile_path), "--board-id", "UNUSED", "--golden", str(golden_path),
+                "--runs", "2", "--min-accepted", "2", "--temperature-range", "35:60",
+                "--policy", str(policy_path),
+                "--run-dir", f"BOARD-A={sample_dirs[0]}", "--run-dir", f"BOARD-B={sample_dirs[1]}",
+                "--baseline-id", "cli-cpu-v1",
+            )
+            self.assertEqual(calibrate.returncode, 0, calibrate.stdout or calibrate.stderr)
+            proposal = json.loads(calibrate.stdout)
+            self.assertEqual(proposal["status"], "draft")
+            approve = self.run_cli(
+                "--state-dir", str(state), "--json", "baseline", "approve", "cli-cpu-v1",
+                "--approver", "unit-test",
+            )
+            self.assertEqual(approve.returncode, 0, approve.stderr)
+            self.assertEqual(json.loads(approve.stdout)["status"], "approved")
+
+    def test_gpu_golden_uses_identical_collected_readbacks(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workload_binary = root / "gpu-avs-workload"
+            workload_binary.write_bytes(b"gpu-workload")
+            workload_config = root / "gpu-workload.json"
+            workload_config.write_text(
+                json.dumps(valid_workload_document("gpu", "golden-image")), encoding="utf-8"
+            )
+            first_shader = root / "fullscreen.vert.spv"
+            second_shader = root / "workload.frag.spv"
+            first_shader.write_bytes(b"vert")
+            second_shader.write_bytes(b"frag")
+            profile_path = root / "gpu-profile.json"
+            profile_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "name": "gpu_cli_qualification",
+                        "target": "gpu",
+                        "platform": "kirin9020",
+                        "workload": {
+                            "binary": str(workload_binary),
+                            "remote_binary": "bin/gpu-avs-workload",
+                            "config": str(workload_config),
+                            "assets": [
+                                {
+                                    "local": str(first_shader),
+                                    "remote": "shaders/vulkan/fullscreen.vert.spv",
+                                    "kind": "shader",
+                                },
+                                {
+                                    "local": str(second_shader),
+                                    "remote": "shaders/vulkan/workload.frag.spv",
+                                    "kind": "shader",
+                                },
+                            ],
+                        },
+                        "scheduler_requirements": {},
+                        "baseline": None,
+                        "telemetry": {"required": [], "optional": []},
+                        "kernel_monitor": "off",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            spools = []
+            for index in range(2):
+                spool = root / f"gpu-{index}" / "spool"
+                spool.mkdir(parents=True)
+                event = {
+                    "schema_version": 1, "run_id": f"gpu-{index}", "seq": 1,
+                    "timestamp_ms": index, "source": "gpu-workload", "type": "golden",
+                    "payload": {"checksum": "feedface"},
+                }
+                (spool / "events.jsonl").write_text(json.dumps(event) + "\n", encoding="utf-8")
+                (spool / "gpu-golden.rgba").write_bytes(b"same-readback")
+                spools.append(spool)
+            result = self.run_cli(
+                "--output-dir", str(root / "output"), "--json", "golden", "gpu",
+                "--profile", str(profile_path), "--board-id", "BOARD-A", "--known-good",
+                "--runs", "2", "--run-dir", str(spools[0]), "--run-dir", str(spools[1]),
+                "--qualification-id", "CLI-GPU-GOLDEN",
+            )
+            self.assertEqual(result.returncode, 0, result.stdout or result.stderr)
+            manifest = Path(json.loads(result.stdout)["golden_manifest"])
+            self.assertTrue(manifest.exists())
+            self.assertTrue((manifest.parent / "gpu-golden.rgba").exists())
 
 
 if __name__ == "__main__":

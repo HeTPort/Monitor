@@ -162,6 +162,7 @@ class RunManifestBuilder:
         kernel_rules_path: Path | None = None,
         device_uart: str | None = None,
         pc_artifacts: str = "full",
+        telemetry_enabled: bool = False,
     ) -> dict[str, Any]:
         if mode not in {"smoke", "golden", "calibration"}:
             raise RunError(f"unsupported qualification mode: {mode}")
@@ -177,7 +178,7 @@ class RunManifestBuilder:
             heartbeat_timeout_s=heartbeat_timeout_s,
             kernel_rules_path=kernel_rules_path,
             device_uart=device_uart,
-            telemetry_enabled=False,
+            telemetry_enabled=telemetry_enabled,
             pc_artifacts=pc_artifacts,
         )
         manifest["qualification"] = {

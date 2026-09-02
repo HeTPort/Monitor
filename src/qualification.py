@@ -162,7 +162,7 @@ class CalibrationService:
     """Reject uncontrolled runs, aggregate distributions, and propose fail-closed limits."""
 
     DEFAULT_METRICS = {
-        "cpu": {"throughput": "operations_per_sec_avg", "latency": "batch_time_p99_ms"},
+        "cpu": {"throughput": "operations_per_sec_avg", "latency": "batch_time_ms_p99"},
         "gpu": {"throughput": "fps_avg", "latency": "frame_time_p99_ms"},
     }
 

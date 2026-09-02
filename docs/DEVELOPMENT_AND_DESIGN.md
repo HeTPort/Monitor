@@ -268,17 +268,44 @@ PC artifact levels:
 
 ```text
 explicit validate/probe/pair/deploy/verify
-  -> golden capture on known-good prepared devices
-  -> ordinary/baseline runs with retained device evidence
-  -> collect by test ID
-  -> calibrate from explicit run directories
+  -> golden (all-live capture OR an exact supplied cohort)
+  -> complete attempt evidence normalized on the PC
+  -> calibrate from an exact explicit multi-board cohort
   -> review draft
   -> baseline approve
+  -> baseline-aware deploy/verify/run
 ```
 
-`calibrate` never fills missing samples by launching hardware. Missing `--run-dir` samples are an error.
+`golden --runs N` accepts zero `--run-dir` values or exactly N values. Zero means live capture on an already prepared known-good device. Live capture enables the existing device-local telemetry collector, runs the qualification workload, pulls the complete device attempt directory, preserves the native full workload summary, and reports reusable PC directories in `source_runs`. A partial cohort is a configuration error; it is never completed from hardware implicitly.
 
-## 14. Acceptance criteria
+The normalization layer accepts any of these inputs:
+
+```text
+PC attempt/
+  result.json
+  device-evidence/<attempt>/spool/{events.jsonl,workload.log,telemetry.jsonl,...}
+
+collected attempt/spool/
+  events.jsonl
+  workload.log
+  telemetry.jsonl
+```
+
+When a spool is supplied, the resolver pairs it with the standard sibling PC attempt when available. The last native `type=summary` record in device `workload.log` takes precedence over the compact PC `workload-summary.json`; this preserves qualification metrics without enlarging verdict UART frames. CPU calibration consumes `operations_per_sec_avg` and `batch_time_ms_p99`; GPU consumes `fps_avg` and `frame_time_p99_ms`.
+
+`calibrate` is always offline and requires exactly `--runs` normalized inputs. The default production policy rejects telemetry gaps, throttling, temperature-range violations, missing metrics, fewer than 20 accepted samples, or fewer than two boards. `--min-accepted 2` exists only for a two-board functional data-chain acceptance test; it does not redefine production policy. Calibration creates an immutable-registry draft, never an approved baseline.
+
+Kirin9030 uses dedicated `cpu_qualification_kirin9030` and `gpu_qualification_kirin9030` profiles. Platform identity and workload/correctness fingerprints are baseline compatibility fields; qualification artifacts from a Kirin9020 profile cannot be relabeled as Kirin9030 evidence.
+
+## 14. UART-v2 diagnostic interfaces
+
+Core `run`, `simulate --raw-serial`, and `monitor` share the UART-v2 framing implementation. A diagnostic session decoder scans only until a valid matching START is discovered, discards stale/corrupt preamble frames, and then delegates to the fail-closed `UartV2Decoder` for CRC, frame-size, schema, identity, sequence, FINAL, and trailing-data checks.
+
+`simulate --events` remains a separate JSONL replay path and may use `--realtime`. `simulate --raw-serial` deterministically replays a stored NUL-delimited COBS+CRC capture and rejects `--realtime`; it builds the same serial-transport manifest expected by `RunOrchestrator`. `monitor` performs live session discovery and artifact capture but deliberately returns `NOT_EVALUATED`: without profile policy, workload process status, and a complete run manifest it is a protocol diagnostic, not a DUT judge.
+
+Neither interface translates UART v2 through `awk`, `tr`, newline framing, or platform shell helpers. They operate on bytes on the PC, so HarmonyOS portability remains confined to the native relay and device agent.
+
+## 15. Acceptance criteria
 
 The refactor is complete when:
 
@@ -292,4 +319,7 @@ The refactor is complete when:
 - PASS never deletes device evidence;
 - PC result/full artifact modes both judge correctly;
 - collect retains remote evidence by default;
+- golden live capture returns complete reusable source directories, while partial supplied cohorts fail;
+- calibration reads device-native full metrics and enforces multi-board policy;
+- raw simulation and monitor decode the same UART-v2 framing as `run`;
 - unit, shell, protocol, and packaging validation pass.

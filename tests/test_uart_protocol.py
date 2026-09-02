@@ -1,7 +1,15 @@
 import unittest
 
 from src.events import EventProtocolError
-from src.uart_protocol import UartV2Decoder, cobs_decode, cobs_encode, encode_uart_frame, frame_wire_seconds
+from src.uart_protocol import (
+    UartV2Decoder,
+    UartV2SessionDecoder,
+    cobs_decode,
+    cobs_encode,
+    discover_uart_session,
+    encode_uart_frame,
+    frame_wire_seconds,
+)
 
 
 def event(run_id, test_id, seq, event_type, payload=None):
@@ -43,6 +51,25 @@ class UartProtocolTests(unittest.TestCase):
         decoded = decoder.feed(b"old text" + b"\x00" + stale + corrupt + current)
         self.assertEqual([item.run_id for item in decoded], ["new"])
         self.assertGreaterEqual(decoder.discarded_frames, 2)
+
+    def test_session_discovery_and_auto_decoder_use_current_uart_v2_start(self):
+        stale = encode_uart_frame(event("old", "old-test", 1, "agent_start"))
+        current = (
+            encode_uart_frame(event("new", "new-test", 1, "agent_start"))
+            + encode_uart_frame(event("new", "new-test", 2, "agent_final", {"workload_exit_code": 0}))
+        )
+        capture = b"stale text\x00" + stale + b"\x00\x02x\x00" + current
+        self.assertEqual(
+            discover_uart_session(capture, expected_run_id="new"),
+            ("new-test", "new"),
+        )
+        decoder = UartV2SessionDecoder(expected_run_id="new")
+        decoded = []
+        for part in (capture[:11], capture[11:37], capture[37:]):
+            decoded.extend(decoder.feed(part))
+        self.assertEqual([item.type for item in decoded], ["agent_start", "agent_final"])
+        self.assertEqual(decoder.test_id, "new-test")
+        self.assertTrue(decoder.final_seen)
 
     def test_active_crc_failure_is_fail_closed(self):
         decoder = UartV2Decoder("r", "t")

@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+import json
 from pathlib import Path
 
+from src.cli_commands import _sample_from_run
 from src.qualification import (
     CalibrationPolicy,
     CalibrationSample,
@@ -11,6 +13,7 @@ from src.qualification import (
     GoldenService,
     QualificationError,
 )
+from src.qualification_artifacts import resolve_qualification_run
 
 
 class GoldenServiceTests(unittest.TestCase):
@@ -64,7 +67,7 @@ class CalibrationServiceTests(unittest.TestCase):
                         "result": "PASS",
                         "exit_code": 0,
                         "operations_per_sec_avg": 1000.0 + index,
-                        "batch_time_p99_ms": 10.0 + index / 10.0,
+                        "batch_time_ms_p99": 10.0 + index / 10.0,
                     },
                     temperature_c=45.0,
                 )
@@ -77,7 +80,7 @@ class CalibrationServiceTests(unittest.TestCase):
                     "result": "PASS",
                     "exit_code": 0,
                     "operations_per_sec_avg": 5000.0,
-                    "batch_time_p99_ms": 1.0,
+                    "batch_time_ms_p99": 1.0,
                 },
                 temperature_c=80.0,
             )
@@ -101,7 +104,7 @@ class CalibrationServiceTests(unittest.TestCase):
             950.0,
         )
         self.assertAlmostEqual(
-            proposal["thresholds"]["performance"]["batch_time_p99_ms"]["max"],
+            proposal["thresholds"]["performance"]["batch_time_ms_p99"]["max"],
             13.09,
         )
 
@@ -122,6 +125,60 @@ class CalibrationServiceTests(unittest.TestCase):
                 policy=CalibrationPolicy(minimum_boards=2, minimum_accepted_samples=1),
                 baseline_id="gpu-v1",
             )
+
+    def test_standard_collected_layout_resolves_full_summary_and_telemetry(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            test_root = Path(tmp) / "QUAL-CPU"
+            attempt = test_root / "QUAL-CPU-001"
+            spool = test_root / "device-evidence" / "QUAL-CPU-001" / "spool"
+            attempt.mkdir(parents=True)
+            spool.mkdir(parents=True)
+            (attempt / "result.json").write_text(
+                json.dumps({"run_id": "QUAL-CPU-001", "verdict": "PASS"}), encoding="utf-8"
+            )
+            (attempt / "workload-summary.json").write_text(
+                json.dumps({"result": "PASS", "exit_code": 0}), encoding="utf-8"
+            )
+            full_summary = {
+                "type": "summary",
+                "result": "PASS",
+                "exit_code": 0,
+                "operations_per_sec_avg": 1234.0,
+                "batch_time_ms_p99": 9.5,
+            }
+            (spool / "workload.log").write_text(json.dumps(full_summary) + "\n", encoding="utf-8")
+            (spool / "events.jsonl").write_text(
+                json.dumps({"type": "golden", "payload": {"checksum": "abc"}}) + "\n", encoding="utf-8"
+            )
+            (spool / "telemetry.jsonl").write_text(
+                json.dumps({"payload": {"metric": "cpu.temperature", "value": 45.0}}) + "\n",
+                encoding="utf-8",
+            )
+            resolved = resolve_qualification_run(attempt)
+            self.assertEqual(resolved.spool_dir, spool)
+            self.assertEqual(resolved.summary["operations_per_sec_avg"], 1234.0)
+            self.assertEqual(resolved.events_path, spool / "events.jsonl")
+            sample = _sample_from_run(attempt, "BOARD-A")
+            self.assertEqual(sample.summary["batch_time_ms_p99"], 9.5)
+            self.assertEqual(sample.temperature_c, 45.0)
+            self.assertTrue(sample.telemetry_complete)
+
+    def test_spool_input_pairs_back_to_pc_attempt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            test_root = Path(tmp) / "QUAL-GPU"
+            attempt = test_root / "QUAL-GPU-001"
+            spool = test_root / "device-evidence" / "QUAL-GPU-001" / "spool"
+            attempt.mkdir(parents=True)
+            spool.mkdir(parents=True)
+            (attempt / "result.json").write_text(json.dumps({"run_id": "QUAL-GPU-001"}), encoding="utf-8")
+            (spool / "workload.log").write_text(
+                json.dumps({"type": "summary", "result": "PASS", "exit_code": 0, "fps_avg": 8.0, "frame_time_p99_ms": 130.0}) + "\n",
+                encoding="utf-8",
+            )
+            (spool / "events.jsonl").write_text("", encoding="utf-8")
+            resolved = resolve_qualification_run(spool)
+            self.assertEqual(resolved.pc_run_dir, attempt)
+            self.assertEqual(resolved.result_path, attempt / "result.json")
 
 
 if __name__ == "__main__":

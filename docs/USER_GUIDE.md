@@ -1,6 +1,6 @@
 # Monitor 用户指南
 
-版本 2.1，更新于 2026-09-01。
+版本 2.1，更新于 2026-09-02。
 
 ## 1. 先理解命令边界
 
@@ -18,7 +18,7 @@ Monitor 把一次性准备和每次测试分开：
 | 短测试 | `smoke` | `run` 的短 profile、无 baseline 别名 |
 | 独立遥测 | `telemetry run` | 不启动 workload、不占用 UART，只向设备文件追加采样 |
 | 证据拉取 | `collect` | 按 test ID 拉取设备本地日志，默认保留设备文件 |
-| 资格化 | `golden` / `calibrate` / `baseline` | 基于明确提供的合格运行生成并管理基线 |
+| 资格化 | `golden` / `calibrate` / `baseline` | 从已准备设备实时采集或消费完整合格运行，生成并管理基线 |
 | 报告 | `report` | 从已有 PC `result.json` 生成 markdown/json/csv |
 
 `run` 不会隐式调用 `probe`、`deploy` 或 `verify-deployment`，也不会修改或恢复 governor、频率、CPU online、功耗策略和绑核状态。
@@ -37,13 +37,13 @@ $DEVICE_UART = '/dev/ttyHW0'
 公共连接参数示例：
 
 ```powershell
-& $MON --transport hdc --device $DEVICE <子命令>
+& $MON --transport hdc --device $DEVICE '<子命令>'
 ```
 
 如果已经成功执行 `pair`，`run` 可以复用保存的串口关系；也可以每次显式提供：
 
 ```powershell
-& $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART <子命令>
+& $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART '<子命令>'
 ```
 
 ## 3. 每个平台/BSP 只做一次的准备
@@ -197,23 +197,68 @@ PC 默认使用 `--pc-artifacts result`，保留判定所需的紧凑结果。�
 & $MON report --run-dir '<运行目录>' --format markdown,json
 ```
 
-## 8. 何时使用 baseline
+## 8. 资格化与 baseline
 
 普通压力测试只关心明确错误时，不传 `--baseline`。需要校验 checksum、golden 或阈值时才显式指定已批准 baseline：
 
 ```powershell
-& $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL run --profile cpu_mixed_big4 --baseline '<baseline-id>' --test-id QUAL-CPU-01
+& $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL run --profile cpu_qualification_kirin9030 --baseline '<baseline-id>' --test-id QUAL-CPU-01
 ```
 
-资格化流程是独立的：先在已准备好的已知良品板上执行并收集运行目录，再把这些目录显式传给 `golden`/`calibrate`，最后人工批准。`calibrate` 不会为了补齐样本而偷偷启动硬件。
+`golden` 有且只有两种输入方式：
+
+- 不传任何 `--run-dir`：在已经 deploy/verify 的已知良品板上实时采集恰好 `--runs` 次，并自动拉取每次完整设备 attempt 目录；
+- 传 `--run-dir`：必须恰好传 `--runs` 个，不允许传一部分后再隐式启动硬件补齐。
+
+命令 JSON 输出中的 `source_runs` 是后续 `calibrate` 可直接复用的 PC 运行目录。每个目录可包含 PC `result.json`，以及 sibling `device-evidence/<attempt>/spool`；也可直接传已 collect 的 `spool`。资格化优先从设备 `workload.log` 的原生 summary 读取完整性能指标，UART 上的紧凑 summary 不需要扩大。
+
+### 8.1 两块板的功能验收（快速证明数据链）
+
+先分别在 BOARD-A 和 BOARD-B 上部署并核验 `cpu_qualification_kirin9030`，每块板实时采集一次 golden。保存两次输出里的 `source_runs[0]`，再做跨板一致性 golden 和最小两样本校准：
 
 ```powershell
-& $MON golden cpu --profile cpu_mixed_big4 --board-id BOARD-A --known-good --runs 2 --run-dir '<run1>' --run-dir '<run2>'
-& $MON calibrate cpu --profile cpu_mixed_big4 --board-id BOARD-A --golden '<golden.json>' --runs 2 --run-dir '<run1>' --run-dir '<run2>'
-& $MON baseline approve '<baseline-id>' --approver '<name>'
+& $MON --transport hdc --device '<BOARD-A设备>' --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json golden cpu --profile cpu_qualification_kirin9030 --board-id BOARD-A --known-good --runs 1 --qualification-id CPU-A-$SESSION
+& $MON --transport hdc --device '<BOARD-B设备>' --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json golden cpu --profile cpu_qualification_kirin9030 --board-id BOARD-B --known-good --runs 1 --qualification-id CPU-B-$SESSION
+
+& $MON --json golden cpu --profile cpu_qualification_kirin9030 --board-id BOARD-A --known-good --runs 2 --qualification-id CPU-2BOARD-$SESSION --run-dir 'BOARD-A=<A-source-run>' --run-dir 'BOARD-B=<B-source-run>'
+& $MON --json calibrate cpu --profile cpu_qualification_kirin9030 --board-id BOARD-A --golden '<CPU-2BOARD golden_manifest>' --runs 2 --min-accepted 2 --baseline-id CPU-FUNCTIONAL-$SESSION --run-dir 'BOARD-A=<A-source-run>' --run-dir 'BOARD-B=<B-source-run>'
+& $MON baseline approve "CPU-FUNCTIONAL-$SESSION" --approver '<name>'
 ```
 
-## 9. 配置边界
+这只证明资格化数据链可执行：两个样本均有 PASS、完整 telemetry、无 throttling、温度在指定范围内，并包含 CPU `operations_per_sec_avg`/`batch_time_ms_p99`（GPU 为 `fps_avg`/`frame_time_p99_ms`）。它不是生产阈值基线。
+
+### 8.2 生产基线
+
+生产流程仍使用 `config/policies/calibration.yaml`：至少 20 个被接受样本、至少 2 块板；建议按项目策略在每块板上采足重复数。先收集全部来源运行，再一次性执行 `golden` 和 `calibrate`。生产流程不要使用 `--min-accepted 2`。`calibrate` 只创建 draft，必须审阅 `proposed-baseline.json` 后人工 `baseline approve`。
+
+GPU 使用同样流程，但换成 `gpu_qualification_kirin9030` 和 `golden gpu`/`calibrate gpu`；每次 golden run 还必须有内容完全一致的 `gpu-golden.rgba`。
+
+批准后，使用同一个 state 目录显式部署、核验并运行：
+
+```powershell
+& $MON --transport hdc --device $DEVICE deploy --profile cpu_qualification_kirin9030 --baseline '<approved-baseline-id>'
+& $MON --transport hdc --device $DEVICE verify-deployment --profile cpu_qualification_kirin9030 --baseline '<approved-baseline-id>'
+& $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART run --profile cpu_qualification_kirin9030 --baseline '<approved-baseline-id>' --test-id "QUAL-CPU-$SESSION"
+```
+
+## 9. UART v2 诊断接口
+
+`simulate` 是离线判定接口。JSONL 事件可选择 `--realtime` 节奏重放；真实 `serial.raw` 使用 UART v2 会话发现、COBS、CRC、身份与序号校验，固定做确定性重放：
+
+```powershell
+& $MON --json simulate --events '<run>/events.jsonl' --profile cpu_stress_kirin9030
+& $MON --json simulate --raw-serial '<run>/serial.raw' --profile cpu_stress_kirin9030
+```
+
+两种输入应复现原运行的 verdict/exit code；`--realtime` 不能和 `--raw-serial` 同用。`monitor` 直接从 `$PC_SERIAL` 发现并解码一段 UART v2 会话，可保存 raw 证据，但因为没有完整 run manifest，只输出诊断结果 `NOT_EVALUATED`，不能替代 `run`：
+
+```powershell
+& $MON --pc-serial $PC_SERIAL --baudrate 115200 --json monitor --save-raw --timeout 60
+```
+
+`monitor` 和 `run` 必须独占串口，不能同时打开同一个 COM 口。
+
+## 10. 配置边界
 
 平台依赖写入配置，不写死在运行逻辑中：
 
@@ -221,9 +266,11 @@ PC 默认使用 `--pc-artifacts result`，保留判定所需的紧凑结果。�
 - `config/profiles/<profile>.yaml`：workload、telemetry 和 `scheduler_requirements`。
 - `config/workloads/<workload>.json`：workload 参数及 `verify_mode`。
 
+新增平台时复制 profile/workload 数据文件并修改平台 ID、能力、路径和 workload 参数，不在 Python 中增加平台分支。普通 stress/smoke 使用 `verify_mode: none`；CPU 资格化使用 `checksum`，GPU 资格化使用 `golden-image`，且 `golden_file` 必须是设备根目录下的绝对路径。`validate --profile ...` 会解析并校验这些 workload 字段，不再只检查文件是否存在。
+
 `scheduler_requirements` 当前只是声明性元数据。Monitor 2.1 不执行它。未来调度模块若要设置 governor、频率、CPU online、功耗策略或 affinity，必须有独立命令、权限、审计和恢复策略。
 
-## 10. 判定和退出码
+## 11. 判定和退出码
 
 | 退出码 | 含义 |
 |---:|---|

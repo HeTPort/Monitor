@@ -15,7 +15,7 @@ from typing import Any, Iterable, Mapping
 
 from .artifact_store import ArtifactStore, atomic_write_bytes, atomic_write_json, sha256_file
 from .baselines import Baseline, BaselineError, BaselineRegistry
-from .config_loader import ConfigError, PlatformConfig, ProfileConfig, load_document
+from .config_loader import ConfigError, PlatformConfig, ProfileConfig, load_document, validate_workload_config
 from .deployment import AssetSpec, DeploymentError, DeploymentManager
 from .events import EventProtocolError
 from .events import EventDecoder
@@ -30,9 +30,11 @@ from .qualification import (
     QualificationError,
     correctness_fingerprint,
 )
+from .qualification_artifacts import resolve_qualification_run
 from .run_orchestrator import RunError, RunInfrastructureError, RunManifestBuilder, RunOrchestrator, new_run_id
 from .transport import ADBTransport, HDCTransport, Transport, TransportError, TransportManager
 from .transport_probe import TransportProbeBackend
+from .uart_protocol import UART_PROTOCOL, UartV2SessionDecoder, discover_uart_session
 
 
 CLI_VERSION = "2.1.0"
@@ -306,6 +308,7 @@ def _asset_plan(
     if not isinstance(workload_config_value, str):
         raise ConfigError(f"profile {profile.name} has no workload.config")
     workload_config = paths.resolve_input(workload_config_value, owner=profile.source_path)
+    validate_workload_config(workload_config, profile.target, device_root=paths.device_root)
     agent_remote = paths.remote("bin/avs-device-agent")
     assets = [
         AssetSpec(agent, agent_remote, executable=True, kind="agent"),
@@ -646,6 +649,7 @@ def _execute_live_qualification(
             overall_timeout_s=float(getattr(args, "overall_timeout", 300.0)),
             heartbeat_timeout_s=float(getattr(args, "heartbeat_timeout", 45.0)),
             device_uart=args.device_uart,
+            telemetry_enabled=mode == "golden",
         )
         execution = RunOrchestrator(paths.output_root).run_serial(
             manifest,
@@ -659,11 +663,19 @@ def _execute_live_qualification(
                 f"live {mode} attempt {attempt_id} did not pass: {execution.result.verdict}; {execution.result_path}"
             )
         run_dir = execution.result_path.parent
-        if mode == "golden" and profile.target == "gpu":
-            remote_readback = PurePosixPath(manifest["spool_dir"]) / "gpu-golden.rgba"
-            transfer = transport.pull(remote_readback, run_dir / "gpu-golden.rgba")
-            if not transfer.success:
-                raise QualificationError(f"failed to collect GPU readback for {attempt_id}: {transfer.message}")
+        evidence_dir = run_dir / "device-evidence"
+        transfer = transport.pull(PurePosixPath(manifest["device_attempt_dir"]), evidence_dir)
+        if not transfer.success:
+            raise QualificationError(
+                f"failed to collect complete qualification evidence for {attempt_id}: {transfer.message}"
+            )
+        normalized = resolve_qualification_run(run_dir)
+        if normalized.events_path is None:
+            raise QualificationError(f"collected qualification events are missing for {attempt_id}")
+        if normalized.summary:
+            atomic_write_json(run_dir / "workload-summary-full.json", normalized.summary)
+        if mode == "golden" and profile.target == "gpu" and normalized.readback_path is None:
+            raise QualificationError(f"collected GPU golden readback is missing for {attempt_id}")
         run_dirs.append(run_dir)
     return run_dirs
 
@@ -720,9 +732,10 @@ def cmd_verify_deployment(args: Namespace) -> int:
 
 
 def _events_from_run(run_dir: Path, event_type: str) -> list[dict[str, Any]]:
-    path = run_dir / "events.jsonl"
-    if not path.exists():
-        raise QualificationError(f"events artifact missing: {path}")
+    normalized = resolve_qualification_run(run_dir)
+    path = normalized.events_path
+    if path is None:
+        raise QualificationError(f"events artifact missing for qualification run: {run_dir}")
     records: list[dict[str, Any]] = []
     for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         if not line.strip():
@@ -758,12 +771,17 @@ def cmd_golden(args: Namespace) -> int:
     profile = load_profile(paths, args.profile)
     if profile.target != args.golden_target:
         raise ConfigError(f"profile target is {profile.target}, command target is {args.golden_target}")
+    if args.runs < 1:
+        raise ConfigError("--runs must be at least 1")
     run_specs = _qualified_run_specs(args.run_dir, args.board_id)
-    if len(run_specs) < args.runs:
-        live = _execute_live_qualification(
-            args, paths, profile, mode="golden", count=args.runs - len(run_specs), golden=None
+    if run_specs and len(run_specs) != args.runs:
+        raise ConfigError(
+            f"golden requires either zero --run-dir values for live capture or exactly {args.runs}; "
+            f"received {len(run_specs)}"
         )
-        run_specs.extend((args.board_id, run_dir) for run_dir in live)
+    if not run_specs:
+        live = _execute_live_qualification(args, paths, profile, mode="golden", count=args.runs, golden=None)
+        run_specs = [(args.board_id, run_dir) for run_dir in live]
     records: list[dict[str, Any]] = []
     for _, run_dir in run_specs[: args.runs]:
         found = _events_from_run(run_dir, "golden")
@@ -789,7 +807,25 @@ def cmd_golden(args: Namespace) -> int:
             board_ids=board_ids,
         )
     else:
-        readbacks = [run_dir / args.readback_name for _, run_dir in run_specs[: args.runs]]
+        readbacks: list[Path] = []
+        for _, run_dir in run_specs[: args.runs]:
+            normalized = resolve_qualification_run(run_dir)
+            readback = normalized.readback_path
+            if readback is None and args.readback_name != "gpu-golden.rgba":
+                readback = next(
+                    (
+                        candidate
+                        for candidate in (
+                            run_dir / args.readback_name,
+                            *( [normalized.spool_dir / args.readback_name] if normalized.spool_dir else [] ),
+                        )
+                        if candidate.exists()
+                    ),
+                    None,
+                )
+            if readback is None:
+                raise QualificationError(f"GPU readback {args.readback_name!r} is missing for {run_dir}")
+            readbacks.append(readback)
         manifest = service.create_gpu(
             qualification_id=qualification_id,
             profile=profile.name,
@@ -798,29 +834,35 @@ def cmd_golden(args: Namespace) -> int:
             readback_files=readbacks,
             board_ids=board_ids,
         )
-    print_command_result(args, {"qualification_id": qualification_id, "golden_manifest": manifest["manifest_path"], "sha256": manifest["manifest_sha256"]})
+    print_command_result(
+        args,
+        {
+            "qualification_id": qualification_id,
+            "golden_manifest": manifest["manifest_path"],
+            "sha256": manifest["manifest_sha256"],
+            "source_mode": "supplied" if args.run_dir else "live-capture",
+            "source_runs": [str(run_dir) for _, run_dir in run_specs[: args.runs]],
+        },
+    )
     return 0
 
 
 def _sample_from_run(run_dir: Path, board_id: str) -> CalibrationSample:
-    result_path = run_dir / "result.json"
-    summary_path = run_dir / "workload-summary.json"
-    if not result_path.exists() or not summary_path.exists():
-        raise QualificationError(f"run is missing result/summary: {run_dir}")
-    result = json.loads(result_path.read_text(encoding="utf-8"))
-    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    normalized = resolve_qualification_run(run_dir)
+    if normalized.result_path is None or not normalized.summary:
+        raise QualificationError(f"run is missing PC result or full workload summary: {run_dir}")
+    result = json.loads(normalized.result_path.read_text(encoding="utf-8"))
+    summary = normalized.summary
     temperatures: list[float] = []
-    telemetry_candidates = [
-        run_dir / "telemetry.jsonl",
-        run_dir / "spool" / "telemetry.jsonl",
-        run_dir.parent / "device-evidence" / run_dir.name / "spool" / "telemetry.jsonl",
-    ]
-    telemetry_path = next((path for path in telemetry_candidates if path.exists()), telemetry_candidates[0])
-    telemetry_complete = telemetry_path.exists()
+    telemetry_path = normalized.telemetry_path
+    telemetry_complete = telemetry_path is not None
     throttled = False
-    if telemetry_path.exists():
+    if telemetry_path is not None:
         for line in telemetry_path.read_text(encoding="utf-8").splitlines():
-            event = json.loads(line)
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise QualificationError(f"invalid telemetry in {telemetry_path}: {exc}") from exc
             payload = event.get("payload", {})
             metrics = payload.get("metrics", {}) if isinstance(payload, dict) else {}
             if isinstance(payload, dict) and isinstance(payload.get("metric"), str):
@@ -832,7 +874,7 @@ def _sample_from_run(run_dir: Path, board_id: str) -> CalibrationSample:
                 if "throttle" in key and value not in {0, 0.0, "0", "none", "off", False}:
                     throttled = True
     return CalibrationSample(
-        run_id=str(result.get("run_id", run_dir.name)),
+        run_id=str(result.get("run_id", normalized.pc_run_dir.name if normalized.pc_run_dir else run_dir.name)),
         board_id=board_id,
         summary=summary,
         temperature_c=max(temperatures) if temperatures else None,
@@ -860,9 +902,11 @@ def cmd_calibrate(args: Namespace) -> int:
     _require_current_correctness(paths, profile, golden)
     if profile.target == "gpu" and golden.get("readback_file"):
         golden["local_path"] = str((golden_path.parent / str(golden["readback_file"])).resolve(strict=True))
-    if len(run_specs) < args.runs:
+    if args.runs < 1:
+        raise ConfigError("--runs must be at least 1")
+    if len(run_specs) != args.runs:
         raise QualificationError(
-            f"calibrate requires {args.runs} collected --run-dir samples; received {len(run_specs)}"
+            f"calibrate requires exactly {args.runs} collected --run-dir samples; received {len(run_specs)}"
         )
     samples = [_sample_from_run(run_dir, board_id) for board_id, run_dir in run_specs[: args.runs]]
     temp_range = tuple(float(item) for item in args.temperature_range.split(":"))
@@ -1015,13 +1059,25 @@ def cmd_simulate(args: Namespace) -> int:
         raise ConfigError("--baseline requires --profile")
     source = paths.resolve_input(source_value)
     data = source.read_bytes()
-    first_line = next((line for line in data.splitlines() if line.strip()), None)
-    if first_line is None:
+    if not data:
         raise ConfigError("simulation input is empty")
-    try:
-        run_id = str(json.loads(first_line)["run_id"])
-    except (json.JSONDecodeError, KeyError, TypeError) as exc:
-        raise ConfigError("simulation input does not begin with a framed event") from exc
+    test_id: str | None = None
+    if args.raw_serial:
+        session = discover_uart_session(data)
+        if session is None:
+            raise ConfigError("raw serial input has no valid UART-v2 agent_start frame")
+        test_id, run_id = session
+    else:
+        first_line = next((line for line in data.splitlines() if line.strip()), None)
+        if first_line is None:
+            raise ConfigError("simulation input is empty")
+        try:
+            first_record = json.loads(first_line)
+            run_id = str(first_record["run_id"])
+            raw_test_id = first_record.get("test_id")
+            test_id = str(raw_test_id) if raw_test_id else None
+        except (json.JSONDecodeError, KeyError, TypeError) as exc:
+            raise ConfigError("events input does not begin with a framed JSON event") from exc
     policy: dict[str, Any] = {"thresholds": {}, "required_telemetry": []}
     if args.profile:
         profile = load_profile(paths, args.profile)
@@ -1030,14 +1086,25 @@ def cmd_simulate(args: Namespace) -> int:
     manifest = {
         "schema_version": 1,
         "run_id": run_id,
+        **({"test_id": test_id, "attempt_id": run_id} if test_id is not None else {}),
         "profile": {"id": args.profile},
         "baseline": {"id": args.baseline},
         "policy": policy,
         "overall_timeout_s": 86400,
         "heartbeat_timeout_s": 86400,
+        **(
+            {
+                "pc_artifacts": "full",
+                "serial_transport": {"protocol": UART_PROTOCOL, "max_frame_bytes": 512},
+            }
+            if args.raw_serial
+            else {}
+        ),
     }
     chunks: Iterable[bytes] = [data]
     if args.realtime:
+        if args.raw_serial:
+            raise ConfigError("--realtime currently requires --events; raw UART-v2 replay is deterministic and immediate")
         def replay() -> Iterable[bytes]:
             previous_timestamp: int | None = None
             for line in data.splitlines(keepends=True):
@@ -1055,7 +1122,13 @@ def cmd_simulate(args: Namespace) -> int:
     execution = RunOrchestrator(paths.output_root).evaluate_stream(manifest, chunks, save_raw=bool(args.raw_serial))
     print_command_result(
         args,
-        {"run_id": run_id, "verdict": execution.result.verdict, "exit_code": execution.result.exit_code, "result": str(execution.result_path)},
+        {
+            "test_id": test_id,
+            "run_id": run_id,
+            "verdict": execution.result.verdict,
+            "exit_code": execution.result.exit_code,
+            "result": str(execution.result_path),
+        },
     )
     return execution.result.exit_code
 
@@ -1075,9 +1148,9 @@ def cmd_monitor_events(args: Namespace) -> int:
     except ImportError as exc:
         raise CommandError("pyserial is required for monitor; install requirements.txt") from exc
     expected_run = args.expected_run_id
-    decoder: EventDecoder | None = None
+    decoder = UartV2SessionDecoder(expected_run_id=expected_run)
     store = None
-    buffered = bytearray()
+    raw_preamble = bytearray()
     event_count = 0
     final_seen = False
     started = time.monotonic()
@@ -1088,33 +1161,22 @@ def cmd_monitor_events(args: Namespace) -> int:
                 chunk = bytes(stream.read(4096))
                 if not chunk:
                     continue
-                buffered.extend(chunk)
-                if decoder is None:
-                    newline = buffered.find(b"\n")
-                    if newline < 0:
-                        continue
-                    try:
-                        first = json.loads(bytes(buffered[:newline]).decode("utf-8"))
-                        discovered_run = str(first["run_id"])
-                        first_seq = int(first["seq"])
-                    except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
-                        raise EventProtocolError("invalid_first_event", f"cannot identify first monitor event: {exc}") from exc
-                    if expected_run and discovered_run != expected_run:
-                        raise EventProtocolError(
-                            "wrong_run_id", f"stream run_id {discovered_run!r} does not match {expected_run!r}"
-                        )
-                    expected_run = discovered_run
-                    decoder = EventDecoder(expected_run, first_seq=first_seq)
+                if store is None and args.save_raw:
+                    raw_preamble.extend(chunk)
+                events = decoder.feed(chunk)
+                if decoder.run_id is not None and store is None:
+                    expected_run = decoder.run_id
                     session_id = f"monitor-{expected_run}-{new_run_id('session').split('-', 2)[-1]}"
                     store = ArtifactStore.create(paths.output_root, session_id)
-                assert decoder is not None and store is not None
-                if args.save_raw:
-                    store.append_raw_serial(bytes(buffered))
-                events = decoder.feed(bytes(buffered))
-                buffered.clear()
+                    if args.save_raw and raw_preamble:
+                        store.append_raw_serial(bytes(raw_preamble))
+                        raw_preamble.clear()
+                elif store is not None and args.save_raw:
+                    store.append_raw_serial(chunk)
                 if events:
                     last_usable = time.monotonic()
                 for event in events:
+                    assert store is not None
                     store.append_event(event)
                     event_count += 1
                     if event.type == "agent_final":
@@ -1122,8 +1184,11 @@ def cmd_monitor_events(args: Namespace) -> int:
                         break
                 if final_seen:
                     break
-        if decoder is None or store is None:
-            raise EventProtocolError("monitor_timeout", "no usable framed event received")
+        if store is None:
+            raise EventProtocolError("monitor_timeout", "no matching UART-v2 agent_start frame received")
+        decoder.finish()
+        if not final_seen:
+            raise EventProtocolError("missing_final", "UART-v2 diagnostic session ended without agent_final")
         result_path = store.finalize(
             {
                 "schema_version": 1,
@@ -1138,7 +1203,13 @@ def cmd_monitor_events(args: Namespace) -> int:
         )
         print_command_result(
             args,
-            {"observed_run_id": expected_run, "event_count": event_count, "agent_final_seen": final_seen, "result": str(result_path)},
+            {
+                "verdict": "NOT_EVALUATED",
+                "observed_run_id": expected_run,
+                "event_count": event_count,
+                "agent_final_seen": final_seen,
+                "result": str(result_path),
+            },
         )
         return 0
     except EventProtocolError as exc:
@@ -1352,7 +1423,8 @@ def cmd_validate_v2(args: Namespace) -> int:
             if platform_record not in resolved_configs:
                 resolved_configs.append(platform_record)
             if profile.workload.get("config"):
-                paths.resolve_input(str(profile.workload["config"]), owner=profile.source_path)
+                workload_config = paths.resolve_input(str(profile.workload["config"]), owner=profile.source_path)
+                validate_workload_config(workload_config, profile.target, device_root=paths.device_root)
                 checked.append(f"workload-config:{profile.name}")
             paths.resolve_input(str(profile.workload["binary"]), owner=profile.source_path)
             checked.append(f"workload-binary:{profile.name}")
