@@ -1,0 +1,12 @@
+{"schema_version":1,"test_id":"MC-SMOKE-0902A","run_id":"MC-SMOKE-0902A-001","seq":1,"timestamp_ms":1302835000,"source":"agent","type":"agent_start","payload":{"agent_version":"0.3.1","protocol_version":2,"baudrate":9600},"crc32":"5a823c11"}
+{"schema_version":1,"test_id":"MC-SMOKE-0902A","run_id":"MC-SMOKE-0902A-001","seq":2,"timestamp_ms":1302836000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"5daa10db"}
+{"schema_version":1,"test_id":"MC-SMOKE-0902A","run_id":"MC-SMOKE-0902A-001","seq":3,"timestamp_ms":1302838000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"555feb62"}
+{"schema_version":1,"test_id":"MC-SMOKE-0902A","run_id":"MC-SMOKE-0902A-001","seq":4,"timestamp_ms":1302839000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"1b5362a1"}
+{"schema_version":1,"test_id":"MC-SMOKE-0902A","run_id":"MC-SMOKE-0902A-001","seq":5,"timestamp_ms":1302840000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"ecee52c7"}
+{"schema_version":1,"test_id":"MC-SMOKE-0902A","run_id":"MC-SMOKE-0902A-001","seq":6,"timestamp_ms":1302842000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"8a9b2131"}
+{"schema_version":1,"test_id":"MC-SMOKE-0902A","run_id":"MC-SMOKE-0902A-001","seq":7,"timestamp_ms":1302843000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"617bd141"}
+{"schema_version":1,"test_id":"MC-SMOKE-0902A","run_id":"MC-SMOKE-0902A-001","seq":8,"timestamp_ms":1302844000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"7f84ace8"}
+{"schema_version":1,"test_id":"MC-SMOKE-0902A","run_id":"MC-SMOKE-0902A-001","seq":9,"timestamp_ms":1302845000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"94645c98"}
+{"schema_version":1,"test_id":"MC-SMOKE-0902A","run_id":"MC-SMOKE-0902A-001","seq":10,"timestamp_ms":1302846000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"a41eb7a3"}
+{"schema_version":1,"test_id":"MC-SMOKE-0902A","run_id":"MC-SMOKE-0902A-001","seq":11,"timestamp_ms":1302847000,"source":"cpu-workload","type":"summary","payload":{"result":"PASS","exit_code":0,"verify_pass":true},"crc32":"2876b4fb"}
+{"schema_version":1,"test_id":"MC-SMOKE-0902A","run_id":"MC-SMOKE-0902A-001","seq":12,"timestamp_ms":1302847000,"source":"agent","type":"agent_final","payload":{"workload_exit_code":0,"summary_seen":true,"timed_out":false,"spool_complete":true,"telemetry_exit_code":null},"crc32":"1246f393"}
