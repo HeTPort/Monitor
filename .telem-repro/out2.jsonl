@@ -1,0 +1,6 @@
+{"schema_version":1,"test_id":"T","run_id":"A","seq":1,"timestamp_ms":1788431879000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.frequency","value":1200000,"path":"/d/Monitor/.telem-repro/f1"}}
+{"schema_version":1,"test_id":"T","run_id":"A","seq":2,"timestamp_ms":1788431880000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":34.000,"path":"/d/Monitor/.telem-repro/t1"}}
+{"schema_version":1,"test_id":"T","run_id":"A","seq":3,"timestamp_ms":1788431883000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.frequency","value":1200000,"path":"/d/Monitor/.telem-repro/f1"}}
+{"schema_version":1,"test_id":"T","run_id":"A","seq":4,"timestamp_ms":1788431884000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":34.000,"path":"/d/Monitor/.telem-repro/t1"}}
+{"schema_version":1,"test_id":"T","run_id":"A","seq":5,"timestamp_ms":1788431887000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.frequency","value":1200000,"path":"/d/Monitor/.telem-repro/f1"}}
+{"schema_version":1,"test_id":"T","run_id":"A","seq":6,"timestamp_ms":1788431887000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":34.000,"path":"/d/Monitor/.telem-repro/t1"}}

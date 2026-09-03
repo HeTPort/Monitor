@@ -1,0 +1,92 @@
+{
+  "assets": [
+    {
+      "action": "unchanged",
+      "executable": true,
+      "kind": "agent",
+      "local": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI370082\\device\\avs_device_agent.sh",
+      "local_sha256": "d2a9028ea869f6be97a9f79226d7c8cc5a2024d1ba130657d61e8cb4f59890df",
+      "mode": "0755",
+      "remote": "/data/local/tmp/avs/bin/avs-device-agent",
+      "remote_sha256": "d2a9028ea869f6be97a9f79226d7c8cc5a2024d1ba130657d61e8cb4f59890df",
+      "required": true,
+      "size": 11776,
+      "verified": true
+    },
+    {
+      "action": "unchanged",
+      "executable": true,
+      "kind": "uart-relay",
+      "local": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI370082\\tools\\relay\\kirin9030\\avs-uart-relay",
+      "local_sha256": "d997d8bc63cb2347dee11574333a6056d3c8ecd338a5714f1f4a6e518e40b7f1",
+      "mode": "0755",
+      "remote": "/data/local/tmp/avs/bin/avs-uart-relay",
+      "remote_sha256": "d997d8bc63cb2347dee11574333a6056d3c8ecd338a5714f1f4a6e518e40b7f1",
+      "required": true,
+      "size": 19304,
+      "verified": true
+    },
+    {
+      "action": "unchanged",
+      "executable": true,
+      "kind": "workload",
+      "local": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI370082\\tools\\cpu-avs-workload",
+      "local_sha256": "fd8ceb01ff187a4f473f73bfa318ecc95c5bd19b5fb2eb5e8383ce3cac36cc90",
+      "mode": "0755",
+      "remote": "/data/local/tmp/avs/bin/cpu-avs-workload",
+      "remote_sha256": "fd8ceb01ff187a4f473f73bfa318ecc95c5bd19b5fb2eb5e8383ce3cac36cc90",
+      "required": true,
+      "size": 4889160,
+      "verified": true
+    },
+    {
+      "action": "unchanged",
+      "executable": false,
+      "kind": "workload-config",
+      "local": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI370082\\config\\workloads\\cpu_qualification_kirin9030.json",
+      "local_sha256": "666a96cf88504969d5976f5de2ef8a076e73cd1a1be99c451afca42fe9007ca2",
+      "mode": null,
+      "remote": "/data/local/tmp/avs/configs/cpu_qualification_kirin9030.json",
+      "remote_sha256": "666a96cf88504969d5976f5de2ef8a076e73cd1a1be99c451afca42fe9007ca2",
+      "required": true,
+      "size": 309,
+      "verified": true
+    },
+    {
+      "action": "unchanged",
+      "executable": true,
+      "kind": "telemetry-agent",
+      "local": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI370082\\device\\avs_telemetry_agent.sh",
+      "local_sha256": "68fb8a5921dbdce98ece9bf6757b87ac23e4e022cf99371fbcacc03975123bf7",
+      "mode": "0755",
+      "remote": "/data/local/tmp/avs/bin/avs-telemetry-agent",
+      "remote_sha256": "68fb8a5921dbdce98ece9bf6757b87ac23e4e022cf99371fbcacc03975123bf7",
+      "required": true,
+      "size": 5538,
+      "verified": true
+    },
+    {
+      "action": "unchanged",
+      "executable": false,
+      "kind": "telemetry-plan",
+      "local": "D:\\h60106817\\release\\output\\prepared\\telemetry\\cpu_qualification_kirin9030.conf",
+      "local_sha256": "bd2af6e54d6bd50d05256047411cb723aa4b98acf59b2510043f571867752d94",
+      "mode": null,
+      "remote": "/data/local/tmp/avs/configs/telemetry/cpu_qualification_kirin9030.conf",
+      "remote_sha256": "bd2af6e54d6bd50d05256047411cb723aa4b98acf59b2510043f571867752d94",
+      "required": true,
+      "size": 667,
+      "verified": true
+    }
+  ],
+  "complete": true,
+  "created_at": "2026-09-03T08:33:53.043310+00:00",
+  "producer": {
+    "component": "DeploymentManager",
+    "name": "vmin_judge"
+  },
+  "removed_stale": [],
+  "schema_version": 1,
+  "transport": "hdc",
+  "verified": true
+}

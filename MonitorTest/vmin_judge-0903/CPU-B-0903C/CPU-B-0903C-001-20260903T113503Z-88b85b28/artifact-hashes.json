@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "sha256": {
+    "effective-profile.json": "563856ddfc7eabddbe28cdcb10540a244524b611bff9e5c1597b5754b3f79ddf",
+    "events.jsonl": "e24c9fb4200de26106f1fdac07cab285e780f2e873c07bde691aecce59b87fe7",
+    "run-manifest.json": "f5c34f1932e0988f7c202d1bde36d0d3011a4b0341a42db28867cd0b13226588",
+    "serial.raw": "b84a5fb95418e3688a6d956e63a183ac22f59ea9f797f6a81bee84378521650a",
+    "workload-summary.json": "1e8dc87ef356bb728d41e214a39eff4d2944e5018513db95d55310d266f1f10a"
+  }
+}

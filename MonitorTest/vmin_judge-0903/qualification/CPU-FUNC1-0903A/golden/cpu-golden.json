@@ -1,0 +1,39 @@
+{
+  "board_ids": [
+    "BOARD-1"
+  ],
+  "checksum": "1a60854766c66a6a",
+  "correctness_fingerprint": "8fd2d8ef4599398bb6e4f4e549bb68003da47a77f6e075645da49949f329a2f8",
+  "created_at": "2026-09-03T09:12:07.790715+00:00",
+  "fingerprint_fields": {
+    "deployed_file_sha256": {
+      "/data/local/tmp/avs/bin/cpu-avs-workload": "fd8ceb01ff187a4f473f73bfa318ecc95c5bd19b5fb2eb5e8383ce3cac36cc90",
+      "/data/local/tmp/avs/configs/cpu_qualification_kirin9030.json": "666a96cf88504969d5976f5de2ef8a076e73cd1a1be99c451afca42fe9007ca2"
+    },
+    "profile_sha256": "43f587cfc020f57b6f1f6b677d8a390cb1dd10bf2bc2c0567cdce503399b88d1",
+    "target": "cpu",
+    "workload": {
+      "binary": "../../tools/cpu-avs-workload",
+      "config": "../workloads/cpu_qualification_kirin9030.json",
+      "remote_binary": "bin/cpu-avs-workload"
+    },
+    "workload_config_sha256": "666a96cf88504969d5976f5de2ef8a076e73cd1a1be99c451afca42fe9007ca2"
+  },
+  "kind": "cpu-checksum",
+  "profile": "cpu_qualification_kirin9030",
+  "qualification_id": "CPU-FUNC1-0903A",
+  "records": [
+    {
+      "api": "cpu",
+      "backend": "mixed",
+      "checksum": "1a60854766c66a6a",
+      "mode": "compute",
+      "profile": "mixed",
+      "type": "golden",
+      "verify_mode": "checksum",
+      "workload": "cpu"
+    }
+  ],
+  "repeat_count": 1,
+  "schema_version": 1
+}

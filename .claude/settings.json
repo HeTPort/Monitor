@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -n \"operations_per_sec\\\\|fps_avg\\\\|frame_time_p99\\\\|batch_time_p99\\\\|MakeBasicSummary\\\\|ops_per\\\\|\\\\.fps\\\\|frame_time\" D:/workload/gpuworkload/src/runner.cpp D:/workload/gpuworkload/src/metrics.cpp 2>/dev/null | head -40)",
+      "Read(//d/workload/gpuworkload/src/**)"
+    ]
+  }
+}

@@ -1,0 +1,14 @@
+{"schema_version":1,"test_id":"BND-REPEAT-0903A","run_id":"BND-REPEAT-0903A-001","seq":1,"timestamp_ms":1418804000,"source":"agent","type":"agent_start","payload":{"agent_version":"0.3.2","protocol_version":2,"baudrate":9600},"crc32":"e8212f91"}
+{"schema_version":1,"test_id":"BND-REPEAT-0903A","run_id":"BND-REPEAT-0903A-001","seq":2,"timestamp_ms":1418805000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"fae4741f"}
+{"schema_version":1,"test_id":"BND-REPEAT-0903A","run_id":"BND-REPEAT-0903A-001","seq":3,"timestamp_ms":1418805000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"8f7bb282"}
+{"schema_version":1,"test_id":"BND-REPEAT-0903A","run_id":"BND-REPEAT-0903A-001","seq":4,"timestamp_ms":1418806000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"44cb4c38"}
+{"schema_version":1,"test_id":"BND-REPEAT-0903A","run_id":"BND-REPEAT-0903A-001","seq":5,"timestamp_ms":1418807000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"b071ef82"}
+{"schema_version":1,"test_id":"BND-REPEAT-0903A","run_id":"BND-REPEAT-0903A-001","seq":6,"timestamp_ms":1418808000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"cdc4afec"}
+{"schema_version":1,"test_id":"BND-REPEAT-0903A","run_id":"BND-REPEAT-0903A-001","seq":7,"timestamp_ms":1418809000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"397e0c56"}
+{"schema_version":1,"test_id":"BND-REPEAT-0903A","run_id":"BND-REPEAT-0903A-001","seq":8,"timestamp_ms":1418810000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"466faa39"}
+{"schema_version":1,"test_id":"BND-REPEAT-0903A","run_id":"BND-REPEAT-0903A-001","seq":9,"timestamp_ms":1418811000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"b2d50983"}
+{"schema_version":1,"test_id":"BND-REPEAT-0903A","run_id":"BND-REPEAT-0903A-001","seq":10,"timestamp_ms":1418812000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"73ef5b03"}
+{"schema_version":1,"test_id":"BND-REPEAT-0903A","run_id":"BND-REPEAT-0903A-001","seq":11,"timestamp_ms":1418813000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"8755f8b9"}
+{"schema_version":1,"test_id":"BND-REPEAT-0903A","run_id":"BND-REPEAT-0903A-001","seq":12,"timestamp_ms":1418814000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"28ed8469"}
+{"schema_version":1,"test_id":"BND-REPEAT-0903A","run_id":"BND-REPEAT-0903A-001","seq":13,"timestamp_ms":1418816000,"source":"cpu-workload","type":"summary","payload":{"result":"PASS","exit_code":0,"verify_pass":true},"crc32":"76d75ce0"}
+{"schema_version":1,"test_id":"BND-REPEAT-0903A","run_id":"BND-REPEAT-0903A-001","seq":14,"timestamp_ms":1418816000,"source":"agent","type":"agent_final","payload":{"workload_exit_code":0,"summary_seen":true,"timed_out":false,"spool_complete":true,"telemetry_exit_code":null,"telemetry_timed_out":false},"crc32":"9d3ce6b6"}

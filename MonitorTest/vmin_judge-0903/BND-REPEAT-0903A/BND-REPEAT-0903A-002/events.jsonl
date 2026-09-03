@@ -1,0 +1,12 @@
+{"schema_version":1,"test_id":"BND-REPEAT-0903A","run_id":"BND-REPEAT-0903A-002","seq":1,"timestamp_ms":1418818000,"source":"agent","type":"agent_start","payload":{"agent_version":"0.3.2","protocol_version":2,"baudrate":9600},"crc32":"fb199976"}
+{"schema_version":1,"test_id":"BND-REPEAT-0903A","run_id":"BND-REPEAT-0903A-002","seq":2,"timestamp_ms":1418819000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"b06459a5"}
+{"schema_version":1,"test_id":"BND-REPEAT-0903A","run_id":"BND-REPEAT-0903A-002","seq":3,"timestamp_ms":1418821000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"221b15d5"}
+{"schema_version":1,"test_id":"BND-REPEAT-0903A","run_id":"BND-REPEAT-0903A-002","seq":4,"timestamp_ms":1418822000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"e9abeb6f"}
+{"schema_version":1,"test_id":"BND-REPEAT-0903A","run_id":"BND-REPEAT-0903A-002","seq":5,"timestamp_ms":1418823000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"1d1148d5"}
+{"schema_version":1,"test_id":"BND-REPEAT-0903A","run_id":"BND-REPEAT-0903A-002","seq":6,"timestamp_ms":1418824000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"b2a93405"}
+{"schema_version":1,"test_id":"BND-REPEAT-0903A","run_id":"BND-REPEAT-0903A-002","seq":7,"timestamp_ms":1418826000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"1e0d3e97"}
+{"schema_version":1,"test_id":"BND-REPEAT-0903A","run_id":"BND-REPEAT-0903A-002","seq":8,"timestamp_ms":1418827000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"169a3448"}
+{"schema_version":1,"test_id":"BND-REPEAT-0903A","run_id":"BND-REPEAT-0903A-002","seq":9,"timestamp_ms":1418828000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"8010f91c"}
+{"schema_version":1,"test_id":"BND-REPEAT-0903A","run_id":"BND-REPEAT-0903A-002","seq":10,"timestamp_ms":1418829000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"d744dda2"}
+{"schema_version":1,"test_id":"BND-REPEAT-0903A","run_id":"BND-REPEAT-0903A-002","seq":11,"timestamp_ms":1418830000,"source":"cpu-workload","type":"summary","payload":{"result":"PASS","exit_code":0,"verify_pass":true},"crc32":"e27383d1"}
+{"schema_version":1,"test_id":"BND-REPEAT-0903A","run_id":"BND-REPEAT-0903A-002","seq":12,"timestamp_ms":1418830000,"source":"agent","type":"agent_final","payload":{"workload_exit_code":0,"summary_seen":true,"timed_out":false,"spool_complete":true,"telemetry_exit_code":null,"telemetry_timed_out":false},"crc32":"6dcc0193"}

@@ -1,0 +1,18 @@
+{
+  "attempt_id": "MC-CPU-0903A-001",
+  "baseline": {
+    "id": null
+  },
+  "heartbeat_timeout_s": 86400,
+  "overall_timeout_s": 86400,
+  "policy": {
+    "required_telemetry": [],
+    "thresholds": {}
+  },
+  "profile": {
+    "id": "cpu_stress_kirin9030"
+  },
+  "run_id": "MC-CPU-0903A-001",
+  "schema_version": 1,
+  "test_id": "MC-CPU-0903A"
+}

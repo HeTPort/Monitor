@@ -1,0 +1,2 @@
+{"schema_version":1,"test_id":"T","run_id":"A","seq":1,"timestamp_ms":1788431961000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.frequency","value":1200000,"path":"/d/Monitor/.telem-repro/f1"}}
+{"schema_version":1,"test_id":"T","run_id":"A","seq":2,"timestamp_ms":1788431962000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":34.000,"path":"/d/Monitor/.telem-repro/t1"}}

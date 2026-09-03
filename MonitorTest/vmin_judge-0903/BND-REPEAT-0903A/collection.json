@@ -1,0 +1,10 @@
+{
+  "attempt_id": "BND-REPEAT-0903A-002",
+  "bytes_transferred": 0,
+  "local": "D:\\h60106817\\release\\output\\BND-REPEAT-0903A\\device-evidence\\BND-REPEAT-0903A-002",
+  "remote": "/data/local/tmp/avs/tests/BND-REPEAT-0903A/BND-REPEAT-0903A-002",
+  "remote_removed": true,
+  "schema_version": 1,
+  "test_id": "BND-REPEAT-0903A",
+  "verified": true
+}

@@ -1,0 +1,2 @@
+run_id,verdict,exit_code,profile_id,baseline_id,workload_result,workload_exit_code
+MC-CPU-0903A-001,INFRA_ERROR,3,cpu_stress_kirin9030,,,

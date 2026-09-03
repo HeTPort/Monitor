@@ -1,0 +1,833 @@
+PS D:\h60106817\release> $MON = 'D:\h60106817\release\vmin_judge.exe'
+PS D:\h60106817\release> $DEVICE = '0123456789ABCDEF'
+PS D:\h60106817\release> $PC_SERIAL = 'COM6'
+PS D:\h60106817\release> $DEVICE_UART = '/dev/ttyHW0'
+PS D:\h60106817\release> $SESSION = '0903A'
+PS D:\h60106817\release> $OUT = '.\output'
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --json probe --platform kirin9030 --full
+{
+  "capabilities": "D:\\h60106817\\release\\output\\probes\\0123456789ABCDEF\\capabilities.json",
+  "required_missing": [],
+  "supported": true
+}
+PS D:\h60106817\release>
+PS D:\h60106817\release>
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART pair --platform kirin9030 --verify
+[OK] Pairing /dev/ttyHW0 -> COM6 @ 9600 baud (760.8 ms)
+[OK] Pairing verified
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --json relay probe --platform kirin9030
+{
+  "baudrate": 9600,
+  "device_abi": {
+    "long_bit": "64",
+    "raw_checks": {
+      "getconf": {
+        "available": true,
+        "return_code": 0,
+        "stderr": "",
+        "stdout": "64"
+      },
+      "uname": {
+        "available": true,
+        "return_code": 0,
+        "stderr": "",
+        "stdout": "aarch64"
+      }
+    },
+    "uname_m": "aarch64"
+  },
+  "platform": "kirin9030",
+  "relay": {
+    "deployed_executable": true,
+    "remote": "/data/local/tmp/avs/bin/avs-uart-relay",
+    "self_test": {
+      "available": true,
+      "return_code": 0,
+      "stderr": "",
+      "stdout": "{\"relay\":\"avs-uart-relay\",\"version\":\"1.0.1\",\"self_test\":true,\"termios\":true,\"tcdrain\":true}"
+    },
+    "version": {
+      "available": true,
+      "return_code": 0,
+      "stderr": "",
+      "stdout": "avs-uart-relay 1.0.1 protocol uart-v2"
+    }
+  },
+  "supported": true,
+  "uart": "/dev/ttyHW0"
+}
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --device-uart $DEVICE_UART --json relay probe --platform kirin9030 --check-uart
+{
+  "baudrate": 9600,
+  "device_abi": {
+    "long_bit": "64",
+    "raw_checks": {
+      "getconf": {
+        "available": true,
+        "return_code": 0,
+        "stderr": "",
+        "stdout": "64"
+      },
+      "uname": {
+        "available": true,
+        "return_code": 0,
+        "stderr": "",
+        "stdout": "aarch64"
+      }
+    },
+    "uname_m": "aarch64"
+  },
+  "platform": "kirin9030",
+  "relay": {
+    "deployed_executable": true,
+    "remote": "/data/local/tmp/avs/bin/avs-uart-relay",
+    "self_test": {
+      "available": true,
+      "return_code": 0,
+      "stderr": "",
+      "stdout": "{\"relay\":\"avs-uart-relay\",\"version\":\"1.0.1\",\"self_test\":true,\"termios\":true,\"tcdrain\":true}"
+    },
+    "uart_check": {
+      "available": true,
+      "return_code": 0,
+      "stderr": "",
+      "stdout": "{\"uart\":\"/dev/ttyHW0\",\"baudrate\":9600,\"open\":true,\"termios\":true,\"tcdrain\":true}"
+    },
+    "version": {
+      "available": true,
+      "return_code": 0,
+      "stderr": "",
+      "stdout": "avs-uart-relay 1.0.1 protocol uart-v2"
+    }
+  },
+  "supported": true,
+  "uart": "/dev/ttyHW0"
+}
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE deploy --profile cpu_stress_kirin9030
+complete: True
+verified: True
+manifest: D:\h60106817\release\output\deployment-manifest.json
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE deploy --profile gpu_stress_kirin9030
+complete: True
+verified: True
+manifest: D:\h60106817\release\output\deployment-manifest.json
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE deploy --profile cpu_smoke_kirin9030
+complete: True
+verified: True
+manifest: D:\h60106817\release\output\deployment-manifest.json
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE deploy --profile gpu_smoke_kirin9030
+complete: True
+verified: True
+manifest: D:\h60106817\release\output\deployment-manifest.json
+PS D:\h60106817\release> hdc shell ls /data/local/tmp/avs
+bin
+configs
+shaders
+tests
+PS D:\h60106817\release> hdc shell ls /data/local/tmp/avs/bin
+avs-device-agent
+avs-telemetry-agent
+avs-uart-relay
+cpu-avs-workload
+gpu-avs-workload
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE verify-deployment --profile cpu_stress_kirin9030
+complete: True
+verified: True
+manifest: D:\h60106817\release\output\deployment-verification.json
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE verify-deployment --profile gpu_stress_kirin9030
+complete: True
+verified: True
+manifest: D:\h60106817\release\output\deployment-verification.json
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE verify-deployment --profile cpu_smoke_kirin9030
+complete: True
+verified: True
+manifest: D:\h60106817\release\output\deployment-verification.json
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json run --profile cpu_stress_kirin9030 --test-id "MC-CPU-$SESSION" --attempt-id "MC-CPU-$SESSION-001" --pc-artifacts full
+>>
+{
+  "exit_code": 0,
+  "repeat": 1,
+  "runs": [
+    {
+      "attempt_id": "MC-CPU-0903A-001",
+      "device_evidence": "/data/local/tmp/avs/tests/MC-CPU-0903A/MC-CPU-0903A-001",
+      "device_spool": "retained",
+      "exit_code": 0,
+      "result": "D:\\h60106817\\release\\output\\MC-CPU-0903A\\MC-CPU-0903A-001\\result.json",
+      "run_id": "MC-CPU-0903A-001",
+      "test_id": "MC-CPU-0903A",
+      "verdict": "PASS"
+    }
+  ],
+  "test_id": "MC-CPU-0903A",
+  "validation_mode": "error-only"
+}
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE collect --test-id "MC-CPU-$SESSION" --verify-hashes
+test_id: MC-CPU-0903A
+attempt_id: None
+collection: D:\h60106817\release\output\MC-CPU-0903A\collection.json
+local: D:\h60106817\release\output\MC-CPU-0903A\device-evidence
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json run --profile gpu_stress_kirin9030 --test-id "MC-GPU-$SESSION" --attempt-id "MC-GPU-$SESSION-001" --pc-artifacts full
+{
+  "exit_code": 0,
+  "repeat": 1,
+  "runs": [
+    {
+      "attempt_id": "MC-GPU-0903A-001",
+      "device_evidence": "/data/local/tmp/avs/tests/MC-GPU-0903A/MC-GPU-0903A-001",
+      "device_spool": "retained",
+      "exit_code": 0,
+      "result": "D:\\h60106817\\release\\output\\MC-GPU-0903A\\MC-GPU-0903A-001\\result.json",
+      "run_id": "MC-GPU-0903A-001",
+      "test_id": "MC-GPU-0903A",
+      "verdict": "PASS"
+    }
+  ],
+  "test_id": "MC-GPU-0903A",
+  "validation_mode": "error-only"
+}
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json run --profile cpu_smoke_kirin9030 --test-id "MC-SMOKE-$SESSION" --attempt-id "MC-SMOKE-$SESSION-001" --pc-artifacts full
+{
+  "exit_code": 0,
+  "repeat": 1,
+  "runs": [
+    {
+      "attempt_id": "MC-SMOKE-0903A-001",
+      "device_evidence": "/data/local/tmp/avs/tests/MC-SMOKE-0903A/MC-SMOKE-0903A-001",
+      "device_spool": "retained",
+      "exit_code": 0,
+      "result": "D:\\h60106817\\release\\output\\MC-SMOKE-0903A\\MC-SMOKE-0903A-001\\result.json",
+      "run_id": "MC-SMOKE-0903A-001",
+      "test_id": "MC-SMOKE-0903A",
+      "verdict": "PASS"
+    }
+  ],
+  "test_id": "MC-SMOKE-0903A",
+  "validation_mode": "error-only"
+}
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE collect --test-id "MC-GPU-$SESSION" --verify-hashes
+test_id: MC-GPU-0903A
+attempt_id: None
+collection: D:\h60106817\release\output\MC-GPU-0903A\collection.json
+local: D:\h60106817\release\output\MC-GPU-0903A\device-evidence
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE collect --test-id "MC-SMOKE-$SESSION" --verify-hashes
+test_id: MC-SMOKE-0903A
+attempt_id: None
+collection: D:\h60106817\release\output\MC-SMOKE-0903A\collection.json
+local: D:\h60106817\release\output\MC-SMOKE-0903A\device-evidence
+PS D:\h60106817\release> Get-Content "$OUT\MC-CPU-0903A\collection.json"
+{
+  "attempt_id": null,
+  "bytes_transferred": 0,
+  "local": "D:\\h60106817\\release\\output\\MC-CPU-0903A\\device-evidence",
+  "remote": "/data/local/tmp/avs/tests/MC-CPU-0903A",
+  "remote_removed": false,
+  "schema_version": 1,
+  "test_id": "MC-CPU-0903A",
+  "verified": true
+}
+PS D:\h60106817\release> Get-Content "$OUT\MC-GPU-0903A\collection.json"
+{
+  "attempt_id": null,
+  "bytes_transferred": 0,
+  "local": "D:\\h60106817\\release\\output\\MC-GPU-0903A\\device-evidence",
+  "remote": "/data/local/tmp/avs/tests/MC-GPU-0903A",
+  "remote_removed": false,
+  "schema_version": 1,
+  "test_id": "MC-GPU-0903A",
+  "verified": true
+}
+PS D:\h60106817\release> Get-Content "$OUT\MC-SMOKE-0903A\collection.json"
+{
+  "attempt_id": null,
+  "bytes_transferred": 0,
+  "local": "D:\\h60106817\\release\\output\\MC-SMOKE-0903A\\device-evidence",
+  "remote": "/data/local/tmp/avs/tests/MC-SMOKE-0903A",
+  "remote_removed": false,
+  "schema_version": 1,
+  "test_id": "MC-SMOKE-0903A",
+  "verified": true
+}
+PS D:\h60106817\release> hdc shell ls /data/local/tmp/avs/tests/MC-CPU-0903A/MC-CPU-0903A-001
+spool
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE collect --test-id "MC-CPU-$SESSION" --attempt-id "MC-CPU-$SESSION-001" --verify-hashes
+test_id: MC-CPU-0903A
+attempt_id: MC-CPU-0903A-001
+collection: D:\h60106817\release\output\MC-CPU-0903A\collection.json
+local: D:\h60106817\release\output\MC-CPU-0903A\device-evidence\MC-CPU-0903A-001
+PS D:\h60106817\release> $RUN_DIR = "$OUT\MC-CPU-0903A\MC-CPU-0903A-001"
+PS D:\h60106817\release> & $MON --json simulate --events "$RUN_DIR\events.jsonl" --profile cpu_stress_kirin9030
+{
+  "exit_code": 0,
+  "replay_id": "replay-20260903T075148Z-7c38b108",
+  "result": "D:\\h60106817\\release\\output\\simulations\\replay-20260903T075148Z-7c38b108\\MC-CPU-0903A\\MC-CPU-0903A-001\\result.json",
+  "run_id": "MC-CPU-0903A-001",
+  "source": "D:\\h60106817\\release\\output\\MC-CPU-0903A\\MC-CPU-0903A-001\\events.jsonl",
+  "source_sha256": "3295cf2982ee069a43180eb32877e244b4e6b13d1c66e645bd54497f5b56f3be",
+  "test_id": "MC-CPU-0903A",
+  "verdict": "PASS"
+}
+PS D:\h60106817\release> & $MON --json simulate --raw-serial "$RUN_DIR\serial.raw" --profile cpu_stress_kirin9030
+{
+  "exit_code": 0,
+  "replay_id": "replay-20260903T075204Z-a6609695",
+  "result": "D:\\h60106817\\release\\output\\simulations\\replay-20260903T075204Z-a6609695\\MC-CPU-0903A\\MC-CPU-0903A-001\\result.json",
+  "run_id": "MC-CPU-0903A-001",
+  "source": "D:\\h60106817\\release\\output\\MC-CPU-0903A\\MC-CPU-0903A-001\\serial.raw",
+  "source_sha256": "8095054bd663c734f0c5875a9492d7ecd69e1899fc9111b5c381b8db7965bc8d",
+  "test_id": "MC-CPU-0903A",
+  "verdict": "PASS"
+}
+PS D:\h60106817\release> & $MON --json simulate --raw-serial "$RUN_DIR\serial.raw" --profile cpu_stress_kirin9030 --realtime
+{
+  "error": "--realtime currently requires --events; raw UART-v2 replay is deterministic and immediate",
+  "exit_code": 4
+}
+PS D:\h60106817\release> Get-Content "$RUN_DIR\events.jsonl" | Select-Object -SkipLast 2 | Set-Content "$OUT\mc04-truncated.jsonl"
+PS D:\h60106817\release> & $MON --json simulate --events "$OUT\mc04-truncated.jsonl" --profile cpu_stress_kirin9030
+{
+  "exit_code": 3,
+  "replay_id": "replay-20260903T075300Z-5ff60021",
+  "result": "D:\\h60106817\\release\\output\\simulations\\replay-20260903T075300Z-5ff60021\\MC-CPU-0903A\\MC-CPU-0903A-001\\result.json",
+  "run_id": "MC-CPU-0903A-001",
+  "source": "D:\\h60106817\\release\\output\\mc04-truncated.jsonl",
+  "source_sha256": "2e33dfc2c81e13df8ef25889c393b2e617e93dfe19293b23358a324d47218ab5",
+  "test_id": "MC-CPU-0903A",
+  "verdict": "INFRA_ERROR"
+}
+PS D:\h60106817\release> & $MON report --run-dir $RUN_DIR --format markdown,json,csv
+run_id: MC-CPU-0903A-001
+reports: ["D:\\h60106817\\release\\output\\MC-CPU-0903A\\MC-CPU-0903A-001\\report.json", "D:\\h60106817\\release\\output\\MC-CPU-0903A\\MC-CPU-0903A-001\\report.md", "D:\\h60106817\\release\\output\\MC-CPU-0903A\\MC-CPU-0903A-001\\report.csv"]
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE collect --test-id "TEL-0902B"
+test_id: TEL-0902B
+attempt_id: None
+collection: D:\h60106817\release\output\TEL-0902B\collection.json
+local: D:\h60106817\release\output\TEL-0902B\device-evidence
+PS D:\h60106817\release> Get-Content "$OUT\TEL-0902B\device-evidence\*\spool\telemetry.jsonl" -ErrorAction SilentlyContinue
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":1,"timestamp_ms":1323582000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.frequency","value":558000,"path":"/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":2,"timestamp_ms":1323582000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.frequency","value":1420000,"path":"/sys/devices/system/cpu/cpu1/cpufreq/scaling_cur_freq"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":3,"timestamp_ms":1323583000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.frequency","value":1200000,"path":"/sys/devices/system/cpu/cpu10/cpufreq/scaling_cur_freq"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":4,"timestamp_ms":1323583000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.frequency","value":1200000,"path":"/sys/devices/system/cpu/cpu11/cpufreq/scaling_cur_freq"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":5,"timestamp_ms":1323584000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.frequency","value":1200000,"path":"/sys/devices/system/cpu/cpu12/cpufreq/scaling_cur_freq"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":6,"timestamp_ms":1323584000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.frequency","value":1200000,"path":"/sys/devices/system/cpu/cpu13/cpufreq/scaling_cur_freq"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":7,"timestamp_ms":1323584000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.frequency","value":855000,"path":"/sys/devices/system/cpu/cpu2/cpufreq/scaling_cur_freq"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":8,"timestamp_ms":1323585000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.frequency","value":855000,"path":"/sys/devices/system/cpu/cpu3/cpufreq/scaling_cur_freq"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":9,"timestamp_ms":1323585000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.frequency","value":970000,"path":"/sys/devices/system/cpu/cpu4/cpufreq/scaling_cur_freq"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":10,"timestamp_ms":1323586000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.frequency","value":970000,"path":"/sys/devices/system/cpu/cpu5/cpufreq/scaling_cur_freq"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":11,"timestamp_ms":1323586000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.frequency","value":855000,"path":"/sys/devices/system/cpu/cpu6/cpufreq/scaling_cur_freq"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":12,"timestamp_ms":1323587000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.frequency","value":855000,"path":"/sys/devices/system/cpu/cpu7/cpufreq/scaling_cur_freq"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":13,"timestamp_ms":1323587000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.frequency","value":970000,"path":"/sys/devices/system/cpu/cpu8/cpufreq/scaling_cur_freq"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":14,"timestamp_ms":1323587000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.frequency","value":855000,"path":"/sys/devices/system/cpu/cpu9/cpufreq/scaling_cur_freq"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":15,"timestamp_ms":1323588000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.frequency","value":855000,"path":"/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":16,"timestamp_ms":1323588000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.frequency","value":855000,"path":"/sys/devices/system/cpu/cpufreq/policy1/scaling_cur_freq"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":17,"timestamp_ms":1323589000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.frequency","value":1200000,"path":"/sys/devices/system/cpu/cpufreq/policy2/scaling_cur_freq"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":18,"timestamp_ms":1323589000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.frequency","value":1200000,"path":"/sys/devices/system/cpu/cpufreq/policy3/scaling_cur_freq"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":19,"timestamp_ms":1323589000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.online","value":1,"path":"/sys/devices/system/cpu/cpu0/online"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":20,"timestamp_ms":1323590000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.online","value":1,"path":"/sys/devices/system/cpu/cpu1/online"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":21,"timestamp_ms":1323590000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.online","value":1,"path":"/sys/devices/system/cpu/cpu10/online"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":22,"timestamp_ms":1323591000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.online","value":1,"path":"/sys/devices/system/cpu/cpu11/online"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":23,"timestamp_ms":1323591000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.online","value":1,"path":"/sys/devices/system/cpu/cpu12/online"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":24,"timestamp_ms":1323591000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.online","value":1,"path":"/sys/devices/system/cpu/cpu13/online"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":25,"timestamp_ms":1323592000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.online","value":1,"path":"/sys/devices/system/cpu/cpu2/online"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":26,"timestamp_ms":1323592000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.online","value":1,"path":"/sys/devices/system/cpu/cpu3/online"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":27,"timestamp_ms":1323593000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.online","value":1,"path":"/sys/devices/system/cpu/cpu4/online"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":28,"timestamp_ms":1323593000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.online","value":1,"path":"/sys/devices/system/cpu/cpu5/online"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":29,"timestamp_ms":1323594000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.online","value":1,"path":"/sys/devices/system/cpu/cpu6/online"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":30,"timestamp_ms":1323594000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.online","value":1,"path":"/sys/devices/system/cpu/cpu7/online"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":31,"timestamp_ms":1323594000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.online","value":1,"path":"/sys/devices/system/cpu/cpu8/online"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":32,"timestamp_ms":1323595000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.online","value":1,"path":"/sys/devices/system/cpu/cpu9/online"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":33,"timestamp_ms":1323596000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":34.111,"path":"/sys/class/thermal/thermal_zone0/temp"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":34,"timestamp_ms":1323596000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":31.181,"path":"/sys/class/thermal/thermal_zone1/temp"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":35,"timestamp_ms":1323597000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":-40,"path":"/sys/class/thermal/thermal_zone10/temp"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":36,"timestamp_ms":1323597000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":32,"path":"/sys/class/thermal/thermal_zone11/temp"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":37,"timestamp_ms":1323597000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":33,"path":"/sys/class/thermal/thermal_zone12/temp"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":38,"timestamp_ms":1323598000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":31.150,"path":"/sys/class/thermal/thermal_zone13/temp"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":39,"timestamp_ms":1323599000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":30.450,"path":"/sys/class/thermal/thermal_zone14/temp"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":40,"timestamp_ms":1323599000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":29.095,"path":"/sys/class/thermal/thermal_zone15/temp"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":41,"timestamp_ms":1323600000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":29.000,"path":"/sys/class/thermal/thermal_zone16/temp"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":42,"timestamp_ms":1323600000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":29.425,"path":"/sys/class/thermal/thermal_zone17/temp"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":43,"timestamp_ms":1323601000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":30.200,"path":"/sys/class/thermal/thermal_zone18/temp"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":44,"timestamp_ms":1323602000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":29.571,"path":"/sys/class/thermal/thermal_zone19/temp"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":45,"timestamp_ms":1323602000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":34,"path":"/sys/class/thermal/thermal_zone2/temp"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":46,"timestamp_ms":1323603000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":8.200,"path":"/sys/class/thermal/thermal_zone20/temp"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":47,"timestamp_ms":1323603000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":25.000,"path":"/sys/class/thermal/thermal_zone21/temp"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":48,"timestamp_ms":1323604000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":25.000,"path":"/sys/class/thermal/thermal_zone22/temp"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":49,"timestamp_ms":1323604000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":25.000,"path":"/sys/class/thermal/thermal_zone23/temp"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":50,"timestamp_ms":1323605000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":0,"path":"/sys/class/thermal/thermal_zone24/temp"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":51,"timestamp_ms":1323605000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":25.000,"path":"/sys/class/thermal/thermal_zone25/temp"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":52,"timestamp_ms":1323606000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":34.000,"path":"/sys/class/thermal/thermal_zone26/temp"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":53,"timestamp_ms":1323607000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":25.000,"path":"/sys/class/thermal/thermal_zone28/temp"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":54,"timestamp_ms":1323607000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":25.000,"path":"/sys/class/thermal/thermal_zone29/temp"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":55,"timestamp_ms":1323608000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":34,"path":"/sys/class/thermal/thermal_zone3/temp"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":56,"timestamp_ms":1323608000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":0,"path":"/sys/class/thermal/thermal_zone30/temp"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":57,"timestamp_ms":1323609000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":25.000,"path":"/sys/class/thermal/thermal_zone31/temp"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":58,"timestamp_ms":1323609000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":0,"path":"/sys/class/thermal/thermal_zone32/temp"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":59,"timestamp_ms":1323609000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":0,"path":"/sys/class/thermal/thermal_zone33/temp"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":60,"timestamp_ms":1323610000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":0,"path":"/sys/class/thermal/thermal_zone34/temp"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":61,"timestamp_ms":1323610000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":32,"path":"/sys/class/thermal/thermal_zone4/temp"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":62,"timestamp_ms":1323611000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":32,"path":"/sys/class/thermal/thermal_zone5/temp"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":63,"timestamp_ms":1323611000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":34,"path":"/sys/class/thermal/thermal_zone6/temp"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":64,"timestamp_ms":1323612000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":32,"path":"/sys/class/thermal/thermal_zone7/temp"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":65,"timestamp_ms":1323612000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":33,"path":"/sys/class/thermal/thermal_zone8/temp"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":66,"timestamp_ms":1323612000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.temperature","value":33,"path":"/sys/class/thermal/thermal_zone9/temp"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":67,"timestamp_ms":1323613000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":236437674268,"path":"/sys/devices/system/cpu/cpu0/cpuidle/state0/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":68,"timestamp_ms":1323613000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":0,"path":"/sys/devices/system/cpu/cpu0/cpuidle/state1/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":69,"timestamp_ms":1323614000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":827891103244,"path":"/sys/devices/system/cpu/cpu0/cpuidle/state2/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":70,"timestamp_ms":1323614000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":251738876032,"path":"/sys/devices/system/cpu/cpu1/cpuidle/state0/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":71,"timestamp_ms":1323615000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":0,"path":"/sys/devices/system/cpu/cpu1/cpuidle/state1/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":72,"timestamp_ms":1323615000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":797542571777,"path":"/sys/devices/system/cpu/cpu1/cpuidle/state2/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":73,"timestamp_ms":1323615000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":316099114,"path":"/sys/devices/system/cpu/cpu10/cpuidle/state0/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":74,"timestamp_ms":1323616000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":76989678,"path":"/sys/devices/system/cpu/cpu10/cpuidle/state1/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":75,"timestamp_ms":1323616000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":1322355515126,"path":"/sys/devices/system/cpu/cpu10/cpuidle/state2/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":76,"timestamp_ms":1323617000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":261396686,"path":"/sys/devices/system/cpu/cpu11/cpuidle/state0/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":77,"timestamp_ms":1323617000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":65210937,"path":"/sys/devices/system/cpu/cpu11/cpuidle/state1/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":78,"timestamp_ms":1323618000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":1322590594268,"path":"/sys/devices/system/cpu/cpu11/cpuidle/state2/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":79,"timestamp_ms":1323618000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":56812550,"path":"/sys/devices/system/cpu/cpu12/cpuidle/state0/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":80,"timestamp_ms":1323618000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":0,"path":"/sys/devices/system/cpu/cpu12/cpuidle/state1/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":81,"timestamp_ms":1323619000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":1321882924146,"path":"/sys/devices/system/cpu/cpu12/cpuidle/state2/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":82,"timestamp_ms":1323619000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":17529846,"path":"/sys/devices/system/cpu/cpu13/cpuidle/state0/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":83,"timestamp_ms":1323620000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":0,"path":"/sys/devices/system/cpu/cpu13/cpuidle/state1/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":84,"timestamp_ms":1323620000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":1323488602600,"path":"/sys/devices/system/cpu/cpu13/cpuidle/state2/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":85,"timestamp_ms":1323621000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":13607948121,"path":"/sys/devices/system/cpu/cpu2/cpuidle/state0/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":86,"timestamp_ms":1323621000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":17980041550,"path":"/sys/devices/system/cpu/cpu2/cpuidle/state1/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":87,"timestamp_ms":1323621000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":1204678339204,"path":"/sys/devices/system/cpu/cpu2/cpuidle/state2/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":88,"timestamp_ms":1323622000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":17326636694,"path":"/sys/devices/system/cpu/cpu3/cpuidle/state0/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":89,"timestamp_ms":1323622000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":5184834166,"path":"/sys/devices/system/cpu/cpu3/cpuidle/state1/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":90,"timestamp_ms":1323623000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":1272145687397,"path":"/sys/devices/system/cpu/cpu3/cpuidle/state2/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":91,"timestamp_ms":1323623000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":15777147606,"path":"/sys/devices/system/cpu/cpu4/cpuidle/state0/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":92,"timestamp_ms":1323624000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":4989574852,"path":"/sys/devices/system/cpu/cpu4/cpuidle/state1/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":93,"timestamp_ms":1323624000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":1280530727890,"path":"/sys/devices/system/cpu/cpu4/cpuidle/state2/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":94,"timestamp_ms":1323624000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":13922188793,"path":"/sys/devices/system/cpu/cpu5/cpuidle/state0/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":95,"timestamp_ms":1323625000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":4423246185,"path":"/sys/devices/system/cpu/cpu5/cpuidle/state1/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":96,"timestamp_ms":1323625000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":1286741125923,"path":"/sys/devices/system/cpu/cpu5/cpuidle/state2/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":97,"timestamp_ms":1323626000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":11416090073,"path":"/sys/devices/system/cpu/cpu6/cpuidle/state0/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":98,"timestamp_ms":1323626000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":4466541281,"path":"/sys/devices/system/cpu/cpu6/cpuidle/state1/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":99,"timestamp_ms":1323627000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":1296949214168,"path":"/sys/devices/system/cpu/cpu6/cpuidle/state2/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":100,"timestamp_ms":1323627000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":9914001381,"path":"/sys/devices/system/cpu/cpu7/cpuidle/state0/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":101,"timestamp_ms":1323628000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":3935407069,"path":"/sys/devices/system/cpu/cpu7/cpuidle/state1/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":102,"timestamp_ms":1323628000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":1300102626882,"path":"/sys/devices/system/cpu/cpu7/cpuidle/state2/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":103,"timestamp_ms":1323628000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":9909122097,"path":"/sys/devices/system/cpu/cpu8/cpuidle/state0/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":104,"timestamp_ms":1323629000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":3675908554,"path":"/sys/devices/system/cpu/cpu8/cpuidle/state1/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":105,"timestamp_ms":1323629000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":1301369325667,"path":"/sys/devices/system/cpu/cpu8/cpuidle/state2/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":106,"timestamp_ms":1323630000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":9312624283,"path":"/sys/devices/system/cpu/cpu9/cpuidle/state0/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":107,"timestamp_ms":1323630000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":3537541478,"path":"/sys/devices/system/cpu/cpu9/cpuidle/state1/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":108,"timestamp_ms":1323631000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.idle_residency","value":1302205503481,"path":"/sys/devices/system/cpu/cpu9/cpuidle/state2/time"}}
+{"schema_version":1,"test_id":"TEL-0902B","run_id":"TEL-0902B-001","seq":109,"timestamp_ms":1323631000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.voltage","value":"","path":"/sys/kernel/debug/lpmcu_debug/cluster_volt"}}
+PS D:\h60106817\release> Get-Content "$OUT\TEL-0902B\device-evidence\*\spool\*.log" -ErrorAction SilentlyContinue
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE telemetry run --profile cpu_stress_kirin9030 --test-id "TEL-0903A" --attempt-id "TEL-0903A-001" --duration 30 --interval 5
+test_id: TEL-0903A
+attempt_id: TEL-0903A-001
+profile: cpu_stress_kirin9030
+device_output: /data/local/tmp/avs/tests/TEL-0903A/TEL-0903A-001/spool/telemetry.jsonl
+append_only: True
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART run --profile cpu_stress_kirin9030 --test-id "TEL-RUN-0903A" --attempt-id "TEL-RUN-0903A-001" --telemetry
+test_id: TEL-RUN-0903A
+validation_mode: error-only
+repeat: 1
+exit_code: 0
+runs: [{"test_id": "TEL-RUN-0903A", "attempt_id": "TEL-RUN-0903A-001", "run_id": "TEL-RUN-0903A-001", "verdict": "PASS", "exit_code": 0, "result": "D:\\h60106817\\release\\output\\TEL-RUN-0903A\\TEL-RUN-0903A-001\\result.json", "device_evidence": "/data/local/tmp/avs/tests/TEL-RUN-0903A/TEL-RUN-0903A-001", "device_spool": "retained"}]
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE collect --test-id "TEL-RUN-0903A"
+test_id: TEL-RUN-0903A
+attempt_id: None
+collection: D:\h60106817\release\output\TEL-RUN-0903A\collection.json
+local: D:\h60106817\release\output\TEL-RUN-0903A\device-evidence
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE collect --test-id "TEL-0903A"
+test_id: TEL-0903A
+attempt_id: None
+collection: D:\h60106817\release\output\TEL-0903A\collection.json
+local: D:\h60106817\release\output\TEL-0903A\device-evidence
+PS D:\h60106817\release> hdc shell "cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor 2>/dev/null" > "$OUT\audit-post-0903A.txt"
+PS D:\h60106817\release> & $MON report --run-dir "$OUT\simulations\replay-20260903T075300Z-5ff60021\MC-CPU-0903A\MC-CPU-0903A-001" --format markdown,json,csv
+run_id: MC-CPU-0903A-001
+reports: ["D:\\h60106817\\release\\output\\simulations\\replay-20260903T075300Z-5ff60021\\MC-CPU-0903A\\MC-CPU-0903A-001\\report.json", "D:\\h60106817\\release\\output\\simulations\\replay-20260903T075300Z-5ff60021\\MC-CPU-0903A\\MC-CPU-0903A-001\\report.md", "D:\\h60106817\\release\\output\\simulations\\replay-20260903T075300Z-5ff60021\\MC-CPU-0903A\\MC-CPU-0903A-001\\report.csv"]
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE deploy --profile cpu_qualification_kirin9030
+complete: True
+verified: True
+manifest: D:\h60106817\release\output\deployment-manifest.json
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE verify-deployment --profile cpu_qualification_kirin9030
+complete: True
+verified: True
+manifest: D:\h60106817\release\output\deployment-verification.json
+PS D:\h60106817\release> hdc shell ls /data/local/tmp/avs/golden
+ls: /data/local/tmp/avs/golden: No such file or directory
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json golden cpu --profile cpu_qualification_kirin9030 --board-id BOARD-A --known-good --runs 1 --qualification-id "CPU-A-0903A"
+{
+  "golden_manifest": "D:\\h60106817\\release\\output\\qualification\\CPU-A-0903A\\golden\\cpu-golden.json",
+  "qualification_id": "CPU-A-0903A",
+  "sha256": "b282f47e51a5a5e6298c0ced7a15a09c2cfb955e2ef050f9ced6000860fcd9e4",
+  "source_mode": "live-capture",
+  "source_runs": [
+    "D:\\h60106817\\release\\output\\CPU-A-0903A\\CPU-A-0903A-001-20260903T083501Z-a1a0e352"
+  ]
+}
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE collect --test-id "TEL-0903A"
+test_id: TEL-0903A
+attempt_id: None
+collection: D:\h60106817\release\output\TEL-0903A\collection.json
+local: D:\h60106817\release\output\TEL-0903A\device-evidence
+PS D:\h60106817\release> hdc shell "cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor 2>/dev/null" > "$OUT\audit-post-0903A.txt"
+PS D:\h60106817\release> hdc shell "cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor 2>/dev/null" > "$OUT\audit-post-0903A.txt"
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json golden cpu --profile cpu_qualification_kirin9030 --board-id BOARD-1 --known-good --runs 1 --qualification-id "CPU-FUNC1-0903A"
+{
+  "golden_manifest": "D:\\h60106817\\release\\output\\qualification\\CPU-FUNC1-0903A\\golden\\cpu-golden.json",
+  "qualification_id": "CPU-FUNC1-0903A",
+  "sha256": "a0e12392000355ebf51b7c0140a56fa239a040f7b1c9e9efd132da223b869ab7",
+  "source_mode": "live-capture",
+  "source_runs": [
+    "D:\\h60106817\\release\\output\\CPU-FUNC1-0903A\\CPU-FUNC1-0903A-001-20260903T091157Z-69630ed3"
+  ]
+}
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json golden cpu --profile cpu_qualification_kirin9030 --board-id BOARD-2 --known-good --runs 1 --qualification-id "CPU-FUNC2-0903A"
+{
+  "golden_manifest": "D:\\h60106817\\release\\output\\qualification\\CPU-FUNC2-0903A\\golden\\cpu-golden.json",
+  "qualification_id": "CPU-FUNC2-0903A",
+  "sha256": "7dee076280e0e17351fa0e60eef68edc3500702fc4dd0b53369efbd99fb8da5d",
+  "source_mode": "live-capture",
+  "source_runs": [
+    "D:\\h60106817\\release\\output\\CPU-FUNC2-0903A\\CPU-FUNC2-0903A-001-20260903T091332Z-296de9b3"
+  ]
+}
+PS D:\h60106817\release> Get-Content "$R1\workload-summary-full.json" | Select-String "operations_per_sec_avg|batch_time_ms_p99|\"result\""
+Select-String : 字符串 operations_per_sec_avg|batch_time_ms_p99|\ 不是有效的正则表达式: 正在分析“operations_per_sec_av
+g|batch_time_ms_p99|\”－ \ 在模式末尾非法。
+所在位置 行:1 字符: 48
++ ... ull.json" | Select-String "operations_per_sec_avg|batch_time_ms_p99|\ ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidArgument: (:) [Select-String]，ArgumentException
+    + FullyQualifiedErrorId : InvalidRegex,Microsoft.PowerShell.Commands.SelectStringCommand
+
+PS D:\h60106817\release> Get-Content "$R1\workload-summary-full.json" | Select-String "operations_per_sec_avg|batch_time_ms_p99|\"result\""
+Select-String : 字符串 operations_per_sec_avg|batch_time_ms_p99|\ 不是有效的正则表达式: 正在分析“operations_per_sec_av
+g|batch_time_ms_p99|\”－ \ 在模式末尾非法。
+所在位置 行:1 字符: 48
++ ... ull.json" | Select-String "operations_per_sec_avg|batch_time_ms_p99|\ ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidArgument: (:) [Select-String]，ArgumentException
+    + FullyQualifiedErrorId : InvalidRegex,Microsoft.PowerShell.Commands.SelectStringCommand
+
+PS D:\h60106817\release> Get-Content "$R1\workload-summary-full.json" | Select-String 'operations_per_sec_avg|batch_time_ms_p99|"result"'\
+Get-Content : 找不到路径“D:\workload-summary-full.json”，因为该路径不存在。
+所在位置 行:1 字符: 1
++ Get-Content "$R1\workload-summary-full.json" | Select-String 'operati ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (D:\workload-summary-full.json:String) [Get-Content], ItemNotFoundExcept
+   ion
+    + FullyQualifiedErrorId : PathNotFound,Microsoft.PowerShell.Commands.GetContentCommand
+
+PS D:\h60106817\release> Get-Content "$R1\workload-summary-full.json" | Select-String 'operations_per_sec_avg|batch_time_ms_p99|"result"'
+Get-Content : 找不到路径“D:\workload-summary-full.json”，因为该路径不存在。
+所在位置 行:1 字符: 1
++ Get-Content "$R1\workload-summary-full.json" | Select-String 'operati ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (D:\workload-summary-full.json:String) [Get-Content], ItemNotFoundExcept
+   ion
+    + FullyQualifiedErrorId : PathNotFound,Microsoft.PowerShell.Commands.GetContentCommand
+
+PS D:\h60106817\release> & $MON --json golden cpu --profile cpu_qualification_kirin9030 --board-id BOARD-1 --known-good --runs 2 --qualification-id "CPU-FUNC-0903A" --run-dir "BOARD-1=$R1" --run-dir "BOARD-2=$R2"
+{
+  "error": "[WinError 2] 系统找不到指定的文件。: 'D:\\\\h60106817\\\\release\\\\BOARD-1='",
+  "exit_code": 3
+}
+PS D:\h60106817\release> & $MON --transport hdc --device $DEV_A deploy --profile gpu_qualification_kirin9030
+usage: vmin_judge [-h] [--config-dir CONFIG_DIR] [--output-dir OUTPUT_DIR] [--state-dir STATE_DIR]
+                  [--transport {auto,adb,hdc}] [--device DEVICE] [--adb-bin ADB_BIN] [--hdc-bin HDC_BIN]
+                  [--device-root DEVICE_ROOT] [--pc-serial PC_SERIAL] [--device-uart DEVICE_UART]
+                  [--baudrate GLOBAL_BAUDRATE] [--log-level {debug,info,warning,error}] [--json] [--version]
+                  {pair,monitor,simulate,list-profiles,validate,probe,relay,deploy,verify-deployment,golden,calibrate,smoke,baseline,run,telemetry,collect,report}
+                  ...
+vmin_judge: error: argument command: invalid choice: 'gpu_qualification_kirin9030' (choose from 'pair', 'monitor', 'simulate', 'list-profiles', 'validate', 'probe', 'relay', 'deploy', 'verify-deployment', 'golden', 'calibrate', 'smoke', 'baseline', 'run', 'telemetry', 'collect', 'report')
+PS D:\h60106817\release> & $MON --transport hdc --device $DEV_A verify-deployment --profile gpu_qualification_kirin9030
+usage: vmin_judge [-h] [--config-dir CONFIG_DIR] [--output-dir OUTPUT_DIR] [--state-dir STATE_DIR]
+                  [--transport {auto,adb,hdc}] [--device DEVICE] [--adb-bin ADB_BIN] [--hdc-bin HDC_BIN]
+                  [--device-root DEVICE_ROOT] [--pc-serial PC_SERIAL] [--device-uart DEVICE_UART]
+                  [--baudrate GLOBAL_BAUDRATE] [--log-level {debug,info,warning,error}] [--json] [--version]
+                  {pair,monitor,simulate,list-profiles,validate,probe,relay,deploy,verify-deployment,golden,calibrate,smoke,baseline,run,telemetry,collect,report}
+                  ...
+vmin_judge: error: argument command: invalid choice: 'gpu_qualification_kirin9030' (choose from 'pair', 'monitor', 'simulate', 'list-profiles', 'validate', 'probe', 'relay', 'deploy', 'verify-deployment', 'golden', 'calibrate', 'smoke', 'baseline', 'run', 'telemetry', 'collect', 'report')
+PS D:\h60106817\release> $R1 = 'D:\h60106817\release\output\CPU-FUNC1-0903A\CPU-FUNC1-0903A-001-20260903T091157Z-69630ed3'
+PS D:\h60106817\release> $R2 = 'D:\h60106817\release\output\CPU-FUNC2-0903A\CPU-FUNC2-0903A-001-20260903T091332Z-296de9b3'
+PS D:\h60106817\release> $R1
+D:\h60106817\release\output\CPU-FUNC1-0903A\CPU-FUNC1-0903A-001-20260903T091157Z-69630ed3
+PS D:\h60106817\release> $R2
+D:\h60106817\release\output\CPU-FUNC2-0903A\CPU-FUNC2-0903A-001-20260903T091332Z-296de9b3
+PS D:\h60106817\release> Get-Content "$R1\workload-summary-full.json" | Select-String 'operations_per_sec_avg|batch_time_ms_p99|result'
+
+  "batch_time_ms_p99": 6.5355,
+  "operations_per_sec_avg": 1101680675.4461,
+  "result": "PASS",
+  "window_operations_per_sec_avg": 0.0,
+
+
+PS D:\h60106817\release> Get-Content "$R2\workload-summary-full.json" | Select-String 'operations_per_sec_avg|batch_time_ms_p99|result'
+
+  "batch_time_ms_p99": 6.422,
+  "operations_per_sec_avg": 1121140653.3286,
+  "result": "PASS",
+  "window_operations_per_sec_avg": 0.0,
+
+
+PS D:\h60106817\release> & $MON --json golden cpu --profile cpu_qualification_kirin9030 --board-id BOARD-1 --known-good --runs 2 --qualification-id "CPU-FUNC-0903A" --run-dir "BOARD-1=$R1" --run-dir "BOARD-2=$R2"
+{
+  "golden_manifest": "D:\\h60106817\\release\\output\\qualification\\CPU-FUNC-0903A\\golden\\cpu-golden.json",
+  "qualification_id": "CPU-FUNC-0903A",
+  "sha256": "025f11ba2a0aa99e992b5590f2b5190d0f1bdc52dacff7ed2e2f5332205b70f0",
+  "source_mode": "supplied",
+  "source_runs": [
+    "D:\\h60106817\\release\\output\\CPU-FUNC1-0903A\\CPU-FUNC1-0903A-001-20260903T091157Z-69630ed3",
+    "D:\\h60106817\\release\\output\\CPU-FUNC2-0903A\\CPU-FUNC2-0903A-001-20260903T091332Z-296de9b3"
+  ]
+}
+PS D:\h60106817\release> & $MON --json calibrate cpu --profile cpu_qualification_kirin9030 --board-id BOARD-1 --golden 'D:\\h60106817\\release\\output\\qualification\\CPU-FUNC-0903A\\golden\\cpu-golden.json' --runs 2 --min-accepted 2 --baseline-id "CPU-FUNC-0903A" --run-dir "BOARD-1=$R1" --run-dir "BOARD-2=$R2"
+{
+  "error": "accepted cohort has 0 boards; minimum is 2",
+  "exit_code": 3
+}
+PS D:\h60106817\release> Get-ChildItem "$R1" -Recurse -Filter telemetry.jsonl | ForEach-Object {
+>>   $max = (Get-Content $_.FullName | Select-String '"cpu.temperature","value":([\d.]+)' |
+>>     ForEach-Object { [double]$_.Matches[0].Groups[1].Value } | Measure-Object -Maximum).Maximum
+>>   "$($_.FullName) max_temp=$max"
+>> }
+D:\h60106817\release\output\CPU-FUNC1-0903A\CPU-FUNC1-0903A-001-20260903T091157Z-69630ed3\device-evidence\spool\telemetry.jsonl max_temp=
+PS D:\h60106817\release> Get-ChildItem "$R2" -Recurse -Filter telemetry.jsonl | ForEach-Object {
+>>   $max = (Get-Content $_.FullName | Select-String '"cpu.temperature","value":([\d.]+)' |
+>>     ForEach-Object { [double]$_.Matches[0].Groups[1].Value } | Measure-Object -Maximum).Maximum
+>>   "$($_.FullName) max_temp=$max"
+>> }
+D:\h60106817\release\output\CPU-FUNC2-0903A\CPU-FUNC2-0903A-001-20260903T091332Z-296de9b3\device-evidence\spool\telemetry.jsonl max_temp=
+PS D:\h60106817\release> & $MON --json calibrate cpu --profile cpu_qualification_kirin9030 --board-id BOARD-1 --golden 'D:\h60106817\release\output\qualification\CPU-FUNC-0903A\golden\cpu-golden.json' --runs 2 --min-accepted 2 --temperature-range 20:60 --baseline-id "CPU-FUNC-0903A" --run-dir "BOARD-1=$R1" --run-dir "BOARD-2=$R2"
+{
+  "error": "accepted cohort has 0 boards; minimum is 2",
+  "exit_code": 3
+}
+PS D:\h60106817\release>
+PS D:\h60106817\release> foreach ($r in @($R1, $R2)) {
+>>   $f = "$r\device-evidence\spool\telemetry.jsonl"
+>>   Write-Host "=== $r : $((Get-Content $f).Count) lines"
+>>   Get-Content $f | ForEach-Object { ($_|ConvertFrom-Json).payload.metric } | Group-Object | Sort-Object Count -Desc | ForEach-Object { "$($_.Count)  $($_.Name)" }
+>>   Write-Host "--- last 3 lines:"
+>>   Get-Content $f | Select-Object -Last 3
+>> }
+=== D:\h60106817\release\output\CPU-FUNC1-0903A\CPU-FUNC1-0903A-001-20260903T091157Z-69630ed3 : 20 lines
+18  cpu.frequency
+2  cpu.online
+--- last 3 lines:
+{"schema_version":1,"test_id":"CPU-FUNC1-0903A","run_id":"CPU-FUNC1-0903A-001-20260903T091157Z-69630ed3","seq":18,"timestamp_ms":1411493000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.frequency","value":1200000,"path":"/sys/devices/system/cpu/cpufreq/policy3/scaling_cur_freq"}}
+{"schema_version":1,"test_id":"CPU-FUNC1-0903A","run_id":"CPU-FUNC1-0903A-001-20260903T091157Z-69630ed3","seq":19,"timestamp_ms":1411493000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.online","value":1,"path":"/sys/devices/system/cpu/cpu0/online"}}
+{"schema_version":1,"test_id":"CPU-FUNC1-0903A","run_id":"CPU-FUNC1-0903A-001-20260903T091157Z-69630ed3","seq":20,"timestamp_ms":1411493000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.online","value":1,"path":"/sys/devices/system/cpu/cpu1/online"}}
+=== D:\h60106817\release\output\CPU-FUNC2-0903A\CPU-FUNC2-0903A-001-20260903T091332Z-296de9b3 : 19 lines
+18  cpu.frequency
+1  cpu.online
+--- last 3 lines:
+{"schema_version":1,"test_id":"CPU-FUNC2-0903A","run_id":"CPU-FUNC2-0903A-001-20260903T091332Z-296de9b3","seq":17,"timestamp_ms":1411587000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.frequency","value":1200000,"path":"/sys/devices/system/cpu/cpufreq/policy2/scaling_cur_freq"}}
+{"schema_version":1,"test_id":"CPU-FUNC2-0903A","run_id":"CPU-FUNC2-0903A-001-20260903T091332Z-296de9b3","seq":18,"timestamp_ms":1411588000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.frequency","value":1200000,"path":"/sys/devices/system/cpu/cpufreq/policy3/scaling_cur_freq"}}
+{"schema_version":1,"test_id":"CPU-FUNC2-0903A","run_id":"CPU-FUNC2-0903A-001-20260903T091332Z-296de9b3","seq":19,"timestamp_ms":1411588000,"source":"cpu-telemetry","type":"telemetry","payload":{"metric":"cpu.online","value":1,"path":"/sys/devices/system/cpu/cpu0/online"}}
+PS D:\h60106817\release>
+>> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json run --profile cpu_smoke_kirin9030 --test-id "BND-REPEAT-$SESSION" --repeat 2 --pc-artifacts full
+{
+  "exit_code": 0,
+  "repeat": 2,
+  "runs": [
+    {
+      "attempt_id": "BND-REPEAT-0903A-001",
+      "device_evidence": "/data/local/tmp/avs/tests/BND-REPEAT-0903A/BND-REPEAT-0903A-001",
+      "device_spool": "retained",
+      "exit_code": 0,
+      "result": "D:\\h60106817\\release\\output\\BND-REPEAT-0903A\\BND-REPEAT-0903A-001\\result.json",
+      "run_id": "BND-REPEAT-0903A-001",
+      "test_id": "BND-REPEAT-0903A",
+      "verdict": "PASS"
+    },
+    {
+      "attempt_id": "BND-REPEAT-0903A-002",
+      "device_evidence": "/data/local/tmp/avs/tests/BND-REPEAT-0903A/BND-REPEAT-0903A-002",
+      "device_spool": "retained",
+      "exit_code": 0,
+      "result": "D:\\h60106817\\release\\output\\BND-REPEAT-0903A\\BND-REPEAT-0903A-002\\result.json",
+      "run_id": "BND-REPEAT-0903A-002",
+      "test_id": "BND-REPEAT-0903A",
+      "verdict": "PASS"
+    }
+  ],
+  "test_id": "BND-REPEAT-0903A",
+  "validation_mode": "error-only"
+}
+PS D:\h60106817\release>
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --json collect --test-id "BND-REPEAT-$SESSION" --attempt-id "BND-REPEAT-$SESSION-002" --verify-hashes --remove-remote
+{
+  "attempt_id": "BND-REPEAT-0903A-002",
+  "collection": "D:\\h60106817\\release\\output\\BND-REPEAT-0903A\\collection.json",
+  "local": "D:\\h60106817\\release\\output\\BND-REPEAT-0903A\\device-evidence\\BND-REPEAT-0903A-002",
+  "test_id": "BND-REPEAT-0903A"
+}
+PS D:\h60106817\release> hdc shell ls /data/local/tmp/avs/tests/BND-REPEAT-$SESSION/
+BND-REPEAT-0903A-001
+PS D:\h60106817\release> & $MON --pc-serial $PC_SERIAL --baudrate 9600 --json monitor --save-raw --timeout 60
+{
+  "error": "no matching UART-v2 agent_start frame received",
+  "exit_code": 3
+}
+PS D:\h60106817\release> hdc shell cat /data/local/tmp/avs/configs/telemetry_plans/cpu_qualification_kirin9030.json
+/bin/sh: cat: /data/local/tmp/avs/configs/telemetry_plans/cpu_qualification_kirin9030.json: No such file or directory
+PS D:\h60106817\release> hdc shell cat /data/local/tmp/avs/configs/telemetry_plans/cpu_stress_kirin9030.json
+/bin/sh: cat: /data/local/tmp/avs/configs/telemetry_plans/cpu_stress_kirin9030.json: No such file or directory
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json golden cpu --profile cpu_qualification_kirin9030 --board-id BOARD-A --known-good --runs 1 --qualification-id "CPU-A-$SESSION"
+{
+  "error": "CPU golden destination already exists: D:\\h60106817\\release\\output\\qualification\\CPU-A-0903A\\golden\\cpu-golden.json",
+  "exit_code": 3
+}
+PS D:\h60106817\release> $SESSION = '0903C'
+PS D:\h60106817\release> hdc shell ls /data/local/tmp/avs/configs/
+cpu_qualification_kirin9030.json
+cpu_smoke_kirin9030.json
+cpu_stress_kirin9030.json
+gpu_smoke_kirin9030.json
+gpu_stress_kirin9030.json
+telemetry
+PS D:\h60106817\release> hdc shell find /data/local/tmp/avs/ -name "*telemetry*"
+/data/local/tmp/avs/bin/avs-telemetry-agent
+/data/local/tmp/avs/configs/telemetry
+/data/local/tmp/avs/tests/TEL-0901/TEL-0901-001/spool/telemetry.jsonl
+/data/local/tmp/avs/tests/TEL-RUN-0901/TEL-RUN-0901-001/spool/telemetry-agent.log
+/data/local/tmp/avs/tests/TEL-RUN-0901/TEL-RUN-0901-001/spool/telemetry.jsonl
+/data/local/tmp/avs/tests/TEL-RUN-0901/TEL-RUN-0901-001/spool/telemetry.stop
+/data/local/tmp/avs/tests/TEL-0902A/TEL-0902A-001/spool/telemetry.jsonl
+/data/local/tmp/avs/tests/TEL-RUN-0902A/TEL-RUN-0902A-001/spool/telemetry-agent.log
+/data/local/tmp/avs/tests/TEL-RUN-0902A/TEL-RUN-0902A-001/spool/telemetry.jsonl
+/data/local/tmp/avs/tests/TEL-RUN-0902A/TEL-RUN-0902A-001/spool/telemetry.stop
+/data/local/tmp/avs/tests/TEL-0902B/TEL-0902B-001/spool/telemetry.jsonl
+/data/local/tmp/avs/tests/TEL-RUN-0902B/TEL-RUN-0902B-001/spool/telemetry-agent.log
+/data/local/tmp/avs/tests/TEL-RUN-0902B/TEL-RUN-0902B-001/spool/telemetry.jsonl
+/data/local/tmp/avs/tests/TEL-RUN-0902B/TEL-RUN-0902B-001/spool/telemetry.stop
+/data/local/tmp/avs/tests/golden-cpu-20260902T091217Z-386fa122/golden-cpu-20260902T091217Z-386fa122-attempt-20260902T091217Z-e9476695/spool/telemetry-agent.log
+/data/local/tmp/avs/tests/golden-cpu-20260902T091217Z-386fa122/golden-cpu-20260902T091217Z-386fa122-attempt-20260902T091217Z-e9476695/spool/telemetry.jsonl
+/data/local/tmp/avs/tests/golden-cpu-20260902T091217Z-386fa122/golden-cpu-20260902T091217Z-386fa122-attempt-20260902T091217Z-e9476695/spool/telemetry.stop
+/data/local/tmp/avs/tests/TEL-0903A/TEL-0903A-001/spool/telemetry.jsonl
+/data/local/tmp/avs/tests/TEL-RUN-0903A/TEL-RUN-0903A-001/spool/telemetry-agent.log
+/data/local/tmp/avs/tests/TEL-RUN-0903A/TEL-RUN-0903A-001/spool/telemetry.jsonl
+/data/local/tmp/avs/tests/TEL-RUN-0903A/TEL-RUN-0903A-001/spool/telemetry.stop
+/data/local/tmp/avs/tests/CPU-A-0903A/CPU-A-0903A-001-20260903T083501Z-a1a0e352/spool/telemetry-agent.log
+/data/local/tmp/avs/tests/CPU-A-0903A/CPU-A-0903A-001-20260903T083501Z-a1a0e352/spool/telemetry.jsonl
+/data/local/tmp/avs/tests/CPU-A-0903A/CPU-A-0903A-001-20260903T083501Z-a1a0e352/spool/telemetry.stop
+/data/local/tmp/avs/tests/CPU-A-0903A/CPU-A-0903A-001-20260903T112834Z-1773a891/spool/telemetry-agent.log
+/data/local/tmp/avs/tests/CPU-A-0903A/CPU-A-0903A-001-20260903T112834Z-1773a891/spool/telemetry.jsonl
+/data/local/tmp/avs/tests/CPU-A-0903A/CPU-A-0903A-001-20260903T112834Z-1773a891/spool/telemetry.stop
+/data/local/tmp/avs/tests/CPU-FUNC1-0903A/CPU-FUNC1-0903A-001-20260903T091157Z-69630ed3/spool/telemetry-agent.log
+/data/local/tmp/avs/tests/CPU-FUNC1-0903A/CPU-FUNC1-0903A-001-20260903T091157Z-69630ed3/spool/telemetry.jsonl
+/data/local/tmp/avs/tests/CPU-FUNC1-0903A/CPU-FUNC1-0903A-001-20260903T091157Z-69630ed3/spool/telemetry.stop
+/data/local/tmp/avs/tests/CPU-FUNC2-0903A/CPU-FUNC2-0903A-001-20260903T091332Z-296de9b3/spool/telemetry-agent.log
+/data/local/tmp/avs/tests/CPU-FUNC2-0903A/CPU-FUNC2-0903A-001-20260903T091332Z-296de9b3/spool/telemetry.jsonl
+/data/local/tmp/avs/tests/CPU-FUNC2-0903A/CPU-FUNC2-0903A-001-20260903T091332Z-296de9b3/spool/telemetry.stop
+PS D:\h60106817\release> hdc shell ls /data/local/tmp/avs/configs/telemetry/
+cpu_qualification_kirin9030.conf
+cpu_smoke_kirin9030.conf
+cpu_stress_kirin9030.conf
+gpu_smoke_kirin9030.conf
+gpu_stress_kirin9030.conf
+PS D:\h60106817\release> ^C
+PS D:\h60106817\release> hdc shell cat /data/local/tmp/avs/configs/telemetry/cpu_qualification_kirin9030.conf
+# metric|parser|device-path-glob
+cpu.frequency|number|/sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq
+cpu.frequency|number|/sys/devices/system/cpu/cpufreq/policy*/scaling_cur_freq
+cpu.online|int|/sys/devices/system/cpu/cpu*/online
+cpu.temperature|temperature_auto|/sys/class/thermal/thermal_zone*/temp
+cpu.utilization|proc_stat_utilization|/proc/stat
+cpu.idle_residency|number|/sys/devices/system/cpu/cpu*/cpuidle/state*/time
+cpu.throttle|number|/sys/devices/system/cpu/cpu*/thermal_throttle/core_throttle_count
+cpu.throttle|number|/sys/devices/system/cpu/cpu*/thermal_throttle/package_throttle_count
+cpu.voltage|text|/sys/kernel/debug/lpmcu_debug/cluster_volt
+PS D:\h60106817\release> hdc shell cat /data/local/tmp/avs/tests/CPU-FUNC1-0903A/CPU-FUNC1-0903A-001-20260903T091157Z-69630ed3/spool/telemetry-agent.log
+PS D:\h60106817\release> $SESSION = '0903C'
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json golden cpu --profile cpu_qualification_kirin9030 --board-id BOARD-A --known-good --runs 1 --qualification-id "CPU-A-$SESSION"
+{
+  "golden_manifest": "D:\\h60106817\\release\\output\\qualification\\CPU-A-0903C\\golden\\cpu-golden.json",
+  "qualification_id": "CPU-A-0903C",
+  "sha256": "56aa183444575f21ebde8fa7f49a7a26543c57d4572e6c5625daf66ba4ca7839",
+  "source_mode": "live-capture",
+  "source_runs": [
+    "D:\\h60106817\\release\\output\\CPU-A-0903C\\CPU-A-0903C-001-20260903T113447Z-a372f267"
+  ]
+}
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json golden cpu --profile cpu_qualification_kirin9030 --board-id BOARD-B --known-good --runs 1 --qualification-id "CPU-B-$SESSION"
+{
+  "golden_manifest": "D:\\h60106817\\release\\output\\qualification\\CPU-B-0903C\\golden\\cpu-golden.json",
+  "qualification_id": "CPU-B-0903C",
+  "sha256": "ac71c38c184d6ac389e6ee47626e8eb53a54fc5432400ac603ef872269a374ec",
+  "source_mode": "live-capture",
+  "source_runs": [
+    "D:\\h60106817\\release\\output\\CPU-B-0903C\\CPU-B-0903C-001-20260903T113503Z-88b85b28"
+  ]
+}
+PS D:\h60106817\release> $R1 = ‘D:\\h60106817\\release\\output\\qualification\\CPU-A-0903C\\golden\\cpu-golden.json‘
+PS D:\h60106817\release> $R2 = ’D:\\h60106817\\release\\output\\qualification\\CPU-B-0903C\\golden\\cpu-golden.json‘
+PS D:\h60106817\release> Write-Host "=== R1 Telemetry Lines ===" -ForegroundColor Green
+=== R1 Telemetry Lines ===
+PS D:\h60106817\release> Get-Content "$R1\device-evidence\spool\telemetry.jsonl" | Measure-Object -Line
+Get-Content : 找不到路径“D:\h60106817\release\output\qualification\CPU-A-0903C\golden\cpu-golden.json\device-evidence\
+spool\telemetry.jsonl”，因为该路径不存在。
+所在位置 行:1 字符: 1
++ Get-Content "$R1\device-evidence\spool\telemetry.jsonl" | Measure-Obj ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (D:\h60106817\re...telemetry.jsonl:String) [Get-Content], ItemNotFoundEx
+   ception
+    + FullyQualifiedErrorId : PathNotFound,Microsoft.PowerShell.Commands.GetContentCommand
+
+
+Lines Words Characters Property
+----- ----- ---------- --------
+    0
+
+
+PS D:\h60106817\release> Write-Host "=== R2 Telemetry Lines ===" -ForegroundColor Green
+=== R2 Telemetry Lines ===
+PS D:\h60106817\release> Get-Content "$R2\device-evidence\spool\telemetry.jsonl" | Measure-Object -Line
+Get-Content : 找不到路径“D:\h60106817\release\output\qualification\CPU-B-0903C\golden\cpu-golden.json\device-evidence\
+spool\telemetry.jsonl”，因为该路径不存在。
+所在位置 行:1 字符: 1
++ Get-Content "$R2\device-evidence\spool\telemetry.jsonl" | Measure-Obj ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (D:\h60106817\re...telemetry.jsonl:String) [Get-Content], ItemNotFoundEx
+   ception
+    + FullyQualifiedErrorId : PathNotFound,Microsoft.PowerShell.Commands.GetContentCommand
+
+
+Lines Words Characters Property
+----- ----- ---------- --------
+    0
+
+
+PS D:\h60106817\release> $R1 = 'D:\h60106817\release\output\CPU-A-0903C\CPU-A-0903C-001-20260903T113447Z-a372f267'
+PS D:\h60106817\release> $R2 = 'D:\h60106817\release\output\CPU-B-0903C\CPU-B-0903C-001-20260903T113503Z-88b85b28'
+PS D:\h60106817\release> Write-Host "=== R1 Telemetry Lines ===" -ForegroundColor Green
+=== R1 Telemetry Lines ===
+PS D:\h60106817\release> Get-Content "$R1\device-evidence\spool\telemetry.jsonl" | Measure-Object -Line
+
+Lines Words Characters Property
+----- ----- ---------- --------
+   20
+
+
+PS D:\h60106817\release> Write-Host "=== R2 Telemetry Lines ===" -ForegroundColor Green
+=== R2 Telemetry Lines ===
+PS D:\h60106817\release> Get-Content "$R2\device-evidence\spool\telemetry.jsonl" | Measure-Object -Line
+
+Lines Words Characters Property
+----- ----- ---------- --------
+   19
+
+
+PS D:\h60106817\release> & $MON --json golden cpu --profile cpu_qualification_kirin9030 --board-id BOARD-A --known-good --runs 2 --qualification-id "CPU-2B-$SESSION" --run-dir "BOARD-A=$R1" --run-dir "BOARD-B=$R2"
+{
+  "golden_manifest": "D:\\h60106817\\release\\output\\qualification\\CPU-2B-0903C\\golden\\cpu-golden.json",
+  "qualification_id": "CPU-2B-0903C",
+  "sha256": "7bac9afbd81ff98fa9227a10e89fa7996deaa199f8a6fdbea95c0e3241f5e739",
+  "source_mode": "supplied",
+  "source_runs": [
+    "D:\\h60106817\\release\\output\\CPU-A-0903C\\CPU-A-0903C-001-20260903T113447Z-a372f267",
+    "D:\\h60106817\\release\\output\\CPU-B-0903C\\CPU-B-0903C-001-20260903T113503Z-88b85b28"
+  ]
+}
+PS D:\h60106817\release> & $MON --json calibrate cpu --profile cpu_qualification_kirin9030 --board-id BOARD-A --golden 'D:\h60106817\release\output\qualification\CPU-2B-0903C\golden\cpu-golden.json' --runs 2 --min-accepted 2 --baseline-id "CPU-FUNC-$SESSION" --run-dir "BOARD-A=$R1" --run-dir "BOARD-B=$R2"
+{
+  "error": "accepted cohort has 0 boards; minimum is 2",
+  "exit_code": 3
+}
