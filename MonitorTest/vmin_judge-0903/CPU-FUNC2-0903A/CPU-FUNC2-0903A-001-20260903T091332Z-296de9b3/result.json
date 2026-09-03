@@ -1,0 +1,46 @@
+{
+  "agent_final_seen": true,
+  "artifacts": {
+    "complete": true,
+    "hash_manifest": "artifact-hashes.json",
+    "hashed_file_count": 5
+  },
+  "attempt_id": "CPU-FUNC2-0903A-001-20260903T091332Z-296de9b3",
+  "baseline_id": null,
+  "completed_at": "2026-09-03T09:13:41.010630+00:00",
+  "device_evidence": "/data/local/tmp/avs/tests/CPU-FUNC2-0903A/CPU-FUNC2-0903A-001-20260903T091332Z-296de9b3",
+  "dut_reasons": [],
+  "event_count": 7,
+  "exit_code": 0,
+  "infrastructure_reasons": [],
+  "liveness": {
+    "agent_final_seen": true,
+    "final_timeout_s": 20.0,
+    "heartbeat_timeout_s": 90.0,
+    "overall_timeout_s": 300.0,
+    "timed_out": false,
+    "timeout_phase": null
+  },
+  "pc_artifacts": "full",
+  "producer": {
+    "component": "RunOrchestrator",
+    "name": "vmin_judge",
+    "version": "2.1.0"
+  },
+  "profile_id": "cpu_qualification_kirin9030",
+  "run_id": "CPU-FUNC2-0903A-001-20260903T091332Z-296de9b3",
+  "schema_version": 1,
+  "telemetry_seen": [],
+  "terminal_summary_seen": true,
+  "test_id": "CPU-FUNC2-0903A",
+  "validation_mode": "error-only",
+  "verdict": "PASS",
+  "warnings": [],
+  "workload_exit_code": 0,
+  "workload_result": "PASS",
+  "workload_summary": {
+    "exit_code": 0,
+    "result": "PASS",
+    "verify_pass": true
+  }
+}

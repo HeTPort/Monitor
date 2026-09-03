@@ -1,0 +1,14 @@
+{"schema_version":1,"test_id":"MC-SMOKE-0903A","run_id":"MC-SMOKE-0903A-001","seq":1,"timestamp_ms":1404819000,"source":"agent","type":"agent_start","payload":{"agent_version":"0.3.2","protocol_version":2,"baudrate":9600},"crc32":"f06af5b8"}
+{"schema_version":1,"test_id":"MC-SMOKE-0903A","run_id":"MC-SMOKE-0903A-001","seq":2,"timestamp_ms":1404820000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"eb9f0863"}
+{"schema_version":1,"test_id":"MC-SMOKE-0903A","run_id":"MC-SMOKE-0903A-001","seq":3,"timestamp_ms":1404821000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"007ff813"}
+{"schema_version":1,"test_id":"MC-SMOKE-0903A","run_id":"MC-SMOKE-0903A-001","seq":4,"timestamp_ms":1404822000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"9748bddf"}
+{"schema_version":1,"test_id":"MC-SMOKE-0903A","run_id":"MC-SMOKE-0903A-001","seq":5,"timestamp_ms":1404823000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"7ca84daf"}
+{"schema_version":1,"test_id":"MC-SMOKE-0903A","run_id":"MC-SMOKE-0903A-001","seq":6,"timestamp_ms":1404824000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"f2fec521"}
+{"schema_version":1,"test_id":"MC-SMOKE-0903A","run_id":"MC-SMOKE-0903A-001","seq":7,"timestamp_ms":1404825000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"191e3551"}
+{"schema_version":1,"test_id":"MC-SMOKE-0903A","run_id":"MC-SMOKE-0903A-001","seq":8,"timestamp_ms":1404826000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"6ee7d6a7"}
+{"schema_version":1,"test_id":"MC-SMOKE-0903A","run_id":"MC-SMOKE-0903A-001","seq":9,"timestamp_ms":1404827000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"850726d7"}
+{"schema_version":1,"test_id":"MC-SMOKE-0903A","run_id":"MC-SMOKE-0903A-001","seq":10,"timestamp_ms":1404828000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"11f7b492"}
+{"schema_version":1,"test_id":"MC-SMOKE-0903A","run_id":"MC-SMOKE-0903A-001","seq":11,"timestamp_ms":1404829000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"fa1744e2"}
+{"schema_version":1,"test_id":"MC-SMOKE-0903A","run_id":"MC-SMOKE-0903A-001","seq":12,"timestamp_ms":1404830000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"b3fa328c"}
+{"schema_version":1,"test_id":"MC-SMOKE-0903A","run_id":"MC-SMOKE-0903A-001","seq":13,"timestamp_ms":1404831000,"source":"cpu-workload","type":"summary","payload":{"result":"PASS","exit_code":0,"verify_pass":true},"crc32":"a0891a09"}
+{"schema_version":1,"test_id":"MC-SMOKE-0903A","run_id":"MC-SMOKE-0903A-001","seq":14,"timestamp_ms":1404832000,"source":"agent","type":"agent_final","payload":{"workload_exit_code":0,"summary_seen":true,"timed_out":false,"spool_complete":true,"telemetry_exit_code":null,"telemetry_timed_out":false},"crc32":"f3dd63fd"}

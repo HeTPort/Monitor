@@ -1,0 +1,10 @@
+{
+  "attempt_id": "MC-CPU-0903A-001",
+  "bytes_transferred": 0,
+  "local": "D:\\h60106817\\release\\output\\MC-CPU-0903A\\device-evidence\\MC-CPU-0903A-001",
+  "remote": "/data/local/tmp/avs/tests/MC-CPU-0903A/MC-CPU-0903A-001",
+  "remote_removed": false,
+  "schema_version": 1,
+  "test_id": "MC-CPU-0903A",
+  "verified": true
+}

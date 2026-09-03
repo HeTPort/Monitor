@@ -1,0 +1,10 @@
+{
+  "attempt_id": null,
+  "bytes_transferred": 0,
+  "local": "D:\\h60106817\\release\\output\\MC-GPU-0903A\\device-evidence",
+  "remote": "/data/local/tmp/avs/tests/MC-GPU-0903A",
+  "remote_removed": false,
+  "schema_version": 1,
+  "test_id": "MC-GPU-0903A",
+  "verified": true
+}
