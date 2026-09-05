@@ -115,6 +115,25 @@ class RunManifestTests(unittest.TestCase):
             telemetry_argv = _shell_agent_argv(PurePosixPath("/agent"), error_only, 9600)
             self.assertIn("--telemetry-plan", telemetry_argv)
 
+            golden_reference = RunManifestBuilder(paths).build(
+                profile=current_profile,
+                golden={
+                    "qualification_id": "CPU-GOLDEN",
+                    "correctness_fingerprint": "fingerprint",
+                    "checksum": "0123456789abcdef",
+                },
+                test_id="CALIBRATION",
+                attempt_id="CALIBRATION-1",
+                device_uart="/dev/ttyAMA0",
+                telemetry_enabled=True,
+                pc_artifacts="full",
+            )
+            self.assertEqual(golden_reference["validation_mode"], "golden-reference")
+            self.assertIsNone(golden_reference["baseline"])
+            self.assertEqual(golden_reference["policy"]["thresholds"], {})
+            self.assertIn("--golden-checksum", golden_reference["workload"]["argv"])
+            self.assertNotIn("--generate-golden", golden_reference["workload"]["argv"])
+
             qualification = RunManifestBuilder(paths).build_qualification(
                 profile=current_profile,
                 golden={},

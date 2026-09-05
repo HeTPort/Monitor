@@ -14,5 +14,5 @@ baseline: null
 telemetry:
   interval_ms: 5000
   required: [gpu.frequency, gpu.utilization, gpu.temperature, gpu.hang_count, gpu.power_policy]
-  optional: [gpu.throttle, gpu.voltage]
+  optional: [gpu.throttle]
 kernel_monitor: "off"

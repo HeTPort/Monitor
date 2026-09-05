@@ -17,6 +17,6 @@ baseline: null
 telemetry:
   interval_ms: 5000
   required: [cpu.frequency, cpu.online, cpu.temperature, cpu.utilization]
-  optional: [cpu.idle_residency, cpu.throttle, cpu.voltage]
+  optional: [cpu.idle_residency, cpu.throttle]
 kernel_monitor: critical
 kernel_options: {dedupe_window_ms: 1000, max_events_per_second: 10}

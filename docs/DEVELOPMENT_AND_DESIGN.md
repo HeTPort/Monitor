@@ -36,7 +36,7 @@ Qualification, deployment, platform discovery, telemetry, reporting, and future 
 | `pair` | Resolve device UART to PC serial port | Launch a workload |
 | `deploy` | Push selected versioned assets and telemetry plans; verify hashes | Start tests |
 | `verify-deployment` | Read-only remote hash verification | Push or remove files |
-| `run` | Parse profile, optionally resolve baseline, launch agent/workload, judge UART | Probe, deploy, mutate environment, generate golden, delete device evidence |
+| `run` | Parse profile, optionally resolve one baseline or correctness-only golden, launch agent/workload, judge UART | Probe, deploy, mutate environment, generate golden, delete device evidence |
 | `smoke` | Deprecated compatibility alias over `run`; retained for one transition cycle | Become a second execution implementation |
 | `telemetry run` | Run the deployed telemetry collector independently | Require UART or launch workload |
 | `collect` | Pull one test or attempt and optionally verify hashes | Delete remote evidence unless explicitly requested after verification |
@@ -50,7 +50,7 @@ Qualification, deployment, platform discovery, telemetry, reporting, and future 
 ```text
 PC CLI
   ├─ profile resolver
-  ├─ optional baseline resolver
+  ├─ optional baseline/golden-reference resolver
   ├─ UART-v2 COBS/CRC session decoder
   ├─ basic/baseline policy evaluator
   └─ compact PC artifact store
@@ -269,15 +269,17 @@ PC artifact levels:
 
 ```text
 explicit validate/probe/pair/deploy/verify
-  -> golden (all-live capture OR an exact supplied cohort)
-  -> complete attempt evidence normalized on the PC
-  -> calibrate from an exact explicit multi-board cohort
+  -> golden correctness (all-live capture OR an exact supplied cohort)
+  -> deploy/verify the correctness reference
+  -> sustained run --golden --telemetry
+  -> collect complete attempts and normalize them on the PC
+  -> calibrate from an exact explicit multi-board sustained cohort
   -> review draft
   -> baseline approve
   -> baseline-aware deploy/verify/run
 ```
 
-`golden --runs N` accepts zero `--run-dir` values or exactly N values. Zero means live capture on an already prepared known-good device. Live capture enables the existing device-local telemetry collector, runs the qualification workload, pulls the complete device attempt directory, preserves the native full workload summary, and reports reusable PC directories in `source_runs`. A partial cohort is a configuration error; it is never completed from hardware implicitly.
+`golden --runs N` accepts zero `--run-dir` values or exactly N values. Zero means live correctness capture on an already prepared known-good device. It pulls the complete device attempt directory and reports auditable PC directories in `source_runs`. A partial cohort is a configuration error; it is never completed from hardware implicitly. Golden generation deliberately does not claim to be a performance sample: the workload may report `duration_s=0` and `batch_count=1`, so its `source_runs` are never accepted merely because they contain a summary.
 
 For live capture, the public `qualification_id` is also the device/PC `test_id`; each attempt appends a unique suffix. This makes the IDs returned by a failed command directly usable with `collect`. Existing CPU and GPU golden artifacts are fail-closed and are not overwritten by reusing a qualification ID.
 
@@ -300,7 +302,11 @@ collected attempt/spool/
 
 When a spool is supplied, the resolver pairs it with the standard sibling PC attempt when available. The last native `type=summary` record in device `workload.log` takes precedence over the compact PC `workload-summary.json`; this preserves qualification metrics without enlarging verdict UART frames. CPU calibration consumes `operations_per_sec_avg` and `batch_time_ms_p99`; GPU consumes `fps_avg` and `frame_time_p99_ms`.
 
-`calibrate` is always offline and requires exactly `--runs` normalized inputs. The default production policy rejects telemetry gaps, throttling, temperature-range violations, missing metrics, fewer than 20 accepted samples, or fewer than two boards. `--min-accepted 2` exists only for a two-board functional data-chain acceptance test; it does not redefine production policy. Calibration creates an immutable-registry draft, never an approved baseline.
+`run --golden MANIFEST --telemetry` is the pre-baseline capture mode. It is mutually exclusive with `--baseline`: it passes only the CPU checksum or GPU readback path to the workload, applies no performance thresholds, executes the profile's normal sustained duration, and retains telemetry locally. GPU `deploy/verify --golden` stages the referenced raw readback at the path declared by the workload config. Ordinary runs with neither reference remain `error-only`.
+
+Telemetry plan rows are data-only `priority|metric|parser|selection|paths` records. The collector aggregates one required-first snapshot per JSONL line with `sample_id`, `complete`, `metrics`, `sources`, and `missing_required`. Qualification accepts telemetry only when one `complete=true` snapshot contains every required profile metric. File existence and a union of unrelated partial events are insufficient. `/proc/stat` is prewarmed for utilization; optional scans can stop independently after the required portion is complete. Platform config chooses canonical aliases and typed thermal zones. The Kirin9030 lpmcu `cluster_volt` adjustment node is intentionally absent because it is not a readback interface.
+
+`calibrate` is always offline and requires exactly `--runs` normalized inputs. In addition to full telemetry coverage, each sample must cover at least 90% of the configured workload duration; CPU samples must report at least two measured batches. The default production policy rejects telemetry gaps, short samples, throttling, temperature-range violations, missing metrics, fewer than 20 accepted samples, or fewer than two boards. Cohort errors include per-run rejection reasons instead of hiding them behind only an accepted-count message. `--min-accepted 2` exists only for a two-board functional data-chain acceptance test; it does not redefine production policy. Calibration creates an immutable-registry draft, never an approved baseline.
 
 Kirin9030 uses dedicated `cpu_qualification_kirin9030` and `gpu_qualification_kirin9030` profiles. Platform identity and workload/correctness fingerprints are baseline compatibility fields; qualification artifacts from a Kirin9020 profile cannot be relabeled as Kirin9030 evidence.
 
@@ -326,7 +332,7 @@ The refactor is complete when:
 - PASS never deletes device evidence;
 - PC result/full artifact modes both judge correctly;
 - collect retains remote evidence by default;
-- golden live capture returns complete reusable source directories, while partial supplied cohorts fail;
-- calibration reads device-native full metrics and enforces multi-board policy;
+- golden live capture returns auditable correctness source directories, while partial supplied cohorts fail;
+- calibration reads device-native full metrics and accepts only sustained golden-checked runs with complete required telemetry;
 - raw simulation and monitor decode the same UART-v2 framing as `run`;
 - unit, shell, protocol, and packaging validation pass.

@@ -169,7 +169,7 @@ PC 默认使用 `--pc-artifacts result`，保留判定所需的紧凑结果。�
 & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL run --profile cpu_stress_kirin9030 --test-id 0831-CPU-TEL-01 --telemetry
 ```
 
-两种方式调用同一个 `avs-telemetry-agent` 和同一份 profile telemetry plan。采样只追加到设备本地 `spool/telemetry.jsonl`，不混入判错 UART。collector 在每个 metric/path 读取前后检查 stop-file 和 wall-clock deadline，采样间隔也可中断。伴随 workload 结束后，agent 只给 telemetry 有限的停止宽限期；超时会终止 collector、记录 `TELEMETRY_SHUTDOWN_TIMEOUT`，但仍继续写 `final.json` 并发送 `agent_final`。普通 error-only 运行不把 telemetry 缺失当作 DUT 错误；显式请求 `--telemetry` 但 collector 未部署属于基础设施错误。
+两种方式调用同一个 `avs-telemetry-agent` 和同一份 profile telemetry plan。采样只追加到设备本地 `spool/telemetry.jsonl`，不混入判错 UART。每行是一个快照：`payload.sample_id` 唯一，`metrics` 中每个指标的值为数组，`sources` 保留对应路径；只有所有 required 指标都至少得到一个有效值时 `complete=true`。collector 总是先完成 required 快照，再读取可中断的 optional 指标，因此 workload 结束时不会留下“文件存在但必需指标不全”的假完整样本。`/proc/stat` 在正式采样前预热，首个有效快照可计算 CPU utilization。伴随 workload 结束后，agent 只给 telemetry 有限的停止宽限期；超时会终止 collector、记录 `TELEMETRY_SHUTDOWN_TIMEOUT`，但仍继续写 `final.json` 并发送 `agent_final`。普通 error-only 运行不把 telemetry 缺失当作 DUT 错误；显式请求 `--telemetry` 但 collector 未部署属于基础设施错误。
 
 ## 7. 拉取和报告
 
@@ -210,7 +210,7 @@ PC 默认使用 `--pc-artifacts result`，保留判定所需的紧凑结果。�
 - 不传任何 `--run-dir`：在已经 deploy/verify 的已知良品板上实时采集恰好 `--runs` 次，并自动拉取每次完整设备 attempt 目录；
 - 传 `--run-dir`：必须恰好传 `--runs` 个，不允许传一部分后再隐式启动硬件补齐。
 
-命令 JSON 输出中的 `source_runs` 是后续 `calibrate` 可直接复用的 PC 运行目录。每个目录可包含 PC `result.json`，以及 sibling `device-evidence/<attempt>/spool`；也可直接传已 collect 的 `spool`。资格化优先从设备 `workload.log` 的原生 summary 读取完整性能指标，UART 上的紧凑 summary 不需要扩大。
+命令 JSON 输出中的 `source_runs` 只用于审计/合并 golden 正确性结果。生成 golden 时 workload 的测量段可以是 `duration_s=0`、`batch_count=1`，因此这些目录不能作为性能 `calibrate` 输入。校准样本必须另用同一资格化 profile 执行 `run --golden <MANIFEST> --telemetry`，让 workload 运行配置声明的完整 duration，同时用 golden 做 checksum/readback 校验但不施加性能阈值。每个校准目录可包含 PC `result.json`，以及 sibling `device-evidence/<attempt>/spool`；也可直接传已 collect 的 `spool`。资格化优先从设备 `workload.log` 的原生 summary 读取完整性能指标，UART 上的紧凑 summary 不需要扩大。
 
 live capture 中，命令的 `--qualification-id` 同时作为设备和 PC 的顶层 `test_id`；每一次运行或重试生成新的 `attempt_id`，不会覆盖已有证据。因此失败后可直接使用命令 JSON 返回的两个 ID 执行：
 
@@ -224,24 +224,31 @@ live golden 失败仍会尽力自动拉取设备 evidence，并在 JSON 中返�
 
 ### 8.1 两块板的功能验收（快速证明数据链）
 
-先分别在 BOARD-A 和 BOARD-B 上部署并核验 `cpu_qualification_kirin9030`，每块板实时采集一次 golden。保存两次输出里的 `source_runs[0]`，再做跨板一致性 golden 和最小两样本校准：
+先分别在 BOARD-A 和 BOARD-B 上部署并核验 `cpu_qualification_kirin9030`，每块板实时采集一次正确性 golden。保存两次输出里的 `source_runs[0]`，做跨板 checksum 一致性 golden。然后把该 manifest 作为正确性参考，在每块板上另跑一次持续 qualification workload：
 
 ```powershell
 & $MON --transport hdc --device '<BOARD-A设备>' --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json golden cpu --profile cpu_qualification_kirin9030 --board-id BOARD-A --known-good --runs 1 --qualification-id CPU-A-$SESSION
 & $MON --transport hdc --device '<BOARD-B设备>' --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json golden cpu --profile cpu_qualification_kirin9030 --board-id BOARD-B --known-good --runs 1 --qualification-id CPU-B-$SESSION
 
 & $MON --json golden cpu --profile cpu_qualification_kirin9030 --board-id BOARD-A --known-good --runs 2 --qualification-id CPU-2BOARD-$SESSION --run-dir 'BOARD-A=<A-source-run>' --run-dir 'BOARD-B=<B-source-run>'
-& $MON --json calibrate cpu --profile cpu_qualification_kirin9030 --board-id BOARD-A --golden '<CPU-2BOARD golden_manifest>' --runs 2 --min-accepted 2 --baseline-id CPU-FUNCTIONAL-$SESSION --run-dir 'BOARD-A=<A-source-run>' --run-dir 'BOARD-B=<B-source-run>'
+
+& $MON --transport hdc --device '<BOARD-A设备>' deploy --profile cpu_qualification_kirin9030 --golden '<CPU-2BOARD golden_manifest>'
+& $MON --transport hdc --device '<BOARD-A设备>' verify-deployment --profile cpu_qualification_kirin9030 --golden '<CPU-2BOARD golden_manifest>'
+& $MON --transport hdc --device '<BOARD-A设备>' --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json run --profile cpu_qualification_kirin9030 --golden '<CPU-2BOARD golden_manifest>' --telemetry --pc-artifacts full --test-id CPU-CAL-A-$SESSION --attempt-id CPU-CAL-A-$SESSION-001
+& $MON --transport hdc --device '<BOARD-A设备>' collect --test-id CPU-CAL-A-$SESSION --verify-hashes
+
+# BOARD-B 重复 deploy/verify/run/collect，ID 改为 CPU-CAL-B-$SESSION。
+& $MON --json calibrate cpu --profile cpu_qualification_kirin9030 --board-id BOARD-A --golden '<CPU-2BOARD golden_manifest>' --runs 2 --min-accepted 2 --baseline-id CPU-FUNCTIONAL-$SESSION --run-dir 'BOARD-A=<CPU-CAL-A PC attempt>' --run-dir 'BOARD-B=<CPU-CAL-B PC attempt>'
 & $MON baseline approve "CPU-FUNCTIONAL-$SESSION" --approver '<name>'
 ```
 
-这只证明资格化数据链可执行：两个样本均有 PASS、完整 telemetry、无 throttling、温度在指定范围内，并包含 CPU `operations_per_sec_avg`/`batch_time_ms_p99`（GPU 为 `fps_avg`/`frame_time_p99_ms`）。它不是生产阈值基线。
+这只证明资格化数据链可执行：两个持续样本均为 `validation_mode=golden-reference` 和 PASS；原生 summary 至少覆盖 workload 配置 duration 的 90%，CPU `batch_count>=2`；至少一个 telemetry 快照 `complete=true` 且覆盖 profile 的全部 required 指标；样本无 throttling、温度在指定范围内，并包含 CPU `operations_per_sec_avg`/`batch_time_ms_p99`（GPU 为 `fps_avg`/`frame_time_p99_ms`）。任一条件失败时，`calibrate` 错误会逐 run 列出原因。该两样本流程不是生产阈值基线。
 
 ### 8.2 生产基线
 
-生产流程仍使用 `config/policies/calibration.yaml`：至少 20 个被接受样本、至少 2 块板；建议按项目策略在每块板上采足重复数。先收集全部来源运行，再一次性执行 `golden` 和 `calibrate`。生产流程不要使用 `--min-accepted 2`。`calibrate` 只创建 draft，必须审阅 `proposed-baseline.json` 后人工 `baseline approve`。
+生产流程仍使用 `config/policies/calibration.yaml`：至少 20 个被接受样本、至少 2 块板；建议按项目策略在每块板上采足重复数。先生成并确认跨板一致的 golden，再以 `run --golden ... --telemetry` 收集全部持续样本，最后一次性执行 `calibrate`。生产流程不要使用 `--min-accepted 2`。`calibrate` 只创建 draft，必须审阅 `proposed-baseline.json` 后人工 `baseline approve`。
 
-GPU 使用同样流程，但换成 `gpu_qualification_kirin9030` 和 `golden gpu`/`calibrate gpu`；每次 golden run 还必须有内容完全一致的 `gpu-golden.rgba`。
+GPU 使用同样流程，但换成 `gpu_qualification_kirin9030` 和 `golden gpu`/`calibrate gpu`；正确性生成的每次 golden run 必须有内容完全一致的 `gpu-golden.rgba`，部署 `--golden` 时会把该 readback 文件放到 workload 配置声明的位置。持续样本的 GPU utilization 支持 `Gpu utilisation : N` 格式，温度使用 Kirin9030 平台配置中按 probe 类型确认的 GPU thermal zone。
 
 批准后，使用同一个 state 目录显式部署、核验并运行：
 
@@ -279,6 +286,8 @@ GPU 使用同样流程，但换成 `gpu_qualification_kirin9030` 和 `golden gpu
 新增平台时复制 profile/workload 数据文件并修改平台 ID、能力、路径和 workload 参数，不在 Python 中增加平台分支。普通 stress/smoke 使用 `verify_mode: none`；CPU 资格化使用 `checksum`，GPU 资格化使用 `golden-image`，且 `golden_file` 必须是设备根目录下的绝对路径。`validate --profile ...` 会解析并校验这些 workload 字段，不再只检查文件是否存在。
 
 `scheduler_requirements` 当前只是声明性元数据。Monitor 2.1 不执行它。未来调度模块若要设置 governor、频率、CPU online、功耗策略或 affinity，必须有独立命令、权限、审计和恢复策略。
+
+Kirin9030 的 `/sys/kernel/debug/lpmcu_debug/cluster_volt` 是调压入口，不是电压回读 telemetry，现有 collector/probe 不能把“可读但为空”当作有效电压。因此该路径不在 CPU/GPU 遥测计划中。若以后需要资格化电压，单独增加经过实机确认的只读 `freqdump` 适配器及解析规则；不得复用调压入口，也不得让采集命令写设备状态。
 
 ## 11. 判定和退出码
 

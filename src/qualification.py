@@ -199,10 +199,14 @@ class CalibrationService:
                 accepted.append(sample)
         boards = sorted({sample.board_id for sample in accepted})
         if len(boards) < policy.minimum_boards:
-            raise QualificationError(f"accepted cohort has {len(boards)} boards; minimum is {policy.minimum_boards}")
+            raise QualificationError(
+                f"accepted cohort has {len(boards)} boards; minimum is {policy.minimum_boards}; "
+                f"{self._rejection_summary(rejected)}"
+            )
         if len(accepted) < policy.minimum_accepted_samples:
             raise QualificationError(
-                f"accepted sample count is {len(accepted)}; minimum is {policy.minimum_accepted_samples}"
+                f"accepted sample count is {len(accepted)}; minimum is {policy.minimum_accepted_samples}; "
+                f"{self._rejection_summary(rejected)}"
             )
         distributions: dict[str, Any] = {}
         for role, metric in metrics.items():
@@ -247,6 +251,16 @@ class CalibrationService:
         }
         proposal["proposal_sha256"] = document_sha256(proposal)
         return proposal
+
+    @staticmethod
+    def _rejection_summary(rejected: list[dict[str, Any]]) -> str:
+        if not rejected:
+            return "no samples were rejected; add boards or accepted runs"
+        details = "; ".join(
+            f"{item['run_id']}[{item['board_id']}]:{','.join(item['reasons'])}"
+            for item in rejected
+        )
+        return f"rejected runs: {details}"
 
     @staticmethod
     def _rejection_reasons(

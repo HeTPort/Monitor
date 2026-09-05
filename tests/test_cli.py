@@ -16,11 +16,13 @@ from src.cli_commands import (
     _apply_saved_pairing,
     _concise_reason,
     _qualification_deadlines,
+    _telemetry_plan_bytes,
     cmd_golden,
     cmd_monitor_events,
     cmd_smoke,
     command_boundary,
 )
+from src.config_loader import PlatformConfig, ProfileConfig
 from src.events import build_event, encode_event
 from src.path_resolver import PathResolver
 from src.run_orchestrator import RunInfrastructureError
@@ -84,9 +86,18 @@ class CLITests(unittest.TestCase):
 
         run_help = self.run_cli("run", "--help")
         self.assertIn("Optional approved baseline", run_help.stdout)
+        self.assertIn("--golden", run_help.stdout)
+        self.assertIn("sustained qualification", run_help.stdout)
         self.assertIn("--test-id", run_help.stdout)
         self.assertNotIn("--no-deploy", run_help.stdout)
         self.assertNotIn("--run-id", run_help.stdout)
+
+        conflicting = self.run_cli(
+            "run", "--profile", "cpu_qualification_kirin9030",
+            "--baseline", "baseline-id", "--golden", "golden.json",
+        )
+        self.assertEqual(conflicting.returncode, 2)
+        self.assertIn("not allowed with argument", conflicting.stderr)
 
         relay_help = self.run_cli("relay", "probe", "--help")
         self.assertEqual(relay_help.returncode, 0, relay_help.stderr)
@@ -100,6 +111,26 @@ class CLITests(unittest.TestCase):
         self.assertIn("candidates", result.stdout)
         for removed in ("--channel", "--device-port", "--pc-port", "--monitor"):
             self.assertNotIn(removed, result.stdout)
+
+    def test_kirin9030_telemetry_plan_is_canonical_typed_and_has_no_lpmcu_readback(self) -> None:
+        try:
+            import yaml  # noqa: F401
+        except ImportError:
+            self.skipTest("PyYAML is not installed in this minimal test interpreter")
+        platform = PlatformConfig.from_file(ROOT / "config" / "platforms" / "kirin9030.yaml")
+        cpu = ProfileConfig.from_file(ROOT / "config" / "profiles" / "cpu_qualification_kirin9030.yaml")
+        gpu = ProfileConfig.from_file(ROOT / "config" / "profiles" / "gpu_qualification_kirin9030.yaml")
+        cpu_plan = _telemetry_plan_bytes(cpu, platform).decode("utf-8")
+        gpu_plan = _telemetry_plan_bytes(gpu, platform).decode("utf-8")
+        self.assertIn(
+            "required|cpu.frequency|number|all|/sys/devices/system/cpu/cpufreq/policy*/scaling_cur_freq",
+            cpu_plan,
+        )
+        self.assertNotIn("cpu*/cpufreq/scaling_cur_freq", cpu_plan)
+        self.assertIn("required|cpu.temperature|temperature_auto|all|", cpu_plan)
+        self.assertIn("required|gpu.utilization|prefixed_number|all|", gpu_plan)
+        self.assertIn("required|gpu.temperature|temperature_auto|first|/sys/class/thermal/thermal_zone6/temp", gpu_plan)
+        self.assertNotIn("cluster_volt", cpu_plan + gpu_plan)
 
     def test_baseline_list_is_machine_readable_without_hardware(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -631,9 +662,18 @@ class CLITests(unittest.TestCase):
                     "type": "summary", "result": "PASS", "exit_code": 0,
                     "operations_per_sec_avg": 1000.0 + index,
                     "batch_time_ms_p99": 10.0 + index,
+                    "duration_s": 1.0,
+                    "batch_count": 2,
                 }
                 (spool / "workload.log").write_text(json.dumps(summary) + "\n", encoding="utf-8")
-                telemetry = {"payload": {"metric": "cpu.temperature", "value": 45.0}}
+                telemetry = {
+                    "payload": {
+                        "sample_id": 1,
+                        "complete": True,
+                        "metrics": {"cpu.temperature": [45.0]},
+                        "missing_required": [],
+                    }
+                }
                 (spool / "telemetry.jsonl").write_text(json.dumps(telemetry) + "\n", encoding="utf-8")
                 sample_dirs.append(attempt)
 

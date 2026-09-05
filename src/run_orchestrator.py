@@ -53,6 +53,7 @@ class RunManifestBuilder:
         *,
         profile: ProfileConfig,
         baseline: Baseline | None = None,
+        golden: Mapping[str, Any] | None = None,
         capabilities: Mapping[str, Any] | None = None,
         run_id: str | None = None,
         test_id: str | None = None,
@@ -73,8 +74,15 @@ class RunManifestBuilder:
 
         resolved_test_id = _safe_identifier(test_id or run_id or new_run_id(profile.target), "test_id")
         resolved_attempt_id = _safe_identifier(attempt_id or run_id or resolved_test_id, "attempt_id")
+        if baseline is not None and golden is not None:
+            raise RunError("baseline and golden reference are mutually exclusive")
         if baseline is not None:
             self._validate_baseline(profile, baseline)
+        if golden is not None:
+            if profile.target == "cpu" and not golden.get("checksum"):
+                raise RunError("CPU golden reference is missing checksum")
+            if profile.target == "gpu" and not golden.get("remote_path"):
+                raise RunError("GPU golden reference is missing remote_path")
 
         remote_attempt = self.paths.remote(PurePosixPath("tests") / resolved_test_id / resolved_attempt_id)
         remote_binary = self.paths.remote(
@@ -87,6 +95,11 @@ class RunManifestBuilder:
                 workload_argv.extend(("--golden-checksum", str(baseline.golden["checksum"])))
             if profile.target == "gpu" and baseline.golden.get("remote_path"):
                 workload_argv.extend(("--golden-file", str(baseline.golden["remote_path"])))
+        elif golden is not None:
+            if profile.target == "cpu" and golden.get("checksum"):
+                workload_argv.extend(("--golden-checksum", str(golden["checksum"])))
+            if profile.target == "gpu" and golden.get("remote_path"):
+                workload_argv.extend(("--golden-file", str(golden["remote_path"])))
 
         thresholds = json.loads(json.dumps(baseline.thresholds)) if baseline is not None else {}
         platform_value = profile.platform
@@ -107,7 +120,17 @@ class RunManifestBuilder:
             "run_id": resolved_attempt_id,
             "profile": {"id": profile.name, "sha256": profile.fingerprint},
             "baseline": {"id": baseline.id, "sha256": baseline.sha256} if baseline is not None else None,
-            "validation_mode": "baseline" if baseline is not None else "error-only",
+            "golden_reference": (
+                {
+                    "qualification_id": golden.get("qualification_id"),
+                    "correctness_fingerprint": golden.get("correctness_fingerprint"),
+                }
+                if golden is not None
+                else None
+            ),
+            "validation_mode": (
+                "baseline" if baseline is not None else "golden-reference" if golden is not None else "error-only"
+            ),
             "platform": profile.platform,
             "target": profile.target,
             "uart": str(PurePosixPath(device_uart)),

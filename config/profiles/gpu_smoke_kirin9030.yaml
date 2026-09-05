@@ -15,6 +15,6 @@ baseline: null
 telemetry:
   interval_ms: 1000
   required: [gpu.frequency, gpu.utilization, gpu.temperature, gpu.hang_count, gpu.power_policy]
-  optional: [gpu.throttle, gpu.voltage]
+  optional: [gpu.throttle]
 kernel_monitor: critical
 kernel_options: {dedupe_window_ms: 1000, max_events_per_second: 10}

@@ -133,7 +133,7 @@ class ShellDeviceAgentTests(unittest.TestCase):
             value.write_text("31074\n", encoding="utf-8")
             plan = root / "telemetry.conf"
             plan.write_text(
-                f"cpu.temperature|temperature_auto|{shell_path(value)}\n",
+                f"required|cpu.temperature|temperature_auto|all|{shell_path(value)}\n",
                 encoding="utf-8",
             )
             output = root / "device" / "telemetry.jsonl"
@@ -167,8 +167,67 @@ class ShellDeviceAgentTests(unittest.TestCase):
             decoder.finish()
             self.assertEqual(len(events), 1)
             self.assertEqual(events[0].raw["test_id"], "telemetry-test")
-            self.assertEqual(events[0].payload["metric"], "cpu.temperature")
-            self.assertEqual(events[0].payload["value"], 31.074)
+            self.assertTrue(events[0].payload["complete"])
+            self.assertEqual(events[0].payload["sample_id"], 1)
+            self.assertEqual(events[0].payload["metrics"]["cpu.temperature"], [31.074])
+            self.assertEqual(events[0].payload["missing_required"], [])
+
+    def test_telemetry_snapshot_rejects_missing_required_and_parses_prefixed_gpu_value(self) -> None:
+        with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
+            root = Path(tmp)
+            utilization = root / "gpu_utilisation"
+            utilization.write_text("Gpu utilisation : 37\n", encoding="utf-8")
+            plan = root / "telemetry.conf"
+            plan.write_text(
+                f"required|gpu.utilization|prefixed_number|first|{shell_path(utilization)}\n"
+                f"required|gpu.temperature|temperature_auto|first|{shell_path(root / 'missing')}\n",
+                encoding="utf-8",
+            )
+            output = root / "spool" / "telemetry.jsonl"
+            result = subprocess.run(
+                [
+                    "sh", shell_path(TELEMETRY), "--test-id", "gpu-telemetry",
+                    "--attempt-id", "gpu-telemetry-1", "--target", "gpu",
+                    "--output", shell_path(output), "--plan", shell_path(plan),
+                    "--interval", "1", "--duration", "0",
+                ],
+                text=True,
+                encoding="utf-8",
+                capture_output=True,
+                timeout=10,
+            )
+            self.assertEqual(result.returncode, 5, result.stderr)
+            event = json.loads(output.read_text(encoding="utf-8"))
+            self.assertFalse(event["payload"]["complete"])
+            self.assertEqual(event["payload"]["metrics"]["gpu.utilization"], [37])
+            self.assertEqual(event["payload"]["missing_required"], ["gpu.temperature"])
+
+    def test_telemetry_plan_without_required_metrics_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
+            root = Path(tmp)
+            value = root / "optional"
+            value.write_text("1\n", encoding="utf-8")
+            plan = root / "telemetry.conf"
+            plan.write_text(
+                f"optional|cpu.idle_residency|number|all|{shell_path(value)}\n",
+                encoding="utf-8",
+            )
+            output = root / "spool" / "telemetry.jsonl"
+            result = subprocess.run(
+                [
+                    "sh", shell_path(TELEMETRY), "--test-id", "empty-plan",
+                    "--attempt-id", "empty-plan-1", "--target", "cpu",
+                    "--output", shell_path(output), "--plan", shell_path(plan),
+                    "--interval", "1", "--duration", "0",
+                ],
+                text=True,
+                encoding="utf-8",
+                capture_output=True,
+                timeout=10,
+            )
+            self.assertEqual(result.returncode, 5)
+            self.assertIn("no required metrics", result.stderr)
+            self.assertEqual(output.read_text(encoding="utf-8"), "")
 
     def test_agent_bounds_non_cooperative_telemetry_and_still_emits_final(self) -> None:
         with tempfile.TemporaryDirectory(dir=ROOT) as tmp:

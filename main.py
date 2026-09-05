@@ -267,7 +267,9 @@ Examples:
     deploy_selection = deploy_parser.add_mutually_exclusive_group(required=True)
     deploy_selection.add_argument('--target', choices=['cpu', 'gpu', 'all'])
     deploy_selection.add_argument('--profile')
-    deploy_parser.add_argument('--baseline')
+    deploy_reference = deploy_parser.add_mutually_exclusive_group()
+    deploy_reference.add_argument('--baseline', help='Approved baseline whose GPU golden asset must be deployed')
+    deploy_reference.add_argument('--golden', metavar='MANIFEST', help='Correctness-only golden for a pre-baseline qualification run')
     deploy_parser.add_argument('--force', action='store_true')
     deploy_parser.add_argument('--clean-stale', action='store_true', help='Remove stale assets; valid only with --target all')
 
@@ -275,7 +277,9 @@ Examples:
     verify_selection = verify_parser.add_mutually_exclusive_group(required=True)
     verify_selection.add_argument('--target', choices=['cpu', 'gpu', 'all'])
     verify_selection.add_argument('--profile')
-    verify_parser.add_argument('--baseline')
+    verify_reference = verify_parser.add_mutually_exclusive_group()
+    verify_reference.add_argument('--baseline')
+    verify_reference.add_argument('--golden', metavar='MANIFEST')
 
     golden_parser = subparsers.add_parser('golden', help='Create CPU/GPU golden artifacts from qualified runs')
     golden_subparsers = golden_parser.add_subparsers(dest='golden_target', required=True)
@@ -354,7 +358,13 @@ Examples:
 
     run_parser = subparsers.add_parser('run', help='Launch an already deployed profile and judge UART events')
     run_parser.add_argument('--profile', required=True)
-    run_parser.add_argument('--baseline', help='Optional approved baseline ID; omit for error-only judgement')
+    run_reference = run_parser.add_mutually_exclusive_group()
+    run_reference.add_argument('--baseline', help='Optional approved baseline ID; omit for error-only judgement')
+    run_reference.add_argument(
+        '--golden',
+        metavar='MANIFEST',
+        help='Correctness-only reference for sustained qualification capture; does not apply performance limits',
+    )
     run_attempts = run_parser.add_mutually_exclusive_group()
     run_attempts.add_argument('--repeat', type=int, default=1)
     run_attempts.add_argument('--attempt-id', help='Explicit unique attempt ID')

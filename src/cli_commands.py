@@ -303,17 +303,70 @@ def _resolve_baseline(args: Namespace, paths: PathResolver, profile: ProfileConf
     return baseline
 
 
+def _workload_config_path(paths: PathResolver, profile: ProfileConfig) -> Path:
+    value = profile.workload.get("config")
+    if not isinstance(value, str):
+        raise ConfigError(f"profile {profile.name} has no workload.config")
+    return paths.resolve_input(value, owner=profile.source_path)
+
+
+def _gpu_golden_remote(paths: PathResolver, profile: ProfileConfig) -> PurePosixPath:
+    workload_config = _workload_config_path(paths, profile)
+    try:
+        workload_document = json.loads(workload_config.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ConfigError(f"cannot read GPU workload config {workload_config}: {exc}") from exc
+    configured_golden = workload_document.get("golden_file")
+    if not isinstance(configured_golden, str) or not configured_golden:
+        raise ConfigError(f"GPU workload config has no golden_file: {workload_config}")
+    remote_golden = PurePosixPath(configured_golden)
+    if not remote_golden.is_absolute() or not remote_golden.is_relative_to(paths.device_root):
+        raise ConfigError(f"GPU golden_file must be an absolute path below {paths.device_root}: {configured_golden}")
+    return remote_golden
+
+
+def _resolve_golden_reference(paths: PathResolver, profile: ProfileConfig, value: str) -> dict[str, Any]:
+    """Load a correctness-only reference for sustained, pre-baseline runs."""
+    golden_path = paths.resolve_input(value)
+    try:
+        golden = json.loads(golden_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise QualificationError(f"cannot read golden manifest {golden_path}: {exc}") from exc
+    if not isinstance(golden, dict):
+        raise QualificationError(f"golden manifest root must be a mapping: {golden_path}")
+    if golden.get("profile") != profile.name:
+        raise QualificationError(f"golden profile {golden.get('profile')!r} does not match {profile.name!r}")
+    _require_current_correctness(paths, profile, golden)
+    if profile.target == "cpu":
+        if golden.get("kind") != "cpu-checksum":
+            raise QualificationError(f"golden kind must be cpu-checksum for CPU profile: {golden_path}")
+        checksum = golden.get("checksum")
+        if not isinstance(checksum, str) or not checksum:
+            raise QualificationError(f"CPU golden manifest is missing checksum: {golden_path}")
+    else:
+        if golden.get("kind") != "gpu-readback":
+            raise QualificationError(f"golden kind must be gpu-readback for GPU profile: {golden_path}")
+        readback = golden.get("readback_file")
+        if not isinstance(readback, str) or not readback:
+            raise QualificationError(f"GPU golden manifest is missing readback_file: {golden_path}")
+        local_readback = (golden_path.parent / readback).resolve(strict=True)
+        expected_hash = golden.get("readback_sha256")
+        if not isinstance(expected_hash, str) or sha256_file(local_readback) != expected_hash:
+            raise QualificationError(f"GPU golden readback hash does not match manifest: {local_readback}")
+        golden["local_path"] = str(local_readback)
+        golden["remote_path"] = str(_gpu_golden_remote(paths, profile))
+    return golden
+
+
 def _asset_plan(
     paths: PathResolver,
     profile: ProfileConfig,
     baseline: Baseline | None,
+    golden: Mapping[str, Any] | None = None,
 ) -> tuple[list[AssetSpec], Path, Path]:
     agent = paths.resolve_resource("device/avs_device_agent.sh")
     workload = paths.resolve_input(str(profile.workload["binary"]), owner=profile.source_path)
-    workload_config_value = profile.workload.get("config")
-    if not isinstance(workload_config_value, str):
-        raise ConfigError(f"profile {profile.name} has no workload.config")
-    workload_config = paths.resolve_input(workload_config_value, owner=profile.source_path)
+    workload_config = _workload_config_path(paths, profile)
     validate_workload_config(workload_config, profile.target, device_root=paths.device_root)
     agent_remote = paths.remote("bin/avs-device-agent")
     assets = [
@@ -341,27 +394,22 @@ def _asset_plan(
                 kind=str(declared.get("kind", "workload-asset")),
             )
         )
-    if baseline is not None and profile.target == "gpu":
-        local_golden = baseline.golden.get("local_path")
+    if baseline is not None and golden is not None:
+        raise ConfigError("baseline and golden reference are mutually exclusive")
+    correctness = baseline.golden if baseline is not None else golden
+    if correctness is not None and profile.target == "gpu":
+        local_golden = correctness.get("local_path")
         if local_golden:
             golden_path = paths.resolve_input(str(local_golden))
-            try:
-                workload_document = json.loads(workload_config.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError) as exc:
-                raise ConfigError(f"cannot read GPU workload config {workload_config}: {exc}") from exc
-            configured_golden = workload_document.get("golden_file")
-            if not isinstance(configured_golden, str) or not configured_golden:
-                raise ConfigError(f"GPU workload config has no golden_file: {workload_config}")
-            remote_golden = PurePosixPath(configured_golden)
-            if not remote_golden.is_absolute() or not remote_golden.is_relative_to(paths.device_root):
-                raise ConfigError(
-                    f"GPU golden_file must be an absolute path below {paths.device_root}: {configured_golden}"
-                )
+            remote_golden = _gpu_golden_remote(paths, profile)
             assets.append(AssetSpec(golden_path, remote_golden, kind="golden"))
     return assets, agent_remote, workload_config
 
 
 def _telemetry_parser(metric: str, interface: Mapping[str, Any]) -> str:
+    explicit = interface.get("telemetry_parser")
+    if isinstance(explicit, str) and explicit:
+        return explicit
     if interface.get("derivation") == "delta_busy_over_delta_total":
         return "proc_stat_utilization"
     if metric.endswith("temperature"):
@@ -377,27 +425,49 @@ def _telemetry_plan_bytes(profile: ProfileConfig, platform: PlatformConfig) -> b
     """Resolve a profile/platform pair into a shell-readable, data-only telemetry plan."""
     domain = platform.cpu if profile.target == "cpu" else platform.gpu
     interfaces = domain.get("interfaces", {}) if isinstance(domain, Mapping) else {}
-    requested = list(dict.fromkeys([
-        *profile.telemetry.get("required", []),
-        *profile.telemetry.get("optional", []),
-    ]))
-    lines = ["# metric|parser|device-path-glob"]
-    for metric in requested:
-        if not isinstance(metric, str) or not metric.startswith(f"{profile.target}."):
+    required = list(dict.fromkeys(profile.telemetry.get("required", [])))
+    optional = [item for item in dict.fromkeys(profile.telemetry.get("optional", [])) if item not in required]
+    lines = ["# priority|metric|parser|selection|device-path-globs"]
+    for priority, metric in [("required", item) for item in required] + [("optional", item) for item in optional]:
+        if not isinstance(metric, str) or not re.fullmatch(rf"{profile.target}\.[A-Za-z0-9_.-]+", metric):
+            if priority == "required":
+                raise ConfigError(f"profile {profile.name} has an invalid required telemetry metric: {metric!r}")
             continue
         name = metric.split(".", 1)[1]
-        if name == "temperature":
-            candidates = ["/sys/class/thermal/thermal_zone*/temp"]
-            parser = "temperature_auto"
-        else:
-            interface = interfaces.get(name, {}) if isinstance(interfaces, Mapping) else {}
-            if not isinstance(interface, Mapping):
-                continue
-            candidates = interface.get("candidates", [])
-            parser = _telemetry_parser(metric, interface)
+        interface = interfaces.get(name, {}) if isinstance(interfaces, Mapping) else {}
+        if not isinstance(interface, Mapping):
+            if priority == "required":
+                raise ConfigError(f"platform {platform.name} has no telemetry interface for required metric {metric}")
+            continue
+        if name == "temperature" and not interface:
+            # Compatibility for older platform files. New platforms should use
+            # typed, platform-specific telemetry_candidates.
+            interface = {
+                "telemetry_candidates": ["/sys/class/thermal/thermal_zone*/temp"],
+                "telemetry_selection": "all",
+                "unit": "celsius_auto",
+            }
+        candidates = interface.get("telemetry_candidates", interface.get("candidates", []))
+        parser = _telemetry_parser(metric, interface)
+        if parser not in {
+            "int", "number", "float", "prefixed_number", "millidegree_celsius",
+            "temperature_auto", "proc_stat_utilization", "text",
+        }:
+            raise ConfigError(f"platform {platform.name} has unsupported telemetry parser {parser!r} for {metric}")
+        selection = str(interface.get("telemetry_selection", "all"))
+        if selection not in {"all", "first"}:
+            raise ConfigError(f"platform {platform.name} telemetry selection for {metric} must be all or first")
+        valid_candidates = []
         for candidate in candidates if isinstance(candidates, list) else []:
-            if isinstance(candidate, str) and candidate and "|" not in candidate:
-                lines.append(f"{metric}|{parser}|{candidate}")
+            if not isinstance(candidate, str) or not candidate:
+                continue
+            if any(character in candidate for character in "|\"'\\\r\n\t "):
+                raise ConfigError(f"platform {platform.name} telemetry path contains an unsafe delimiter: {candidate!r}")
+            valid_candidates.append(candidate)
+        if valid_candidates:
+            lines.append(f"{priority}|{metric}|{parser}|{selection}|{' '.join(valid_candidates)}")
+        elif priority == "required":
+            raise ConfigError(f"platform {platform.name} has no paths for required telemetry metric {metric}")
     return ("\n".join(lines) + "\n").encode("utf-8")
 
 
@@ -441,8 +511,8 @@ def _deployment_assets(args: Namespace, paths: PathResolver) -> list[AssetSpec]:
         kind="agent",
     )
     planned: dict[str, AssetSpec] = {str(agent.remote): agent}
-    if getattr(args, "baseline", None) and getattr(args, "target", None) == "all":
-        raise ConfigError("--baseline requires --profile or one specific --target")
+    if (getattr(args, "baseline", None) or getattr(args, "golden", None)) and getattr(args, "target", None) == "all":
+        raise ConfigError("--baseline/--golden requires --profile or one specific --target")
     for profile in _requested_deployment_profiles(args, paths):
         platform = load_platform(paths, profile.platform)
         relay = dict(platform.serial.get("relay", {}))
@@ -457,9 +527,14 @@ def _deployment_assets(args: Namespace, paths: PathResolver) -> list[AssetSpec]:
         )
         planned[str(relay_asset.remote)] = relay_asset
         baseline = _resolve_baseline(args, paths, profile) if getattr(args, "baseline", None) else None
+        golden = (
+            _resolve_golden_reference(paths, profile, str(args.golden))
+            if getattr(args, "golden", None)
+            else None
+        )
         if baseline is not None:
             RunManifestBuilder._validate_baseline(profile, baseline)
-        profile_assets, _, _ = _asset_plan(paths, profile, baseline)
+        profile_assets, _, _ = _asset_plan(paths, profile, baseline, golden)
         for asset in [*profile_assets, *_telemetry_assets(paths, profile)]:
             planned[str(asset.remote)] = asset
     return list(planned.values())
@@ -686,7 +761,9 @@ def _execute_live_qualification(
             workload_guard_s=workload_guard,
             final_timeout_s=final_timeout,
             device_uart=args.device_uart,
-            telemetry_enabled=mode == "golden",
+            # Golden generation proves correctness only. Its intentionally short
+            # measured phase is not a sustained calibration sample.
+            telemetry_enabled=mode == "calibration",
         )
         execution = RunOrchestrator(paths.output_root).run_serial(
             manifest,
@@ -751,8 +828,8 @@ def cmd_smoke(args: Namespace) -> int:
 def cmd_deploy(args: Namespace) -> int:
     if args.clean_stale and args.target != "all":
         raise ConfigError("--clean-stale is valid only with --target all")
-    if args.baseline and args.target == "all":
-        raise ConfigError("--baseline requires --profile or one specific --target")
+    if (args.baseline or getattr(args, "golden", None)) and args.target == "all":
+        raise ConfigError("--baseline/--golden requires --profile or one specific --target")
     paths = make_paths(args)
     paths.ensure_writable_roots()
     transport = _transport(args, paths)
@@ -914,7 +991,18 @@ def cmd_golden(args: Namespace) -> int:
     return 0
 
 
-def _sample_from_run(run_dir: Path, board_id: str) -> CalibrationSample:
+def _metric_values(value: Any) -> list[Any]:
+    return list(value) if isinstance(value, list) else [value]
+
+
+def _sample_from_run(
+    run_dir: Path,
+    board_id: str,
+    *,
+    required_metrics: Iterable[str] = (),
+    expected_duration_s: float | None = None,
+    target: str | None = None,
+) -> CalibrationSample:
     normalized = resolve_qualification_run(run_dir)
     if normalized.result_path is None or not normalized.summary:
         raise QualificationError(f"run is missing PC result or full workload summary: {run_dir}")
@@ -922,7 +1010,8 @@ def _sample_from_run(run_dir: Path, board_id: str) -> CalibrationSample:
     summary = normalized.summary
     temperatures: list[float] = []
     telemetry_path = normalized.telemetry_path
-    telemetry_complete = telemetry_path is not None
+    required = {str(metric) for metric in required_metrics}
+    telemetry_complete = False
     throttled = False
     if telemetry_path is not None:
         for line in telemetry_path.read_text(encoding="utf-8").splitlines():
@@ -934,12 +1023,45 @@ def _sample_from_run(run_dir: Path, board_id: str) -> CalibrationSample:
             metrics = payload.get("metrics", {}) if isinstance(payload, dict) else {}
             if isinstance(payload, dict) and isinstance(payload.get("metric"), str):
                 metrics = {payload["metric"]: payload.get("value")}
+            if not isinstance(metrics, dict):
+                continue
+            if isinstance(payload, dict) and payload.get("complete") is True:
+                covered = {
+                    str(key)
+                    for key, value in metrics.items()
+                    if _metric_values(value) and any(item is not None for item in _metric_values(value))
+                }
+                if required.issubset(covered):
+                    telemetry_complete = True
             for key, value in metrics.items():
-                if key.endswith("temperature") or ".temperature." in key:
-                    if isinstance(value, (int, float)):
-                        temperatures.append(float(value))
-                if "throttle" in key and value not in {0, 0.0, "0", "none", "off", False}:
-                    throttled = True
+                metric_name = str(key)
+                if metric_name.endswith("temperature") or ".temperature." in metric_name:
+                    temperatures.extend(
+                        float(item)
+                        for item in _metric_values(value)
+                        if isinstance(item, (int, float)) and not isinstance(item, bool)
+                    )
+                if "throttle" in metric_name:
+                    throttled = throttled or any(
+                        item not in (0, 0.0, "0", "none", "off", False, None, "")
+                        for item in _metric_values(value)
+                    )
+    rejection_reasons: list[str] = []
+    if expected_duration_s is not None:
+        observed_duration = summary.get("duration_s", summary.get("duration"))
+        minimum_duration = expected_duration_s * 0.90
+        if not isinstance(observed_duration, (int, float)) or isinstance(observed_duration, bool):
+            rejection_reasons.append("qualification_duration_missing")
+        elif float(observed_duration) < minimum_duration:
+            rejection_reasons.append(
+                f"qualification_duration_too_short:{float(observed_duration):g}<{minimum_duration:g}"
+            )
+        if target == "cpu":
+            batch_count = summary.get("batch_count")
+            if not isinstance(batch_count, int) or isinstance(batch_count, bool):
+                rejection_reasons.append("qualification_batch_count_missing")
+            elif batch_count < 2:
+                rejection_reasons.append(f"qualification_batch_count_too_low:{batch_count}<2")
     return CalibrationSample(
         run_id=str(result.get("run_id", normalized.pc_run_dir.name if normalized.pc_run_dir else run_dir.name)),
         board_id=board_id,
@@ -948,6 +1070,7 @@ def _sample_from_run(run_dir: Path, board_id: str) -> CalibrationSample:
         environment_compliant=not bool(result.get("environment_violations")),
         telemetry_complete=telemetry_complete,
         throttled=throttled,
+        rejection_reasons=tuple(rejection_reasons),
     )
 
 
@@ -962,20 +1085,27 @@ def cmd_calibrate(args: Namespace) -> int:
     policy = CalibrationPolicy.from_mapping(policy_data)
     if args.min_accepted is not None:
         policy = replace(policy, minimum_accepted_samples=args.min_accepted)
-    golden_path = paths.resolve_input(args.golden)
-    golden = json.loads(golden_path.read_text(encoding="utf-8"))
-    if golden.get("profile") != profile.name:
-        raise QualificationError(f"golden profile {golden.get('profile')!r} does not match {profile.name!r}")
-    _require_current_correctness(paths, profile, golden)
-    if profile.target == "gpu" and golden.get("readback_file"):
-        golden["local_path"] = str((golden_path.parent / str(golden["readback_file"])).resolve(strict=True))
+    golden = _resolve_golden_reference(paths, profile, args.golden)
     if args.runs < 1:
         raise ConfigError("--runs must be at least 1")
     if len(run_specs) != args.runs:
         raise QualificationError(
             f"calibrate requires exactly {args.runs} collected --run-dir samples; received {len(run_specs)}"
         )
-    samples = [_sample_from_run(run_dir, board_id) for board_id, run_dir in run_specs[: args.runs]]
+    workload_document = validate_workload_config(
+        _workload_config_path(paths, profile), profile.target, device_root=paths.device_root
+    )
+    expected_duration = float(workload_document["duration"])
+    samples = [
+        _sample_from_run(
+            run_dir,
+            board_id,
+            required_metrics=profile.telemetry.get("required", []),
+            expected_duration_s=expected_duration,
+            target=profile.target,
+        )
+        for board_id, run_dir in run_specs[: args.runs]
+    ]
     temp_range = tuple(float(item) for item in args.temperature_range.split(":"))
     if len(temp_range) != 2:
         raise ConfigError("--temperature-range must be MIN:MAX")
@@ -1040,10 +1170,14 @@ def _execute_run_command(args: Namespace, *, smoke: bool = False) -> int:
     profile = load_profile(paths, args.profile)
     _apply_platform_serial(args, paths, profile)
     baseline_value = getattr(args, "baseline", None)
+    golden_value = getattr(args, "golden", None)
     baseline = None
+    golden = None
     if baseline_value and str(baseline_value).lower() != "none":
         baseline = _resolve_baseline(args, paths, profile)
         _require_current_correctness(paths, profile, baseline.golden)
+    if golden_value:
+        golden = _resolve_golden_reference(paths, profile, str(golden_value))
     transport = _transport(args, paths)
     agent_remote = paths.remote("bin/avs-device-agent")
     test_id = getattr(args, "test_id", None) or new_run_id(f"test-{profile.target}")
@@ -1062,6 +1196,7 @@ def _execute_run_command(args: Namespace, *, smoke: bool = False) -> int:
         manifest = RunManifestBuilder(paths).build(
             profile=profile,
             baseline=baseline,
+            golden=golden,
             test_id=test_id,
             attempt_id=attempt_id,
             overall_timeout_s=args.overall_timeout,
@@ -1100,7 +1235,9 @@ def _execute_run_command(args: Namespace, *, smoke: bool = False) -> int:
         results.append(run_result)
     payload: dict[str, Any] = {
         "test_id": test_id,
-        "validation_mode": "baseline" if baseline is not None else "error-only",
+        "validation_mode": (
+            "baseline" if baseline is not None else "golden-reference" if golden is not None else "error-only"
+        ),
         "repeat": args.repeat,
         "exit_code": final_exit,
         "runs": results,

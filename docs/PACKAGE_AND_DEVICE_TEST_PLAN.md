@@ -24,7 +24,7 @@ probe、pair、deploy 和 verify-deployment 是显式准备，不属于每次 `r
 | `relay probe` | 读取 ABI；检查已部署 relay 的 version/self-test/termios/tcdrain | relay 首次移植或重新编译后 | `--check-uart` 不发送测试负载 |
 | `deploy --profile P` | 部署 profile P 需要的 agent、relay、workload、配置、shader 和 telemetry plan | 第一次运行 P；P 的资源变化后；设备目录被清理后 | 不运行测试；不会部署其他 profile 的专属配置 |
 | `verify-deployment --profile P` | 只读比较 profile P 的本地/设备哈希 | deploy 后；正式 run 前 | 不补文件、不修复哈希 |
-| `run --profile P` | 启动已部署 agent/workload，接收 UART v2 并给出 PASS/FAIL | CPU/GPU 长压、短 smoke、负向测试、可选 baseline | 不隐式 probe/pair/deploy/verify，不修改设备策略 |
+| `run --profile P` | 启动已部署 agent/workload，接收 UART v2 并给出 PASS/FAIL | CPU/GPU 长压、短 smoke、负向测试；可选 baseline 或 correctness-only golden | 不隐式 probe/pair/deploy/verify，不修改设备策略 |
 | `smoke` | 兼容旧调用的短 profile 别名 | 只用于旧脚本迁移 | 已弃用；新流程统一使用 `run --profile ...smoke...` |
 | `telemetry run` | 单独启动设备本地追加式遥测 | 平台能力验收或需要独立采样时 | 不启动 workload、不占用判错 UART |
 | `collect` | 按 test/attempt ID 拉取设备证据，可校验哈希 | run/telemetry 后集中取证 | 默认不删除设备证据 |
@@ -43,7 +43,7 @@ probe、pair、deploy 和 verify-deployment 是显式准备，不属于每次 `r
 | 短时快速验证 | 部署/核验 smoke profile → `run --profile ...smoke...` → `collect` | MC-03 通过；仍走核心 run |
 | 独立遥测 | 部署/核验对应 profile → `telemetry run` → `collect` | TEL-01 通过 |
 | workload+遥测 | 部署/核验对应 profile → `run --telemetry` → `collect` | TEL-02 通过 |
-| baseline 资格化 | 合格样本 → `golden` → `calibrate` → `baseline approve` → 部署/核验对应 profile → `run --baseline` | 第 7 节通过 |
+| baseline 资格化 | `golden` 正确性 → `deploy/verify --golden` → `run --golden --telemetry` 持续样本 → `collect` → `calibrate` → `baseline approve` → `run --baseline` | 第 7 节通过 |
 | 负向判错 | 准备并部署明确失败的 profile → `run` → `collect` | MC-04 返回预期非 PASS；没有 profile 时用 `simulate` |
 | 报告生成 | 对 PC run 目录执行 `report` | 第 8 节报告文件生成成功 |
 
@@ -269,7 +269,7 @@ telemetry 不是最小闭环的前置条件，但应证明它能独立工作，�
 & $MON --transport hdc --device $DEVICE collect --test-id "TEL-$SESSION"
 ```
 
-通过条件：设备 `spool/telemetry.jsonl` 追加至少一个合法 JSON 对象；对象包含同一 test/attempt ID；期间不启动 workload、不向 UART 输出；30 秒 duration 在有限误差内结束，而不是因为一次 sysfs 遍历拖到 50 秒以上。
+通过条件：设备 `spool/telemetry.jsonl` 追加至少一个合法快照 JSON；对象包含同一 test/attempt ID、唯一 `payload.sample_id`、`complete=true`、`missing_required=[]`，并且 `metrics` 覆盖 profile 的全部 required 指标；每个指标值数组与 `sources` 路径数组对应。期间不启动 workload、不向 UART 输出；30 秒 duration 在有限误差内结束，而不是因为一次 sysfs 遍历拖到 50 秒以上。只有文件存在、只有 frequency/online、或首轮没有 utilization 都不能判通过。
 
 ### TEL-02 伴随 workload
 
@@ -278,11 +278,13 @@ telemetry 不是最小闭环的前置条件，但应证明它能独立工作，�
 & $MON --transport hdc --device $DEVICE collect --test-id "TEL-RUN-$SESSION"
 ```
 
-通过条件：核心 UART 仍完成 PASS/FAIL 判定，telemetry 只出现在设备本地文件，不穿插到 UART 事件流。另用一个会忽略 TERM/stop-file 的受控 collector 做单元或实验室测试：超过 shutdown grace 后必须出现 `TELEMETRY_SHUTDOWN_TIMEOUT`，但 `final.json` 和 UART `agent_final` 仍生成。
+通过条件：核心 UART 仍完成 PASS/FAIL 判定，telemetry 只出现在设备本地文件，不穿插到 UART 事件流；workload 发出 stop 时 collector 先完成正在进行的 required 快照，optional 可中断，最终至少保留一个 `complete=true` 快照。另用一个会忽略 TERM/stop-file 的受控 collector 做单元或实验室测试：超过 shutdown grace 后必须出现 `TELEMETRY_SHUTDOWN_TIMEOUT`，但 `final.json` 和 UART `agent_final` 仍生成。
+
+Kirin9030 检查点：CPU frequency 的 `sources` 只能来自 `cpufreq/policy*/scaling_cur_freq`，不能同时出现等价的 `cpu*/cpufreq` 路径；CPU/GPU temperature 必须来自平台配置中由 probe 类型确认的 thermal zones；`Gpu utilisation : N` 必须解析成数值 N；CPU/GPU plan 均不得包含 `/sys/kernel/debug/lpmcu_debug/cluster_volt`，因为该节点是调压入口而不是电压回读。
 
 ## 7. 资格化数据链与 baseline（非最小闭环）
 
-资格化 profile 必须先各自完成 PRE-03/04。`golden --runs N` 有两个互斥来源模式：不传 `--run-dir` 时实时采集 N 次并自动拉完整设备 attempt；传入时必须恰好 N 个。输出 JSON 的 `source_runs` 是可直接交给 `calibrate` 的规范化 PC 运行目录。禁止只传一部分目录再从设备补齐。
+资格化 profile 必须先各自完成 PRE-03/04。`golden --runs N` 有两个互斥来源模式：不传 `--run-dir` 时实时生成 N 次正确性结果并自动拉完整设备 attempt；传入时必须恰好 N 个。输出 JSON 的 `source_runs` 用于 golden 一致性审计或跨板合并，禁止只传一部分目录再从设备补齐。golden 生成的测量段可能是 `duration_s=0`、`batch_count=1`，不能直接交给 `calibrate` 当性能样本。
 
 live capture 中 `--qualification-id` 就是设备/PC `test_id`，每次运行或重试使用唯一 `attempt_id`。当前 CPU workload JSON 的 `timeout=75` 派生为：设备 workload guard 80 秒、summary 前 heartbeat 窗口 90 秒、summary 后 FINAL 窗口 20 秒、整体 300 秒。普通 `run` 的 heartbeat 仍为 45 秒。Monitor 的放宽只覆盖已知 golden 同步阶段；workload 后续仍应在该阶段持续发 heartbeat 并自行限制计算时间。
 
@@ -294,31 +296,47 @@ live capture 中 `--qualification-id` 就是设备/PC `test_id`，每次运行�
 & $MON --transport hdc --device '<BOARD-A设备>' --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json golden cpu --profile cpu_qualification_kirin9030 --board-id BOARD-A --known-good --runs 1 --qualification-id "CPU-A-$SESSION"
 ```
 
-在 BOARD-B 上重复 deploy/verify，并执行同样命令（`--device`、`--board-id BOARD-B`、qualification ID 相应替换）。从两次 JSON 输出保存 `$A_RUN = source_runs[0]`、`$B_RUN = source_runs[0]`，然后离线合并正确性并校准：
+在 BOARD-B 上重复 deploy/verify，并执行同样命令（`--device`、`--board-id BOARD-B`、qualification ID 相应替换）。从两次 JSON 输出保存 `$A_GOLDEN_RUN = source_runs[0]`、`$B_GOLDEN_RUN = source_runs[0]`，然后离线合并正确性：
 
 ```powershell
-& $MON --json golden cpu --profile cpu_qualification_kirin9030 --board-id BOARD-A --known-good --runs 2 --qualification-id "CPU-2BOARD-$SESSION" --run-dir "BOARD-A=$A_RUN" --run-dir "BOARD-B=$B_RUN"
-& $MON --json calibrate cpu --profile cpu_qualification_kirin9030 --board-id BOARD-A --golden '<上一命令 golden_manifest>' --runs 2 --min-accepted 2 --baseline-id "CPU-FUNCTIONAL-$SESSION" --run-dir "BOARD-A=$A_RUN" --run-dir "BOARD-B=$B_RUN"
+& $MON --json golden cpu --profile cpu_qualification_kirin9030 --board-id BOARD-A --known-good --runs 2 --qualification-id "CPU-2BOARD-$SESSION" --run-dir "BOARD-A=$A_GOLDEN_RUN" --run-dir "BOARD-B=$B_GOLDEN_RUN"
+```
+
+保存上一命令的 `$GOLDEN`。在 BOARD-A 上部署/核验正确性参考并采集持续样本：
+
+```powershell
+& $MON --transport hdc --device '<BOARD-A设备>' deploy --profile cpu_qualification_kirin9030 --golden $GOLDEN
+& $MON --transport hdc --device '<BOARD-A设备>' verify-deployment --profile cpu_qualification_kirin9030 --golden $GOLDEN
+& $MON --transport hdc --device '<BOARD-A设备>' --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json run --profile cpu_qualification_kirin9030 --golden $GOLDEN --telemetry --pc-artifacts full --test-id "CPU-CAL-A-$SESSION" --attempt-id "CPU-CAL-A-$SESSION-001"
+& $MON --transport hdc --device '<BOARD-A设备>' collect --test-id "CPU-CAL-A-$SESSION" --verify-hashes
+```
+
+在 BOARD-B 上重复上述四条命令，ID 改为 `CPU-CAL-B-$SESSION`。然后把两个 PC attempt 目录交给离线校准：
+
+```powershell
+& $MON --json calibrate cpu --profile cpu_qualification_kirin9030 --board-id BOARD-A --golden $GOLDEN --runs 2 --min-accepted 2 --baseline-id "CPU-FUNCTIONAL-$SESSION" --run-dir "BOARD-A=<CPU-CAL-A PC attempt>" --run-dir "BOARD-B=<CPU-CAL-B PC attempt>"
 & $MON baseline show "CPU-FUNCTIONAL-$SESSION"
 & $MON baseline approve "CPU-FUNCTIONAL-$SESSION" --approver '<name>'
 ```
 
 通过条件：
 
-- 两次 live golden 均退出 0，`source_mode=live-capture`，每个 source run 同时有 PC `result.json` 和完整 `device-evidence/.../spool`；
+- 两次 live golden 均退出 0，`source_mode=live-capture`，只作为 correctness source，不把其短测量指标用于校准；
 - live 输出的 `qualification_id` 与设备 `test_id` 一致，attempt 唯一；同一 ID 重试不覆盖既有 attempt/golden；
 - 合法 golden 在最后一条早期 heartbeat 后静默超过 45 秒、但在派生的 90 秒窗口内给出 summary 时不能误判；超过 90 秒必须有界失败；summary 后超过 20 秒无 FINAL 必须报 `AGENT_FINAL_TIMEOUT`；
 - 离线 golden 为 `source_mode=supplied`，两板 checksum 一致；少传一个 `--run-dir` 返回配置错误 4；
-- `workload-summary-full.json` 或设备 `workload.log` 含 `operations_per_sec_avg` 和 `batch_time_ms_p99`；telemetry 存在且样本未被 throttling/温度/缺字段规则拒绝；
+- 两次持续 run 均为 `validation_mode=golden-reference`、PASS，没有 `--generate-golden`，也没有 baseline 性能阈值；
+- `workload-summary-full.json` 或设备 `workload.log` 含 `operations_per_sec_avg`、`batch_time_ms_p99`、至少配置 duration 的 90%，且 CPU `batch_count>=2`；
+- telemetry 至少有一个 `complete=true` 快照，且同一快照覆盖 profile 全部 required 指标；样本未被 throttling/温度规则拒绝；
 - calibrate 生成 draft，接受 2 个样本和 2 个 board ID；approve 后状态为 approved。
 
-GPU 按相同顺序改用 `gpu_qualification_kirin9030`、`golden gpu` 和 `calibrate gpu`。额外通过条件是每个 source run 有 `gpu-golden.rgba`，两份 raw readback 字节完全一致，完整 summary 有 `fps_avg` 和 `frame_time_p99_ms`。
+GPU 按相同顺序改用 `gpu_qualification_kirin9030`、`golden gpu` 和 `calibrate gpu`。额外通过条件是每个 correctness source 有 `gpu-golden.rgba`，两份 raw readback 字节完全一致；`deploy --golden` 已核验并部署该文件；持续 summary 有 `fps_avg` 和 `frame_time_p99_ms`；快照包含可解析的 `gpu.frequency`、`gpu.utilization`、`gpu.temperature`、`gpu.hang_count` 和 `gpu.power_policy`。
 
 `--min-accepted 2` 只证明命令、证据归一化、指标抽取和 registry 的功能数据链，不是生产基线。
 
 ### QUAL-02 生产 cohort
 
-生产资格化必须使用默认 `config/policies/calibration.yaml`：至少 20 个被接受样本、至少 2 块板，不传 `--min-accepted 2`。每个输入写成 `BOARD_ID=<source-run-or-spool>`，`--runs` 必须与输入总数完全相等。任何缺 telemetry、throttling、温度范围外、DUT 非 PASS 或缺性能指标的样本都应被拒绝；接受数或板数不足时命令必须失败而不能启动硬件补样本。
+生产资格化必须使用默认 `config/policies/calibration.yaml`：至少 20 个被接受样本、至少 2 块板，不传 `--min-accepted 2`。每个输入必须是 `run --golden --telemetry` 产生的持续运行，写成 `BOARD_ID=<run-or-spool>`；`--runs` 必须与输入总数完全相等。任何无完整 required telemetry 快照、时长不足、CPU batch 数不足、throttling、温度范围外、DUT 非 PASS 或缺性能指标的样本都应被拒绝；接受数或板数不足时错误必须逐 run 列出拒绝原因，并且不能启动硬件补样本。
 
 通过条件：审阅 `proposed-baseline.json` 的 accepted/rejected、分布和阈值后才执行 `baseline approve`；`baseline list/show/export/import/deprecate` 分别完成状态查询、可移植 bundle 哈希校验和生命周期审计。
 
@@ -426,7 +444,7 @@ $RUN_DIR = "$OUT\MC-CPU-$SESSION\MC-CPU-$SESSION-001"
 
 最终全量验收应逐项记录以下 24 个叶命令路径，不能用“最小闭环已过”替代未执行接口：`pair`、`monitor`、`simulate`、`list-profiles`、`validate`、`probe`、`relay probe`、`deploy`、`verify-deployment`、`golden cpu`、`golden gpu`、`calibrate cpu`、`calibrate gpu`、`smoke`、`baseline list`、`baseline show`、`baseline approve`、`baseline deprecate`、`baseline export`、`baseline import`、`run`、`telemetry run`、`collect`、`report`。
 
-除叶命令存在性外，还要覆盖这些关键分支：`run --pc-artifacts result/full`、自动 attempt/显式 attempt/`--repeat`、CPU/GPU smoke、baseline 有/无、telemetry 独立/伴随、collect 全 test/单 attempt/哈希验证/验证后删除、report markdown/json/csv、golden live/supplied/partial-reject、calibrate 功能/生产 cohort，以及退出码 0～6 的可控场景。没有安全故障 profile 时，退出码与协议负向分支使用 `simulate` 和单元测试，不用断网代替。
+除叶命令存在性外，还要覆盖这些关键分支：`run --pc-artifacts result/full`、自动 attempt/显式 attempt/`--repeat`、CPU/GPU smoke、无参考/`--golden`/`--baseline` 三种互斥校验模式、telemetry 独立/伴随/required 缺失拒绝、collect 全 test/单 attempt/哈希验证/验证后删除、report markdown/json/csv、golden live/supplied/partial-reject、calibrate 短 golden 样本拒绝/两板功能/生产 cohort，以及退出码 0～6 的可控场景。没有安全故障 profile 时，退出码与协议负向分支使用 `simulate` 和单元测试，不用断网代替。
 
 ## 13. 验收记录模板
 

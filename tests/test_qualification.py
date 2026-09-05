@@ -140,6 +140,30 @@ class CalibrationServiceTests(unittest.TestCase):
                 baseline_id="gpu-v1",
             )
 
+    def test_insufficient_cohort_error_lists_per_run_rejection_reasons(self) -> None:
+        sample = CalibrationSample(
+            run_id="short",
+            board_id="board-a",
+            summary={"result": "PASS", "exit_code": 0, "fps_avg": 60.0, "frame_time_p99_ms": 20.0},
+            telemetry_complete=False,
+            rejection_reasons=("qualification_duration_too_short:0<54",),
+        )
+        with self.assertRaises(QualificationError) as raised:
+            CalibrationService().calibrate(
+                profile="gpu",
+                target="gpu",
+                platform="soc",
+                fingerprints={"profile": "a"},
+                golden={"readback_sha256": "b"},
+                samples=[sample],
+                policy=CalibrationPolicy(minimum_boards=2, minimum_accepted_samples=1),
+                baseline_id="gpu-v1",
+            )
+        message = str(raised.exception)
+        self.assertIn("short[board-a]", message)
+        self.assertIn("telemetry_incomplete", message)
+        self.assertIn("qualification_duration_too_short", message)
+
     def test_standard_collected_layout_resolves_full_summary_and_telemetry(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             test_root = Path(tmp) / "QUAL-CPU"
@@ -159,23 +183,73 @@ class CalibrationServiceTests(unittest.TestCase):
                 "exit_code": 0,
                 "operations_per_sec_avg": 1234.0,
                 "batch_time_ms_p99": 9.5,
+                "duration_s": 60.0,
+                "batch_count": 25,
             }
             (spool / "workload.log").write_text(json.dumps(full_summary) + "\n", encoding="utf-8")
             (spool / "events.jsonl").write_text(
                 json.dumps({"type": "golden", "payload": {"checksum": "abc"}}) + "\n", encoding="utf-8"
             )
             (spool / "telemetry.jsonl").write_text(
-                json.dumps({"payload": {"metric": "cpu.temperature", "value": 45.0}}) + "\n",
+                json.dumps(
+                    {
+                        "payload": {
+                            "sample_id": 1,
+                            "complete": True,
+                            "metrics": {"cpu.temperature": [45.0], "cpu.frequency": [1000]},
+                            "missing_required": [],
+                        }
+                    }
+                ) + "\n",
                 encoding="utf-8",
             )
             resolved = resolve_qualification_run(attempt)
             self.assertEqual(resolved.spool_dir, spool.resolve())
             self.assertEqual(resolved.summary["operations_per_sec_avg"], 1234.0)
             self.assertEqual(resolved.events_path, (spool / "events.jsonl").resolve())
-            sample = _sample_from_run(attempt, "BOARD-A")
+            sample = _sample_from_run(
+                attempt,
+                "BOARD-A",
+                required_metrics=["cpu.temperature", "cpu.frequency"],
+                expected_duration_s=60,
+                target="cpu",
+            )
             self.assertEqual(sample.summary["batch_time_ms_p99"], 9.5)
             self.assertEqual(sample.temperature_c, 45.0)
             self.assertTrue(sample.telemetry_complete)
+
+    def test_legacy_per_metric_telemetry_and_short_golden_run_are_rejected_explicitly(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            attempt = Path(tmp) / "attempt"
+            spool = attempt / "spool"
+            spool.mkdir(parents=True)
+            (attempt / "result.json").write_text(
+                json.dumps({"run_id": "short-golden", "verdict": "PASS"}), encoding="utf-8"
+            )
+            (spool / "workload.log").write_text(
+                json.dumps(
+                    {
+                        "type": "summary", "result": "PASS", "exit_code": 0,
+                        "operations_per_sec_avg": 1000.0, "batch_time_ms_p99": 1.0,
+                        "duration_s": 0, "batch_count": 1,
+                    }
+                ) + "\n",
+                encoding="utf-8",
+            )
+            (spool / "telemetry.jsonl").write_text(
+                json.dumps({"payload": {"metric": "cpu.temperature", "value": 45.0}}) + "\n",
+                encoding="utf-8",
+            )
+            sample = _sample_from_run(
+                attempt,
+                "BOARD-A",
+                required_metrics=["cpu.temperature", "cpu.frequency"],
+                expected_duration_s=60,
+                target="cpu",
+            )
+            self.assertFalse(sample.telemetry_complete)
+            self.assertIn("qualification_duration_too_short:0<54", sample.rejection_reasons)
+            self.assertIn("qualification_batch_count_too_low:1<2", sample.rejection_reasons)
 
     def test_spool_input_pairs_back_to_pc_attempt(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
