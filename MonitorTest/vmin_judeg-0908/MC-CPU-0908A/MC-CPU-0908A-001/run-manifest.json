@@ -1,0 +1,67 @@
+{
+  "agent_backend": "posix-shell",
+  "assets": [],
+  "attempt_id": "MC-CPU-0908A-001",
+  "baseline": null,
+  "device_attempt_dir": "/data/local/tmp/avs/tests/MC-CPU-0908A/MC-CPU-0908A-001",
+  "event_crc": false,
+  "golden_reference": null,
+  "heartbeat_timeout_s": 45.0,
+  "logs": {
+    "device_local": true,
+    "streamed_to_pc": false
+  },
+  "manifest_sha256": "39cd812b911d0d82e350a1ed0f757dc04831994f345a75d6d9a7d6bcb1be0d5f",
+  "overall_timeout_s": 300.0,
+  "pc_artifacts": "full",
+  "platform": "kirin9030",
+  "policy": {
+    "required_telemetry": [],
+    "thresholds": {}
+  },
+  "producer": {
+    "component": "RunManifestBuilder",
+    "name": "vmin_judge",
+    "version": "2.1.0"
+  },
+  "profile": {
+    "id": "cpu_stress_kirin9030",
+    "sha256": "3e20f3b9172aa946ef94e753c2bf84c858f5112f87cf64952663bbef10216d14"
+  },
+  "run_id": "MC-CPU-0908A-001",
+  "scheduler": {
+    "managed_by_monitor": false,
+    "requirements": {}
+  },
+  "schema_version": 1,
+  "serial_transport": {
+    "max_frame_bytes": 512,
+    "protocol": "uart-v2",
+    "relay": "/data/local/tmp/avs/bin/avs-uart-relay",
+    "safe_utilization": 0.7,
+    "tail_guard_bytes": 64
+  },
+  "spool_dir": "/data/local/tmp/avs/tests/MC-CPU-0908A/MC-CPU-0908A-001/spool",
+  "target": "cpu",
+  "telemetry": {
+    "agent": "/data/local/tmp/avs/bin/avs-telemetry-agent",
+    "device_local": true,
+    "enabled": false,
+    "interval_s": 5,
+    "plan": "/data/local/tmp/avs/configs/telemetry/cpu_stress_kirin9030.conf",
+    "shutdown_timeout_s": 10
+  },
+  "test_id": "MC-CPU-0908A",
+  "timeout_s": 300.0,
+  "uart": "/dev/ttyHW0",
+  "validation_mode": "error-only",
+  "workload": {
+    "argv": [
+      "/data/local/tmp/avs/bin/cpu-avs-workload",
+      "--config",
+      "/data/local/tmp/avs/configs/cpu_stress_kirin9030.json"
+    ],
+    "config_path": "/data/local/tmp/avs/configs/cpu_stress_kirin9030.json",
+    "cwd": "/data/local/tmp/avs"
+  }
+}

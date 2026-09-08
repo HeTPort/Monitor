@@ -1,0 +1,67 @@
+{
+  "agent_backend": "posix-shell",
+  "assets": [],
+  "attempt_id": "MC-GPU-0908A-001",
+  "baseline": null,
+  "device_attempt_dir": "/data/local/tmp/avs/tests/MC-GPU-0908A/MC-GPU-0908A-001",
+  "event_crc": false,
+  "golden_reference": null,
+  "heartbeat_timeout_s": 45.0,
+  "logs": {
+    "device_local": true,
+    "streamed_to_pc": false
+  },
+  "manifest_sha256": "7f1e236ba0b4176242d5c10a65e8797a3e321fadec2886c229782e4f341065ab",
+  "overall_timeout_s": 300.0,
+  "pc_artifacts": "full",
+  "platform": "kirin9030",
+  "policy": {
+    "required_telemetry": [],
+    "thresholds": {}
+  },
+  "producer": {
+    "component": "RunManifestBuilder",
+    "name": "vmin_judge",
+    "version": "2.1.0"
+  },
+  "profile": {
+    "id": "gpu_stress_kirin9030",
+    "sha256": "676051088a554e14f0a4751d55216f8db447656de2336c7f718a6e46589a3ee0"
+  },
+  "run_id": "MC-GPU-0908A-001",
+  "scheduler": {
+    "managed_by_monitor": false,
+    "requirements": {}
+  },
+  "schema_version": 1,
+  "serial_transport": {
+    "max_frame_bytes": 512,
+    "protocol": "uart-v2",
+    "relay": "/data/local/tmp/avs/bin/avs-uart-relay",
+    "safe_utilization": 0.7,
+    "tail_guard_bytes": 64
+  },
+  "spool_dir": "/data/local/tmp/avs/tests/MC-GPU-0908A/MC-GPU-0908A-001/spool",
+  "target": "gpu",
+  "telemetry": {
+    "agent": "/data/local/tmp/avs/bin/avs-telemetry-agent",
+    "device_local": true,
+    "enabled": false,
+    "interval_s": 5,
+    "plan": "/data/local/tmp/avs/configs/telemetry/gpu_stress_kirin9030.conf",
+    "shutdown_timeout_s": 10
+  },
+  "test_id": "MC-GPU-0908A",
+  "timeout_s": 300.0,
+  "uart": "/dev/ttyHW0",
+  "validation_mode": "error-only",
+  "workload": {
+    "argv": [
+      "/data/local/tmp/avs/bin/gpu-avs-workload",
+      "--config",
+      "/data/local/tmp/avs/configs/gpu_stress_kirin9030.json"
+    ],
+    "config_path": "/data/local/tmp/avs/configs/gpu_stress_kirin9030.json",
+    "cwd": "/data/local/tmp/avs"
+  }
+}

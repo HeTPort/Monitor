@@ -1,0 +1,57 @@
+{
+  "board_ids": [
+    "BOARD-A"
+  ],
+  "correctness_fingerprint": "1e640ff78249d0b87d0819335d636188186cdb961ffaa7cc032c1e6c36f7c567",
+  "created_at": "2026-09-08T09:32:18.094283+00:00",
+  "fingerprint_fields": {
+    "deployed_file_sha256": {
+      "/data/local/tmp/avs/bin/gpu-avs-workload": "e97e7a1ac2cd6e3538456f8f601f2ca8f79729d003c626b05602c6067d6ce6dd",
+      "/data/local/tmp/avs/configs/gpu_qualification_kirin9030.json": "d628e9c9690e9264bea1da218fb609cd018f16fc0a59db31d2ce658323ccd1ce",
+      "/data/local/tmp/avs/shaders/vulkan/fullscreen.vert.spv": "e12aae1cfc3959515badec3c7b85433622e83c56fb7ad9f30bc92d9f65a4ed17",
+      "/data/local/tmp/avs/shaders/vulkan/workload.frag.spv": "31ef0207fc83a5fc07769b4aac227eaa77c533341b021b40954a6cf7382bf37c"
+    },
+    "profile_sha256": "b0a790d4e9b8e2d7a995f70ee8537d867b11e2147de56795f39af2fc4fb49267",
+    "target": "gpu",
+    "workload": {
+      "assets": [
+        {
+          "kind": "shader",
+          "local": "../../tools/shaders/vulkan/fullscreen.vert.spv",
+          "remote": "shaders/vulkan/fullscreen.vert.spv"
+        },
+        {
+          "kind": "shader",
+          "local": "../../tools/shaders/vulkan/workload.frag.spv",
+          "remote": "shaders/vulkan/workload.frag.spv"
+        }
+      ],
+      "binary": "../../tools/gpu-avs-workload",
+      "config": "../workloads/gpu_qualification_kirin9030.json",
+      "remote_binary": "bin/gpu-avs-workload"
+    },
+    "workload_config_sha256": "d628e9c9690e9264bea1da218fb609cd018f16fc0a59db31d2ce658323ccd1ce"
+  },
+  "kind": "gpu-readback",
+  "profile": "gpu_qualification_kirin9030",
+  "qualification_id": "GPU-A-0908A",
+  "readback_file": "gpu-golden.rgba",
+  "readback_sha256": "aa0c85b1996643fd661b8c76207f55dfd6fb6775bce13f0c9ad1ec01f0f49a37",
+  "readback_size": 3686400,
+  "records": [
+    {
+      "api": "vulkan",
+      "checksum": "0xBD9467E5",
+      "golden_file": "/data/local/tmp/avs/tests/GPU-A-0908A/GPU-A-0908A-001-20260908T093208Z-1ae1521a/spool/gpu-golden.rgba",
+      "height": 720,
+      "mode": "offscreen",
+      "profile": "mixed",
+      "rt_format": "RGBA8",
+      "type": "golden",
+      "verify_mode": "golden-image",
+      "width": 1280
+    }
+  ],
+  "repeat_count": 1,
+  "schema_version": 1
+}
