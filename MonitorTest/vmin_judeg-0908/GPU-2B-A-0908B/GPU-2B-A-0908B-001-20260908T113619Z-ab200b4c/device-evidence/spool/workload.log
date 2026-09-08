@@ -1,0 +1,12 @@
+{"type":"start","profile":"mixed","api":"vulkan","mode":"offscreen","width":1280,"height":720,"rt_format":"RGBA8","duration_s":60,"warmup_s":5}
+DEBUG: Enter CreateBackend. GPU_AVS_ENABLE_VULKAN=1
+DEBUG: Inside #if GPU_AVS_ENABLE_VULKAN block.
+DEBUG: cfg.api == vulkan is TRUE.
+DEBUG: cfg.mode == offscreen is TRUE. Returning VulkanGraphicsBackend.
+{"type":"heartbeat","timestamp_ms":107231,"elapsed_s":1.406e-06,"phase":"warmup","frame_count":1,"gpu_job_count":1,"last_frame_time_ms":142.162,"last_gpu_time_ms":127.435}
+{"type":"heartbeat","timestamp_ms":108289,"elapsed_s":1.07671,"phase":"warmup","frame_count":10,"gpu_job_count":10,"last_frame_time_ms":122.669,"last_gpu_time_ms":120.469}
+{"type":"heartbeat","timestamp_ms":109324,"elapsed_s":2.11973,"phase":"warmup","frame_count":19,"gpu_job_count":19,"last_frame_time_ms":115.093,"last_gpu_time_ms":112.027}
+{"type":"heartbeat","timestamp_ms":110370,"elapsed_s":3.17059,"phase":"warmup","frame_count":28,"gpu_job_count":28,"last_frame_time_ms":110.288,"last_gpu_time_ms":108.709}
+{"type":"heartbeat","timestamp_ms":111428,"elapsed_s":4.21315,"phase":"warmup","frame_count":37,"gpu_job_count":37,"last_frame_time_ms":125.669,"last_gpu_time_ms":124.182}
+{"type":"golden","profile":"mixed","api":"vulkan","mode":"offscreen","width":1280,"height":720,"rt_format":"RGBA8","verify_mode":"golden-image","checksum":"0xBD9467E5","golden_file":"/data/local/tmp/avs/tests/GPU-2B-A-0908B/GPU-2B-A-0908B-001-20260908T113619Z-ab200b4c/spool/gpu-golden.rgba"}
+{"type":"summary","result":"PASS","exit_code":0,"profile":"mixed","api":"vulkan","mode":"offscreen","width":1280,"height":720,"rt_format":"RGBA8","warmup_s":5.0358,"duration_s":0.0000,"frame_count":1,"fps_avg":0.0000,"fps_min":0.0000,"fps_max":0.0000,"frame_time_avg_ms":0.0000,"frame_time_min_ms":0.0000,"frame_time_max_ms":0.0000,"frame_time_p95_ms":0.0000,"frame_time_p99_ms":0.0000,"gpu_timestamp_valid":false,"gpu_job_time_avg_ms":0.0000,"gpu_job_time_min_ms":0.0000,"gpu_job_time_max_ms":0.0000,"gpu_job_time_p95_ms":0.0000,"gpu_job_time_p99_ms":0.0000,"verify_pass":true,"verify_mode":"golden-image","verify_fail_count":0,"first_fail_frame":-1,"checksum":"0xBD9467E5","golden_checksum":"","pixel_diff_count":0,"compute_mismatch_count":0,"timeout_count":0,"api_error_count":0,"device_lost_count":0,"allocation_fail_count":0,"heartbeat_last_time_ms":111428,"last_error":"","last_error_code":""}

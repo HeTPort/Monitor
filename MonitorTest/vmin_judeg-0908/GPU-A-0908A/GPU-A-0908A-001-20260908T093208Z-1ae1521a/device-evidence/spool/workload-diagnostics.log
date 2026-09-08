@@ -1,0 +1,4 @@
+DEBUG: Enter CreateBackend. GPU_AVS_ENABLE_VULKAN=1
+DEBUG: Inside #if GPU_AVS_ENABLE_VULKAN block.
+DEBUG: cfg.api == vulkan is TRUE.
+DEBUG: cfg.mode == offscreen is TRUE. Returning VulkanGraphicsBackend.

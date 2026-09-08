@@ -1,0 +1,46 @@
+{
+  "agent_final_seen": true,
+  "artifacts": {
+    "complete": true,
+    "hash_manifest": "artifact-hashes.json",
+    "hashed_file_count": 5
+  },
+  "attempt_id": "GPU-A-0908A-001-20260908T093208Z-1ae1521a",
+  "baseline_id": null,
+  "completed_at": "2026-09-08T09:32:16.974727+00:00",
+  "device_evidence": "/data/local/tmp/avs/tests/GPU-A-0908A/GPU-A-0908A-001-20260908T093208Z-1ae1521a",
+  "dut_reasons": [],
+  "event_count": 8,
+  "exit_code": 0,
+  "infrastructure_reasons": [],
+  "liveness": {
+    "agent_final_seen": true,
+    "final_timeout_s": 20.0,
+    "heartbeat_timeout_s": 105.0,
+    "overall_timeout_s": 300.0,
+    "timed_out": false,
+    "timeout_phase": null
+  },
+  "pc_artifacts": "full",
+  "producer": {
+    "component": "RunOrchestrator",
+    "name": "vmin_judge",
+    "version": "2.1.0"
+  },
+  "profile_id": "gpu_qualification_kirin9030",
+  "run_id": "GPU-A-0908A-001-20260908T093208Z-1ae1521a",
+  "schema_version": 1,
+  "telemetry_seen": [],
+  "terminal_summary_seen": true,
+  "test_id": "GPU-A-0908A",
+  "validation_mode": "error-only",
+  "verdict": "PASS",
+  "warnings": [],
+  "workload_exit_code": 0,
+  "workload_result": "PASS",
+  "workload_summary": {
+    "exit_code": 0,
+    "result": "PASS",
+    "verify_pass": true
+  }
+}
