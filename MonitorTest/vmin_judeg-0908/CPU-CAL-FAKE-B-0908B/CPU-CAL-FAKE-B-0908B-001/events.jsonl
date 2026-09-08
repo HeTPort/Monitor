@@ -1,0 +1,7 @@
+{"schema_version":1,"test_id":"CPU-CAL-FAKE-B-0908B","run_id":"CPU-CAL-FAKE-B-0908B-001","seq":1,"timestamp_ms":252000,"source":"agent","type":"agent_start","payload":{"agent_version":"0.3.2","protocol_version":2,"baudrate":9600},"crc32":"d5161e35"}
+{"schema_version":1,"test_id":"CPU-CAL-FAKE-B-0908B","run_id":"CPU-CAL-FAKE-B-0908B-001","seq":2,"timestamp_ms":252000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"5c3d2d20"}
+{"schema_version":1,"test_id":"CPU-CAL-FAKE-B-0908B","run_id":"CPU-CAL-FAKE-B-0908B-001","seq":3,"timestamp_ms":253000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"a8878e9a"}
+{"schema_version":1,"test_id":"CPU-CAL-FAKE-B-0908B","run_id":"CPU-CAL-FAKE-B-0908B-001","seq":4,"timestamp_ms":254000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"0a31ee7f"}
+{"schema_version":1,"test_id":"CPU-CAL-FAKE-B-0908B","run_id":"CPU-CAL-FAKE-B-0908B-001","seq":5,"timestamp_ms":255000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"fe8b4dc5"}
+{"schema_version":1,"test_id":"CPU-CAL-FAKE-B-0908B","run_id":"CPU-CAL-FAKE-B-0908B-001","seq":6,"timestamp_ms":256000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"3835af4a"}
+{"schema_version":1,"test_id":"CPU-CAL-FAKE-B-0908B","run_id":"CPU-CAL-FAKE-B-0908B-001","seq":7,"timestamp_ms":257000,"source":"cpu-workload","type":"heartbeat","payload":{},"crc32":"cc8f0cf0"}

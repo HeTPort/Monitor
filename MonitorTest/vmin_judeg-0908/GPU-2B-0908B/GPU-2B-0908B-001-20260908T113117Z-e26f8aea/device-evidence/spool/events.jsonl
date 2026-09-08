@@ -1,0 +1,2 @@
+{"schema_version":1,"test_id":"GPU-2B-0908B","run_id":"GPU-2B-0908B-001-20260908T113117Z-e26f8aea","seq":1,"timestamp_ms":1954000,"source":"agent","type":"agent_start","payload":{"agent_version":"0.3.2","protocol_version":2,"baudrate":9600}}
+{"schema_version":1,"test_id":"GPU-2B-0908B","run_id":"GPU-2B-0908B-001-20260908T113117Z-e26f8aea","seq":2,"timestamp_ms":1955000,"source":"agent","type":"agent_final","payload":{"workload_exit_code":127,"summary_seen":false,"timed_out":false,"spool_complete":true,"telemetry_exit_code":null,"telemetry_timed_out":false}}
