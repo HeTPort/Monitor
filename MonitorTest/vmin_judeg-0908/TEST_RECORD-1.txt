@@ -1,0 +1,477 @@
+PS D:\h60106817\release> $MON = 'D:\h60106817\release\vmin_judge.exe'
+PS D:\h60106817\release> $DEVICE = '0123456789ABCDEF'
+PS D:\h60106817\release> $PC_SERIAL = 'COM8'
+PS D:\h60106817\release> $DEVICE_UART = '/dev/ttyHW0'
+PS D:\h60106817\release> $SESSION = '0908A'
+PS D:\h60106817\release> $OUT = '.\output'
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --json probe --platform kirin9030 --full
+{
+  "capabilities": "D:\\h60106817\\release\\output\\probes\\0123456789ABCDEF\\capabilities.json",
+  "required_missing": [],
+  "supported": true
+}
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART pair --platform kirin9030 --verify
+[OK] Pairing /dev/ttyHW0 -> COM8 @ 9600 baud (175.7 ms)
+[OK] Pairing verified
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --json relay probe --platform kirin9030
+{
+  "baudrate": 9600,
+  "device_abi": {
+    "long_bit": "64",
+    "raw_checks": {
+      "getconf": {
+        "available": true,
+        "return_code": 0,
+        "stderr": "",
+        "stdout": "64"
+      },
+      "uname": {
+        "available": true,
+        "return_code": 0,
+        "stderr": "",
+        "stdout": "aarch64"
+      }
+    },
+    "uname_m": "aarch64"
+  },
+  "platform": "kirin9030",
+  "relay": {
+    "deployed_executable": true,
+    "remote": "/data/local/tmp/avs/bin/avs-uart-relay",
+    "self_test": {
+      "available": true,
+      "return_code": 0,
+      "stderr": "",
+      "stdout": "{\"relay\":\"avs-uart-relay\",\"version\":\"1.0.1\",\"self_test\":true,\"termios\":true,\"tcdrain\":true}"
+    },
+    "version": {
+      "available": true,
+      "return_code": 0,
+      "stderr": "",
+      "stdout": "avs-uart-relay 1.0.1 protocol uart-v2"
+    }
+  },
+  "supported": true,
+  "uart": "/dev/ttyHW0"
+}
+PS D:\h60106817\release> hdc shell
+# ls /data/local/tmp
+avs               gpu_case_judge_arm64    judge_logs   wl.json
+debugserver       gpu_case_logs           kingkongDir  workload_output.jsonl
+gpu-avs-workload  gpu_case_rules_v2.conf  shaders
+# ls /data/local/tmp/avs
+bin  configs  shaders  tests
+# exit
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE deploy --profile cpu_stress_kirin9030
+complete: True
+verified: True
+manifest: D:\h60106817\release\output\deployment-manifest.json
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE deploy --profile gpu_stress_kirin9030
+complete: True
+verified: True
+manifest: D:\h60106817\release\output\deployment-manifest.json
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE deploy --profile cpu_smoke_kirin9030
+complete: True
+verified: True
+manifest: D:\h60106817\release\output\deployment-manifest.json
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE deploy --profile gpu_smoke_kirin9030
+complete: True
+verified: True
+manifest: D:\h60106817\release\output\deployment-manifest.json
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --device-uart $DEVICE_UART --json relay probe --platform kirin9030 --check-uart
+{
+  "baudrate": 9600,
+  "device_abi": {
+    "long_bit": "64",
+    "raw_checks": {
+      "getconf": {
+        "available": true,
+        "return_code": 0,
+        "stderr": "",
+        "stdout": "64"
+      },
+      "uname": {
+        "available": true,
+        "return_code": 0,
+        "stderr": "",
+        "stdout": "aarch64"
+      }
+    },
+    "uname_m": "aarch64"
+  },
+  "platform": "kirin9030",
+  "relay": {
+    "deployed_executable": true,
+    "remote": "/data/local/tmp/avs/bin/avs-uart-relay",
+    "self_test": {
+      "available": true,
+      "return_code": 0,
+      "stderr": "",
+      "stdout": "{\"relay\":\"avs-uart-relay\",\"version\":\"1.0.1\",\"self_test\":true,\"termios\":true,\"tcdrain\":true}"
+    },
+    "uart_check": {
+      "available": true,
+      "return_code": 0,
+      "stderr": "",
+      "stdout": "{\"uart\":\"/dev/ttyHW0\",\"baudrate\":9600,\"open\":true,\"termios\":true,\"tcdrain\":true}"
+    },
+    "version": {
+      "available": true,
+      "return_code": 0,
+      "stderr": "",
+      "stdout": "avs-uart-relay 1.0.1 protocol uart-v2"
+    }
+  },
+  "supported": true,
+  "uart": "/dev/ttyHW0"
+}
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE verify-deployment --profile cpu_stress_kirin9030
+complete: True
+verified: True
+manifest: D:\h60106817\release\output\deployment-verification.json
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE verify-deployment --profile gpu_stress_kirin9030
+complete: True
+verified: True
+manifest: D:\h60106817\release\output\deployment-verification.json
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE verify-deployment --profile cpu_smoke_kirin9030
+complete: True
+verified: True
+manifest: D:\h60106817\release\output\deployment-verification.json
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json run --profile cpu_stress_kirin9030 --test-id "MC-CPU-$SESSION" --attempt-id "MC-CPU-$SESSION-001" --pc-artifacts full
+{
+  "exit_code": 0,
+  "repeat": 1,
+  "runs": [
+    {
+      "attempt_id": "MC-CPU-0908A-001",
+      "device_evidence": "/data/local/tmp/avs/tests/MC-CPU-0908A/MC-CPU-0908A-001",
+      "device_spool": "retained",
+      "exit_code": 0,
+      "result": "D:\\h60106817\\release\\output\\MC-CPU-0908A\\MC-CPU-0908A-001\\result.json",
+      "run_id": "MC-CPU-0908A-001",
+      "test_id": "MC-CPU-0908A",
+      "verdict": "PASS"
+    }
+  ],
+  "test_id": "MC-CPU-0908A",
+  "validation_mode": "error-only"
+}
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json run --profile gpu_stress_kirin9030 --test-id "MC-GPU-$SESSION" --attempt-id "MC-GPU-$SESSION-001" --pc-artifacts full
+{
+  "exit_code": 0,
+  "repeat": 1,
+  "runs": [
+    {
+      "attempt_id": "MC-GPU-0908A-001",
+      "device_evidence": "/data/local/tmp/avs/tests/MC-GPU-0908A/MC-GPU-0908A-001",
+      "device_spool": "retained",
+      "exit_code": 0,
+      "result": "D:\\h60106817\\release\\output\\MC-GPU-0908A\\MC-GPU-0908A-001\\result.json",
+      "run_id": "MC-GPU-0908A-001",
+      "test_id": "MC-GPU-0908A",
+      "verdict": "PASS"
+    }
+  ],
+  "test_id": "MC-GPU-0908A",
+  "validation_mode": "error-only"
+}
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json run --profile cpu_smoke_kirin9030 --test-id "MC-SMOKE-$SESSION" --attempt-id "MC-SMOKE-$SESSION-001" --pc-artifacts full
+{
+  "exit_code": 0,
+  "repeat": 1,
+  "runs": [
+    {
+      "attempt_id": "MC-SMOKE-0908A-001",
+      "device_evidence": "/data/local/tmp/avs/tests/MC-SMOKE-0908A/MC-SMOKE-0908A-001",
+      "device_spool": "retained",
+      "exit_code": 0,
+      "result": "D:\\h60106817\\release\\output\\MC-SMOKE-0908A\\MC-SMOKE-0908A-001\\result.json",
+      "run_id": "MC-SMOKE-0908A-001",
+      "test_id": "MC-SMOKE-0908A",
+      "verdict": "PASS"
+    }
+  ],
+  "test_id": "MC-SMOKE-0908A",
+  "validation_mode": "error-only"
+}
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE collect --test-id "MC-CPU-$SESSION" --verify-hashes
+test_id: MC-CPU-0908A
+attempt_id: None
+collection: D:\h60106817\release\output\MC-CPU-0908A\collection.json
+local: D:\h60106817\release\output\MC-CPU-0908A\device-evidence
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE collect --test-id "MC-GPU-$SESSION" --verify-hashes
+test_id: MC-GPU-0908A
+attempt_id: None
+collection: D:\h60106817\release\output\MC-GPU-0908A\collection.json
+local: D:\h60106817\release\output\MC-GPU-0908A\device-evidence
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE collect --test-id "MC-SMOKE-$SESSION" --verify-hashes
+test_id: MC-SMOKE-0908A
+attempt_id: None
+collection: D:\h60106817\release\output\MC-SMOKE-0908A\collection.json
+local: D:\h60106817\release\output\MC-SMOKE-0908A\device-evidence
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE telemetry run --profile cpu_stress_kirin9030 --test-id "TEL-$SESSION" --attempt-id "TEL-$SESSION-001" --duration 30 --interval 5
+test_id: TEL-0908A
+attempt_id: TEL-0908A-001
+profile: cpu_stress_kirin9030
+device_output: /data/local/tmp/avs/tests/TEL-0908A/TEL-0908A-001/spool/telemetry.jsonl
+append_only: True
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE collect --test-id "TEL-$SESSION"
+test_id: TEL-0908A
+attempt_id: None
+collection: D:\h60106817\release\output\TEL-0908A\collection.json
+local: D:\h60106817\release\output\TEL-0908A\device-evidence
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART run --profile cpu_stress_kirin9030 --test-id "TEL-RUN-$SESSION" --attempt-id "TEL-RUN-$SESSION-001" --telemetry
+test_id: TEL-RUN-0908A
+validation_mode: error-only
+repeat: 1
+exit_code: 0
+runs: [{"test_id": "TEL-RUN-0908A", "attempt_id": "TEL-RUN-0908A-001", "run_id": "TEL-RUN-0908A-001", "verdict": "PASS", "exit_code": 0, "result": "D:\\h60106817\\release\\output\\TEL-RUN-0908A\\TEL-RUN-0908A-001\\result.json", "device_evidence": "/data/local/tmp/avs/tests/TEL-RUN-0908A/TEL-RUN-0908A-001", "device_spool": "retained"}]
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE collect --test-id "TEL-RUN-$SESSION"
+test_id: TEL-RUN-0908A
+attempt_id: None
+collection: D:\h60106817\release\output\TEL-RUN-0908A\collection.json
+local: D:\h60106817\release\output\TEL-RUN-0908A\device-evidence
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE verify-deployment --profile gpu_smoke_kirin9030
+complete: True
+verified: True
+manifest: D:\h60106817\release\output\deployment-verification.json
+PS D:\h60106817\release>  $RUN_DIR = "$OUT\MC-CPU-$SESSION\MC-CPU-$SESSION-001"
+PS D:\h60106817\release> & $MON --json simulate --events "$RUN_DIR\events.jsonl" --profile cpu_stress_kirin9030
+{
+  "exit_code": 0,
+  "replay_id": "replay-20260908T090752Z-36968600",
+  "result": "D:\\h60106817\\release\\output\\simulations\\replay-20260908T090752Z-36968600\\MC-CPU-0908A\\MC-CPU-0908A-001\\result.json",
+  "run_id": "MC-CPU-0908A-001",
+  "source": "D:\\h60106817\\release\\output\\MC-CPU-0908A\\MC-CPU-0908A-001\\events.jsonl",
+  "source_sha256": "04650eb1803c9203a40de09497df636e319905394e8535451c6af0023dd638c7",
+  "test_id": "MC-CPU-0908A",
+  "verdict": "PASS"
+}
+PS D:\h60106817\release> & $MON --json simulate --raw-serial "$RUN_DIR\serial.raw" --profile cpu_stress_kirin9030
+{
+  "exit_code": 0,
+  "replay_id": "replay-20260908T090802Z-9ef7308e",
+  "result": "D:\\h60106817\\release\\output\\simulations\\replay-20260908T090802Z-9ef7308e\\MC-CPU-0908A\\MC-CPU-0908A-001\\result.json",
+  "run_id": "MC-CPU-0908A-001",
+  "source": "D:\\h60106817\\release\\output\\MC-CPU-0908A\\MC-CPU-0908A-001\\serial.raw",
+  "source_sha256": "c5f30a327fe079765ecedf4b8476b02067cc094efef061bb19a5d713a5828489",
+  "test_id": "MC-CPU-0908A",
+  "verdict": "PASS"
+}
+PS D:\h60106817\release> & $MON --json simulate --raw-serial "$RUN_DIR\serial.raw" --profile cpu_stress_kirin9030 --realtime
+{
+  "error": "--realtime currently requires --events; raw UART-v2 replay is deterministic and immediate",
+  "exit_code": 4
+}
+PS D:\h60106817\release> & $MON --pc-serial $PC_SERIAL --baudrate 9600 --json monitor --save-raw --timeout 60
+{
+  "error": "no matching UART-v2 agent_start frame received",
+  "exit_code": 3
+}
+PS D:\h60106817\release>  $RUN_DIR = "$OUT\MC-CPU-$SESSION\MC-CPU-$SESSION-001"
+PS D:\h60106817\release> & $MON report --run-dir $RUN_DIR --format markdown,json,csv
+run_id: MC-CPU-0908A-001
+reports: ["D:\\h60106817\\release\\output\\MC-CPU-0908A\\MC-CPU-0908A-001\\report.json", "D:\\h60106817\\release\\output\\MC-CPU-0908A\\MC-CPU-0908A-001\\report.md", "D:\\h60106817\\release\\output\\MC-CPU-0908A\\MC-CPU-0908A-001\\report.csv"]
+PS D:\h60106817\release> & $MON list-profiles
+count: 8
+profiles: [{"name": "cpu_mixed_big4", "target": "cpu", "platform": "kirin9020", "baseline": null, "status": "implemented", "path": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI102362\\config\\profiles\\cpu_mixed_big4.yaml"}, {"name": "cpu_qualification_kirin9030", "target": "cpu", "platform": "kirin9030", "baseline": null, "status": "implemented", "path": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI102362\\config\\profiles\\cpu_qualification_kirin9030.yaml"}, {"name": "cpu_smoke_kirin9030", "target": "cpu", "platform": "kirin9030", "baseline": null, "status": "implemented", "path": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI102362\\config\\profiles\\cpu_smoke_kirin9030.yaml"}, {"name": "cpu_stress_kirin9030", "target": "cpu", "platform": "kirin9030", "baseline": null, "status": "implemented", "path": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI102362\\config\\profiles\\cpu_stress_kirin9030.yaml"}, {"name": "gpu_qualification_kirin9030", "target": "gpu", "platform": "kirin9030", "baseline": null, "status": "implemented", "path": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI102362\\config\\profiles\\gpu_qualification_kirin9030.yaml"}, {"name": "gpu_smoke_kirin9030", "target": "gpu", "platform": "kirin9030", "baseline": null, "status": "implemented", "path": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI102362\\config\\profiles\\gpu_smoke_kirin9030.yaml"}, {"name": "gpu_stress_kirin9030", "target": "gpu", "platform": "kirin9030", "baseline": null, "status": "implemented", "path": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI102362\\config\\profiles\\gpu_stress_kirin9030.yaml"}, {"name": "gpu_vulkan_mixed", "target": "gpu", "platform": "kirin9020", "baseline": null, "status": "implemented", "path": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI102362\\config\\profiles\\gpu_vulkan_mixed.yaml"}]
+PS D:\h60106817\release> & $MON validate --package
+valid: True
+checked: ["profile:cpu_mixed_big4", "platform:kirin9020", "workload-config:cpu_mixed_big4", "workload-binary:cpu_mixed_big4", "profile:cpu_qualification_kirin9030", "platform:kirin9030", "workload-config:cpu_qualification_kirin9030", "workload-binary:cpu_qualification_kirin9030", "profile:cpu_smoke_kirin9030", "platform:kirin9030", "workload-config:cpu_smoke_kirin9030", "workload-binary:cpu_smoke_kirin9030", "profile:cpu_stress_kirin9030", "platform:kirin9030", "workload-config:cpu_stress_kirin9030", "workload-binary:cpu_stress_kirin9030", "profile:gpu_qualification_kirin9030", "platform:kirin9030", "workload-config:gpu_qualification_kirin9030", "workload-binary:gpu_qualification_kirin9030", "workload-asset:gpu_qualification_kirin9030:shaders/vulkan/fullscreen.vert.spv", "workload-asset:gpu_qualification_kirin9030:shaders/vulkan/workload.frag.spv", "profile:gpu_smoke_kirin9030", "platform:kirin9030", "workload-config:gpu_smoke_kirin9030", "workload-binary:gpu_smoke_kirin9030", "workload-asset:gpu_smoke_kirin9030:shaders/vulkan/fullscreen.vert.spv", "workload-asset:gpu_smoke_kirin9030:shaders/vulkan/workload.frag.spv", "profile:gpu_stress_kirin9030", "platform:kirin9030", "workload-config:gpu_stress_kirin9030", "workload-binary:gpu_stress_kirin9030", "workload-asset:gpu_stress_kirin9030:shaders/vulkan/fullscreen.vert.spv", "workload-asset:gpu_stress_kirin9030:shaders/vulkan/workload.frag.spv", "profile:gpu_vulkan_mixed", "platform:kirin9020", "workload-config:gpu_vulkan_mixed", "workload-binary:gpu_vulkan_mixed", "workload-asset:gpu_vulkan_mixed:shaders/vulkan/fullscreen.vert.spv", "workload-asset:gpu_vulkan_mixed:shaders/vulkan/workload.frag.spv", "resource:device/avs_device_agent.sh", "resource:device/avs_telemetry_agent.sh"]
+resolved_configs: [{"kind": "profile", "name": "cpu_mixed_big4", "path": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI74202\\config\\profiles\\cpu_mixed_big4.yaml", "sha256": "bec8c97a6054bcb3946b01ebcbd3c51f9c9db227aa64baa75c745379d1dc3945"}, {"kind": "platform", "name": "kirin9020", "path": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI74202\\config\\platforms\\kirin9020.yaml", "sha256": "bf7662228b8d9f51b34921d24b633f95e9e836f4900017024e9141caa7cfb462"}, {"kind": "profile", "name": "cpu_qualification_kirin9030", "path": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI74202\\config\\profiles\\cpu_qualification_kirin9030.yaml", "sha256": "8e4353137828816b3e07bfade5338324d08c9f9da1547ddfa2a48d1369066aa2"}, {"kind": "platform", "name": "kirin9030", "path": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI74202\\config\\platforms\\kirin9030.yaml", "sha256": "99c2f18561186aae1861fa91336ddcce4e5f13803411ac07775c2caf60987bf5"}, {"kind": "profile", "name": "cpu_smoke_kirin9030", "path": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI74202\\config\\profiles\\cpu_smoke_kirin9030.yaml", "sha256": "402982e23001cc80711372d5331d80b560190b88c26f42b640b979c6bcbb2c83"}, {"kind": "profile", "name": "cpu_stress_kirin9030", "path": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI74202\\config\\profiles\\cpu_stress_kirin9030.yaml", "sha256": "3e20f3b9172aa946ef94e753c2bf84c858f5112f87cf64952663bbef10216d14"}, {"kind": "profile", "name": "gpu_qualification_kirin9030", "path": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI74202\\config\\profiles\\gpu_qualification_kirin9030.yaml", "sha256": "b0a790d4e9b8e2d7a995f70ee8537d867b11e2147de56795f39af2fc4fb49267"}, {"kind": "profile", "name": "gpu_smoke_kirin9030", "path": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI74202\\config\\profiles\\gpu_smoke_kirin9030.yaml", "sha256": "9a6a405123f6dd5e394d9008364275878a4b61c0ed0d6ee8c49e4baca3ac0ba7"}, {"kind": "profile", "name": "gpu_stress_kirin9030", "path": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI74202\\config\\profiles\\gpu_stress_kirin9030.yaml", "sha256": "676051088a554e14f0a4751d55216f8db447656de2336c7f718a6e46589a3ee0"}, {"kind": "profile", "name": "gpu_vulkan_mixed", "path": "C:\\Users\\p_BalongAVS\\AppData\\Local\\Temp\\_MEI74202\\config\\profiles\\gpu_vulkan_mixed.yaml", "sha256": "574612056563d13f6b9841f494141d16a242cc02f577d66fc8f0a891fe602fae"}]
+errors: []
+offline: True
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json smoke --profile cpu_smoke_kirin9030 --test-id "SMOKE-OLD-$SESSION" --attempt-id "SMOKE-OLD-$SESSION-001" --pc-artifacts full
+warning: smoke is deprecated; use run with the same short profile
+{
+  "exit_code": 0,
+  "minimum_closed_loop": true,
+  "repeat": 1,
+  "runs": [
+    {
+      "attempt_id": "SMOKE-OLD-0908A-001",
+      "device_evidence": "/data/local/tmp/avs/tests/SMOKE-OLD-0908A/SMOKE-OLD-0908A-001",
+      "device_spool": "retained",
+      "exit_code": 0,
+      "result": "D:\\h60106817\\release\\output\\SMOKE-OLD-0908A\\SMOKE-OLD-0908A-001\\result.json",
+      "run_id": "SMOKE-OLD-0908A-001",
+      "test_id": "SMOKE-OLD-0908A",
+      "verdict": "PASS"
+    }
+  ],
+  "test_id": "SMOKE-OLD-0908A",
+  "validation_mode": "error-only"
+}
+PS D:\h60106817\release> & $MON baseline list
+count: 0
+baselines: []
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE deploy --profile cpu_qualification_kirin9030
+complete: True
+verified: True
+manifest: D:\h60106817\release\output\deployment-manifest.json
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE verify-deployment --profile cpu_qualification_kirin9030
+
+complete: True
+verified: True
+manifest: D:\h60106817\release\output\deployment-verification.json
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json golden cpu --profile cpu_qualification_kirin9030 --board-id BOARD-A --known-good --runs 1 --qualification-id "CPU-A-$SESSION"
+{
+  "golden_manifest": "D:\\h60106817\\release\\output\\qualification\\CPU-A-0908A\\golden\\cpu-golden.json",
+  "qualification_id": "CPU-A-0908A",
+  "sha256": "6411aa04714236cd6f93c541ae6e71a17dca8ed4f72a64c81ab1faef914f0d1b",
+  "source_mode": "live-capture",
+  "source_runs": [
+    "D:\\h60106817\\release\\output\\CPU-A-0908A\\CPU-A-0908A-001-20260908T092032Z-4814c582"
+  ]
+}
+PS D:\h60106817\release> hdc shell "cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor"
+>>
+misc
+PS D:\h60106817\release> hdc shell "cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq"
+418000
+PS D:\h60106817\release> hdc shell "cat /sys/class/kgsl/kgsl-3d0/devfreq/governor"
+/bin/sh: cat: /sys/class/kgsl/kgsl-3d0/devfreq/governor: No such file or directory
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE deploy --profile gpu_qualification_kirin9030
+complete: True
+verified: True
+manifest: D:\h60106817\release\output\deployment-manifest.json
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE verify-deployment --profile gpu_qualification_kirin9030
+
+complete: True
+verified: True
+manifest: D:\h60106817\release\output\deployment-verification.json
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json golden gpu --profile gpu_qualification_kirin9030 --board-id BOARD-A --known-good --runs 1 --qualification-id "GPU-A-$SESSION"
+{
+  "golden_manifest": "D:\\h60106817\\release\\output\\qualification\\GPU-A-0908A\\golden\\gpu-golden.json",
+  "qualification_id": "GPU-A-0908A",
+  "sha256": "3440b92076b74eb80ff937df98c7ec10085cfbc36bc74b50814209342a59fbdf",
+  "source_mode": "live-capture",
+  "source_runs": [
+    "D:\\h60106817\\release\\output\\GPU-A-0908A\\GPU-A-0908A-001-20260908T093208Z-1ae1521a"
+  ]
+}
+PS D:\h60106817\release> $GOLDEN = "D:\h60106817\release\output\qualification\CPU-A-$SESSION\golden\cpu-golden.json"
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json run --profile cpu_qualification_kirin9030 --golden $GOLDEN --telemetry --pc-artifacts full --test-id "CPU-CAL-A-$SESSION" --attempt-id "CPU-CAL-A-$SESSION-001"
+{
+  "exit_code": 3,
+  "repeat": 1,
+  "runs": [
+    {
+      "attempt_id": "CPU-CAL-A-0908A-001",
+      "device_evidence": "/data/local/tmp/avs/tests/CPU-CAL-A-0908A/CPU-CAL-A-0908A-001",
+      "device_spool": "retained",
+      "errors": [
+        {
+          "code": "AGENT_FINAL_MISSING",
+          "scope": "agent"
+        },
+        {
+          "code": "AGENT_TRANSPORT_CANCELLED_AFTER_VERDICT",
+          "message": "device-agent transport was cancelled after UART evaluation completed",
+          "scope": "transport"
+        },
+        {
+          "code": "HEARTBEAT_OR_SUMMARY_TIMEOUT",
+          "scope": "liveness"
+        }
+      ],
+      "exit_code": 3,
+      "result": "D:\\h60106817\\release\\output\\CPU-CAL-A-0908A\\CPU-CAL-A-0908A-001\\result.json",
+      "run_id": "CPU-CAL-A-0908A-001",
+      "test_id": "CPU-CAL-A-0908A",
+      "verdict": "INFRA_ERROR"
+    }
+  ],
+  "test_id": "CPU-CAL-A-0908A",
+  "validation_mode": "golden-reference"
+}
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE collect --test-id "CPU-CAL-A-$SESSION" --verify-hashes
+error: no device artifact-hashes.json found under D:\h60106817\release\output\CPU-CAL-A-0908A\device-evidence
+exit_code: 3
+PS D:\h60106817\release> $RUN_DIR_CAL = "D:\h60106817\release\output\CPU-CAL-A-$SESSION\CPU-CAL-A-$SESSION-001"
+PS D:\h60106817\release> & $MON --json calibrate cpu --profile cpu_qualification_kirin9030 --board-id BOARD-A --golden $GOLDEN --runs 1 --min-accepted 1 --baseline-id "CPU-FUNCTIONAL-$SESSION" --run-dir "BOARD-A=$RUN_DIR_CAL"
+{
+  "error": "run is missing PC result or full workload summary: D:\\h60106817\\release\\output\\CPU-CAL-A-0908A\\CPU-CAL-A-0908A-001",
+  "exit_code": 3
+}
+PS D:\h60106817\release> & $MON baseline show "CPU-FUNCTIONAL-$SESSION"
+error: unknown baseline: CPU-FUNCTIONAL-0908A
+exit_code: 4
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json run --profile cpu_qualification_kirin9030 --baseline "NON-EXIST-BASELINE" --test-id "BASELINE-NEG-$SESSION" --attempt-id "BASELINE-NEG-$SESSION-001"
+{
+  "error": "unknown baseline: NON-EXIST-BASELINE",
+  "exit_code": 4
+}
+PS D:\h60106817\release> & $MON baseline deprecate "NON-EXIST-BASELINE"
+usage: vmin_judge baseline deprecate [-h] --reason REASON baseline_id
+vmin_judge baseline deprecate: error: the following arguments are required: --reason
+PS D:\h60106817\release> & $MON baseline export "NON-EXIST-BASELINE" --out "$OUT\fake-baseline.json"
+error: unknown baseline: NON-EXIST-BASELINE
+exit_code: 4
+PS D:\h60106817\release> & $MON baseline import "$OUT\fake-baseline.json"
+error: [WinError 2] 系统找不到指定的文件。: 'D:\\h60106817\\release\\output\\fake-baseline.json'
+exit_code: 3
+PS D:\h60106817\release> hdc shell "cat /sys/class/kgsl/kgsl-3d0/gpuclk"
+/bin/sh: cat: /sys/class/kgsl/kgsl-3d0/gpuclk: No such file or directory
+PS D:\h60106817\release> hdc shell "cat /sys/class/kgsl/kgsl-3d0/bus_split"
+/bin/sh: cat: /sys/class/kgsl/kgsl-3d0/bus_split: No such file or directory
+PS D:\h60106817\release> hdc shell
+# cat /data/local/tmp/avs/configs/cpu_qualification_kirin9030.json
+{
+  "profile": "mixed",
+  "api": "cpu",
+  "mode": "compute",
+  "backend": "mixed",
+  "duration": 60,
+  "warmup": 5,
+  "timeout": 75,
+  "iterations": 100000,
+  "threads": 4,
+  "working_set_kb": 256,
+  "verify_mode": "checksum",
+  "checksum_interval": 1,
+  "heartbeat_interval": 1,
+  "output_format": "jsonl"
+}
+# exit
+PS D:\h60106817\release> $GPU_GOLDEN = "D:\h60106817\release\output\qualification\GPU-A-$SESSION\golden\gpu-golden.json"
+
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json run --profile gpu_qualification_kirin9030 --golden $GPU_GOLDEN --telemetry --pc-artifacts full --test-id "GPU-CAL-A-$SESSION" --attempt-id "GPU-CAL-A-$SESSION-001"
+{
+  "exit_code": 1,
+  "repeat": 1,
+  "runs": [
+    {
+      "attempt_id": "GPU-CAL-A-0908A-001",
+      "device_evidence": "/data/local/tmp/avs/tests/GPU-CAL-A-0908A/GPU-CAL-A-0908A-001",
+      "device_spool": "retained",
+      "errors": [
+        {
+          "code": "CHECKSUM_FAIL",
+          "exit_code": 1,
+          "scope": "workload",
+          "seq": 7
+        },
+        {
+          "code": "SUMMARY_VERIFY_FAIL",
+          "exit_code": 1,
+          "scope": "correctness",
+          "seq": 7
+        },
+        {
+          "code": "WORKLOAD_EXIT_NONZERO",
+          "exit_code": 1,
+          "scope": "workload",
+          "seq": 8
+        }
+      ],
+      "exit_code": 1,
+      "result": "D:\\h60106817\\release\\output\\GPU-CAL-A-0908A\\GPU-CAL-A-0908A-001\\result.json",
+      "run_id": "GPU-CAL-A-0908A-001",
+      "test_id": "GPU-CAL-A-0908A",
+      "verdict": "DUT_FAIL"
+    }
+  ],
+  "test_id": "GPU-CAL-A-0908A",
+  "validation_mode": "golden-reference"
+}

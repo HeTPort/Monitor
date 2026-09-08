@@ -1,0 +1,270 @@
+PS D:\h60106817\release> hdc list targets
+0123456789ABCDEF
+PS D:\h60106817\release>  $MON = 'D:\h60106817\release\vmin_judge.exe'
+PS D:\h60106817\release> hdc shell
+# ls /dev/tty*
+/dev/tty   /dev/ttyHW0  /dev/ttyHW5    /dev/ttyHwGS1
+/dev/tty0  /dev/ttyHW4  /dev/ttyHwGS0  /dev/ttyHwGS2
+# echo test > /dev/ttyHW0
+# exit
+PS D:\h60106817\release> $PC_SERIAL = 'COM8'
+PS D:\h60106817\release> $DEVICE_UART = '/dev/ttyHW0'
+PS D:\h60106817\release>  $SESSION = '0908B'
+PS D:\h60106817\release> $DEVICE = '0123456789ABCDEF'
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --json probe --platform kirin9030 --full
+{
+  "capabilities": "D:\\h60106817\\release\\output\\probes\\0123456789ABCDEF\\capabilities.json",
+  "required_missing": [],
+  "supported": true
+}
+PS D:\h60106817\release> ^C
+PS D:\h60106817\release> $OUT = '.\output_B'
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART pair --platform kirin9030 --verify
+[OK] Pairing /dev/ttyHW0 -> COM8 @ 9600 baud (190.0 ms)
+[OK] Pairing verified
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE deploy --profile cpu_qualification_kirin9030
+complete: True
+verified: True
+manifest: D:\h60106817\release\output\deployment-manifest.json
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE verify-deployment --profile cpu_qualification_kirin9030
+
+complete: True
+verified: True
+manifest: D:\h60106817\release\output\deployment-verification.json
+PS D:\h60106817\release>  $B_GOLDEN_OUT = & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json golden cpu --profile cpu_qualification_kirin9030 --board-id BOARD-B --known-good --runs 1 --qualification-id "CPU-2B-$SESSION"
+PS D:\h60106817\release> $B_RUN = $B_GOLDEN_OUT.source_runs[0]
+无法对 Null 数组进行索引。
+所在位置 行:1 字符: 1
++ $B_RUN = $B_GOLDEN_OUT.source_runs[0]
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidOperation: (:) []，RuntimeException
+    + FullyQualifiedErrorId : NullArray
+
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json golden cpu --profile cpu_qualification_kirin9030 --board-id BOARD-B --known-good --runs 1 --qualification-id "CPU-2B-$SESSION"
+{
+  "error": "CPU golden destination already exists: D:\\h60106817\\release\\output\\qualification\\CPU-2B-0908B\\golden\\cpu-golden.json",
+  "exit_code": 3
+}
+PS D:\h60106817\release>  $B_RUN = (Get-ChildItem -Directory "D:\h60106817\release\output\CPU-2B-$SESSION" | Sort-Object
+ LastWriteTime -Descending | Select-Object -First 1).FullName
+PS D:\h60106817\release> echo $B_RUN
+D:\h60106817\release\output\CPU-2B-0908B\CPU-2B-0908B-001-20260908T112429Z-48902ee3
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json golden gpu --profile gpu_qualification_kirin9030 --board-id BOARD-B --known-good --runs 1 --qualification-id "GPU-2B-$SESSION"
+{
+  "attempt_id": "GPU-2B-0908B-001-20260908T113117Z-e26f8aea",
+  "device_evidence_local": "D:\\h60106817\\release\\output\\GPU-2B-0908B\\GPU-2B-0908B-001-20260908T113117Z-e26f8aea\\device-evidence",
+  "device_evidence_remote": "/data/local/tmp/avs/tests/GPU-2B-0908B/GPU-2B-0908B-001-20260908T113117Z-e26f8aea",
+  "dut_reasons": [
+    {
+      "code": "WORKLOAD_EXIT_NONZERO",
+      "evidence": {
+        "exit_code": 127
+      },
+      "scope": "workload",
+      "seq": 2
+    }
+  ],
+  "error": "live golden attempt GPU-2B-0908B-001-20260908T113117Z-e26f8aea did not pass",
+  "exit_code": 3,
+  "infrastructure_reasons": [],
+  "result_exit_code": 1,
+  "result_path": "D:\\h60106817\\release\\output\\GPU-2B-0908B\\GPU-2B-0908B-001-20260908T113117Z-e26f8aea\\result.json",
+  "test_id": "GPU-2B-0908B",
+  "verdict": "DUT_FAIL"
+}
+PS D:\h60106817\release> $B_GPU_RUN = (Get-ChildItem -Directory "D:\h60106817\release\output\GPU-2B-$SESSION" | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
+PS D:\h60106817\release> echo $B_GPU_RUN
+D:\h60106817\release\output\GPU-2B-0908B\GPU-2B-0908B-001-20260908T113117Z-e26f8aea
+PS D:\h60106817\release>  $OUT = '.\output'
+PS D:\h60106817\release> hdc shell
+[Fail]ExecuteCommand need connect-key? please confirm a device by help info
+PS D:\h60106817\release> hdc shell
+[Fail]ExecuteCommand need connect-key? please confirm a device by help info
+PS D:\h60106817\release> hdc shell
+# ls /data/local/tmp
+avs               gpu_case_judge_arm64    judge_logs   wl.json
+debugserver       gpu_case_logs           kingkongDir  workload_output.jsonl
+gpu-avs-workload  gpu_case_rules_v2.conf  shaders
+# exit
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json golden cpu --profile cpu_qualification_kirin9030 --board-id BOARD-A --known-good --runs 1 --qualification-id "CPU-2B-A-$SESSION"
+{
+  "golden_manifest": "D:\\h60106817\\release\\output\\qualification\\CPU-2B-A-0908B\\golden\\cpu-golden.json",
+  "qualification_id": "CPU-2B-A-0908B",
+  "sha256": "05bc94dc66591f38a80957c073b398ee64bf128addcfbbcc5f6cd945312760b2",
+  "source_mode": "live-capture",
+  "source_runs": [
+    "D:\\h60106817\\release\\output\\CPU-2B-A-0908B\\CPU-2B-A-0908B-001-20260908T113516Z-d0e371a8"
+  ]
+}
+PS D:\h60106817\release> $A_CPU_RUN = (Get-ChildItem -Directory "D:\h60106817\release\output\CPU-2B-A-$SESSION" | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
+PS D:\h60106817\release> echo "A板 CPU: $A_CPU_RUN"
+A板 CPU: D:\h60106817\release\output\CPU-2B-A-0908B\CPU-2B-A-0908B-001-20260908T113516Z-d0e371a8
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json golden gpu --profile gpu_qualification_kirin9030 --board-id BOARD-A --known-good --runs 1 --qualification-id "GPU-2B-A-$SESSION"
+{
+  "golden_manifest": "D:\\h60106817\\release\\output\\qualification\\GPU-2B-A-0908B\\golden\\gpu-golden.json",
+  "qualification_id": "GPU-2B-A-0908B",
+  "sha256": "6d21fa813870bb7fcf10dcc6dc4795d57eb0522b2e37bb36db2518d8a6eee1d3",
+  "source_mode": "live-capture",
+  "source_runs": [
+    "D:\\h60106817\\release\\output\\GPU-2B-A-0908B\\GPU-2B-A-0908B-001-20260908T113619Z-ab200b4c"
+  ]
+}
+PS D:\h60106817\release> $A_GPU_RUN = (Get-ChildItem -Directory "D:\h60106817\release\output\GPU-2B-A-$SESSION" | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
+PS D:\h60106817\release> echo "A板 GPU: $A_GPU_RUN"
+A板 GPU: D:\h60106817\release\output\GPU-2B-A-0908B\GPU-2B-A-0908B-001-20260908T113619Z-ab200b4c
+PS D:\h60106817\release> & $MON --json golden cpu --profile cpu_qualification_kirin9030 --board-id BOARD-A --known-good --runs 2 --qualification-id "CPU-2B-MERGE-$SESSION" --run-dir "BOARD-A=$A_CPU_RUN" --run-dir "BOARD-B=$B_RUN"
+{
+  "golden_manifest": "D:\\h60106817\\release\\output\\qualification\\CPU-2B-MERGE-0908B\\golden\\cpu-golden.json",
+  "qualification_id": "CPU-2B-MERGE-0908B",
+  "sha256": "34b5645ce36b6fc5d23c2d80224338fec57a2a8a55cc2c8072c6253888767039",
+  "source_mode": "supplied",
+  "source_runs": [
+    "D:\\h60106817\\release\\output\\CPU-2B-A-0908B\\CPU-2B-A-0908B-001-20260908T113516Z-d0e371a8",
+    "D:\\h60106817\\release\\output\\CPU-2B-0908B\\CPU-2B-0908B-001-20260908T112429Z-48902ee3"
+  ]
+}
+PS D:\h60106817\release>  $CPU_GOLDEN = "D:\h60106817\release\output\qualification\CPU-2B-MERGE-$SESSION\golden\cpu-golden.json"
+PS D:\h60106817\release> echo "合并后 CPU Golden: $CPU_GOLDEN"
+合并后 CPU Golden: D:\h60106817\release\output\qualification\CPU-2B-MERGE-0908B\golden\cpu-golden.json
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json run --profile cpu_qualification_kirin9030 --golden $CPU_GOLDEN --telemetry --pc-artifacts full --test-id "CPU-CAL-A-$SESSION" --attempt-id "CPU-CAL-A-$SESSION-001"
+{
+  "exit_code": 3,
+  "repeat": 1,
+  "runs": [
+    {
+      "attempt_id": "CPU-CAL-A-0908B-001",
+      "device_evidence": "/data/local/tmp/avs/tests/CPU-CAL-A-0908B/CPU-CAL-A-0908B-001",
+      "device_spool": "retained",
+      "errors": [
+        {
+          "code": "AGENT_FINAL_MISSING",
+          "scope": "agent"
+        },
+        {
+          "code": "AGENT_TRANSPORT_CANCELLED_AFTER_VERDICT",
+          "message": "device-agent transport was cancelled after UART evaluation completed",
+          "scope": "transport"
+        },
+        {
+          "code": "HEARTBEAT_OR_SUMMARY_TIMEOUT",
+          "scope": "liveness"
+        }
+      ],
+      "exit_code": 3,
+      "result": "D:\\h60106817\\release\\output\\CPU-CAL-A-0908B\\CPU-CAL-A-0908B-001\\result.json",
+      "run_id": "CPU-CAL-A-0908B-001",
+      "test_id": "CPU-CAL-A-0908B",
+      "verdict": "INFRA_ERROR"
+    }
+  ],
+  "test_id": "CPU-CAL-A-0908B",
+  "validation_mode": "golden-reference"
+}
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE collect --test-id "CPU-CAL-A-$SESSION" --verify-hashes
+error: no device artifact-hashes.json found under D:\h60106817\release\output\CPU-CAL-A-0908B\device-evidence
+exit_code: 3
+PS D:\h60106817\release>  $RUN_DIR_CPU_A = "D:\h60106817\release\output\CPU-CAL-A-$SESSION\CPU-CAL-A-$SESSION-001"
+PS D:\h60106817\release> echo "A板 CPU 校准目录: $RUN_DIR_CPU_A"
+A板 CPU 校准目录: D:\h60106817\release\output\CPU-CAL-A-0908B\CPU-CAL-A-0908B-001
+PS D:\h60106817\release> hdc shell
+[Fail]ExecuteCommand need connect-key? please confirm a device by help info
+PS D:\h60106817\release> hdc shell
+# exit
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json run --profile cpu_qualification_kirin9030 --golden $CPU_GOLDEN --telemetry --pc-artifacts full --test-id "CPU-CAL-FAKE-A-$SESSION" --attempt-id "CPU-CAL-FAKE-A-$SESSION-001"
+{
+  "exit_code": 0,
+  "repeat": 1,
+  "runs": [
+    {
+      "attempt_id": "CPU-CAL-FAKE-A-0908B-001",
+      "device_evidence": "/data/local/tmp/avs/tests/CPU-CAL-FAKE-A-0908B/CPU-CAL-FAKE-A-0908B-001",
+      "device_spool": "retained",
+      "exit_code": 0,
+      "result": "D:\\h60106817\\release\\output\\CPU-CAL-FAKE-A-0908B\\CPU-CAL-FAKE-A-0908B-001\\result.json",
+      "run_id": "CPU-CAL-FAKE-A-0908B-001",
+      "test_id": "CPU-CAL-FAKE-A-0908B",
+      "verdict": "PASS"
+    }
+  ],
+  "test_id": "CPU-CAL-FAKE-A-0908B",
+  "validation_mode": "golden-reference"
+}
+PS D:\h60106817\release>
+PS D:\h60106817\release>
+PS D:\h60106817\release>
+PS D:\h60106817\release>
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE collect --test-id "CPU-CAL-FAKE-A-$SESSION" --verify-hashes
+test_id: CPU-CAL-FAKE-A-0908B
+attempt_id: None
+collection: D:\h60106817\release\output\CPU-CAL-FAKE-A-0908B\collection.json
+local: D:\h60106817\release\output\CPU-CAL-FAKE-A-0908B\device-evidence
+PS D:\h60106817\release> $RUN_DIR_CPU_A = "D:\h60106817\release\output\CPU-CAL-FAKE-A-$SESSION\CPU-CAL-FAKE-A-$SESSION-001"
+PS D:\h60106817\release> echo "模拟 A 板校准目录: $RUN_DIR_CPU_A"
+模拟 A 板校准目录: D:\h60106817\release\output\CPU-CAL-FAKE-A-0908B\CPU-CAL-FAKE-A-0908B-001
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json run --profile cpu_qualification_kirin9030 --golden $CPU_GOLDEN --telemetry --pc-artifacts full --test-id "CPU-CAL-FAKE-B-$SESSION" --attempt-id "CPU-CAL-FAKE-B-$SESSION-001"
+{
+  "exit_code": 3,
+  "repeat": 1,
+  "runs": [
+    {
+      "attempt_id": "CPU-CAL-FAKE-B-0908B-001",
+      "device_evidence": "/data/local/tmp/avs/tests/CPU-CAL-FAKE-B-0908B/CPU-CAL-FAKE-B-0908B-001",
+      "device_spool": "retained",
+      "errors": [
+        {
+          "code": "AGENT_FINAL_MISSING",
+          "scope": "agent"
+        },
+        {
+          "code": "AGENT_TRANSPORT_CANCELLED_AFTER_VERDICT",
+          "message": "device-agent transport was cancelled after UART evaluation completed",
+          "scope": "transport"
+        },
+        {
+          "code": "HEARTBEAT_OR_SUMMARY_TIMEOUT",
+          "scope": "liveness"
+        }
+      ],
+      "exit_code": 3,
+      "result": "D:\\h60106817\\release\\output\\CPU-CAL-FAKE-B-0908B\\CPU-CAL-FAKE-B-0908B-001\\result.json",
+      "run_id": "CPU-CAL-FAKE-B-0908B-001",
+      "test_id": "CPU-CAL-FAKE-B-0908B",
+      "verdict": "INFRA_ERROR"
+    }
+  ],
+  "test_id": "CPU-CAL-FAKE-B-0908B",
+  "validation_mode": "golden-reference"
+}
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE collect --test-id "CPU-CAL-FAKE-B-$SESSION" --verify-hashes
+error: no device artifact-hashes.json found under D:\h60106817\release\output\CPU-CAL-FAKE-B-0908B\device-evidence
+exit_code: 3
+PS D:\h60106817\release>  $RUN_DIR_CPU_B = "D:\h60106817\release\output\CPU-CAL-FAKE-B-$SESSION\CPU-CAL-FAKE-B-$SESSION-001"
+PS D:\h60106817\release> echo "模拟 B 板校准目录: $RUN_DIR_CPU_B"
+模拟 B 板校准目录: D:\h60106817\release\output\CPU-CAL-FAKE-B-0908B\CPU-CAL-FAKE-B-0908B-001
+PS D:\h60106817\release>  $FAKE_JSON = "D:\h60106817\release\output\fake-baseline.json"
+PS D:\h60106817\release> @'
+>> {
+>>   "baseline_id": "CPU-FUNCTIONAL-FAKE",
+>>   "profile": "cpu_qualification_kirin9030",
+>>   "platform": "kirin9030",
+>>   "status": "draft",
+>>   "metrics": {
+>>     "operations_per_sec_avg": 1000,
+>>     "batch_time_ms_p99": 50
+>>   }
+>> }
+>> '@ | Out-File -FilePath $FAKE_JSON -Encoding UTF8
+PS D:\h60106817\release> cat D:\h60106817\release\output\fake-baseline.json
+{
+  "baseline_id": "CPU-FUNCTIONAL-FAKE",
+  "profile": "cpu_qualification_kirin9030",
+  "platform": "kirin9030",
+  "status": "draft",
+  "metrics": {
+    "operations_per_sec_avg": 1000,
+    "batch_time_ms_p99": 50
+  }
+}
+PS D:\h60106817\release> & $MON baseline import $FAKE_JSON
+error: invalid baseline bundle: D:\h60106817\release\output\fake-baseline.json
+exit_code: 4

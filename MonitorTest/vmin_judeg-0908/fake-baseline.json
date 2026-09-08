@@ -1,0 +1,10 @@
+﻿{
+  "baseline_id": "CPU-FUNCTIONAL-FAKE",
+  "profile": "cpu_qualification_kirin9030",
+  "platform": "kirin9030",
+  "status": "draft",
+  "metrics": {
+    "operations_per_sec_avg": 1000,
+    "batch_time_ms_p99": 50
+  }
+}

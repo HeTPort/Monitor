@@ -1,0 +1,72 @@
+{
+  "agent_backend": "posix-shell",
+  "assets": [],
+  "attempt_id": "CPU-CAL-A-0908B-001",
+  "baseline": null,
+  "device_attempt_dir": "/data/local/tmp/avs/tests/CPU-CAL-A-0908B/CPU-CAL-A-0908B-001",
+  "event_crc": false,
+  "golden_reference": {
+    "correctness_fingerprint": "9b869e5c43b4f49843b4e2f1b0939e2419f43c621aaca08eb6a7fec0e3bbcb5d",
+    "qualification_id": "CPU-2B-MERGE-0908B"
+  },
+  "heartbeat_timeout_s": 45.0,
+  "logs": {
+    "device_local": true,
+    "streamed_to_pc": false
+  },
+  "manifest_sha256": "8b3bebfccd15b94d61067ed002d16486251085619bef003409b665ece5f6b845",
+  "overall_timeout_s": 300.0,
+  "pc_artifacts": "full",
+  "platform": "kirin9030",
+  "policy": {
+    "required_telemetry": [],
+    "thresholds": {}
+  },
+  "producer": {
+    "component": "RunManifestBuilder",
+    "name": "vmin_judge",
+    "version": "2.1.0"
+  },
+  "profile": {
+    "id": "cpu_qualification_kirin9030",
+    "sha256": "8e4353137828816b3e07bfade5338324d08c9f9da1547ddfa2a48d1369066aa2"
+  },
+  "run_id": "CPU-CAL-A-0908B-001",
+  "scheduler": {
+    "managed_by_monitor": false,
+    "requirements": {}
+  },
+  "schema_version": 1,
+  "serial_transport": {
+    "max_frame_bytes": 512,
+    "protocol": "uart-v2",
+    "relay": "/data/local/tmp/avs/bin/avs-uart-relay",
+    "safe_utilization": 0.7,
+    "tail_guard_bytes": 64
+  },
+  "spool_dir": "/data/local/tmp/avs/tests/CPU-CAL-A-0908B/CPU-CAL-A-0908B-001/spool",
+  "target": "cpu",
+  "telemetry": {
+    "agent": "/data/local/tmp/avs/bin/avs-telemetry-agent",
+    "device_local": true,
+    "enabled": true,
+    "interval_s": 5,
+    "plan": "/data/local/tmp/avs/configs/telemetry/cpu_qualification_kirin9030.conf",
+    "shutdown_timeout_s": 10
+  },
+  "test_id": "CPU-CAL-A-0908B",
+  "timeout_s": 300.0,
+  "uart": "/dev/ttyHW0",
+  "validation_mode": "golden-reference",
+  "workload": {
+    "argv": [
+      "/data/local/tmp/avs/bin/cpu-avs-workload",
+      "--config",
+      "/data/local/tmp/avs/configs/cpu_qualification_kirin9030.json",
+      "--golden-checksum",
+      "1a60854766c66a6a"
+    ],
+    "config_path": "/data/local/tmp/avs/configs/cpu_qualification_kirin9030.json",
+    "cwd": "/data/local/tmp/avs"
+  }
+}
