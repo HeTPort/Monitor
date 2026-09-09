@@ -1,0 +1,39 @@
+{
+  "board_ids": [
+    "BOARD-A"
+  ],
+  "checksum": "1a60854766c66a6a",
+  "correctness_fingerprint": "5b556acf14238b8d0555f95c388aa13daf968f123ad18ab3e2f809f4a6f9307f",
+  "created_at": "2026-09-09T09:07:44.368967+00:00",
+  "fingerprint_fields": {
+    "deployed_file_sha256": {
+      "/data/local/tmp/avs/bin/cpu-avs-workload": "0591facae427507f5fabca88e8b453cba05a55b7fcb110da2ad5f58380890a68",
+      "/data/local/tmp/avs/configs/cpu_qualification_kirin9030.json": "28b1c989b9c6bed77cb13308e85770b7f2cc8ecbff53f4ffcd85701b0512a597"
+    },
+    "profile_sha256": "8e4353137828816b3e07bfade5338324d08c9f9da1547ddfa2a48d1369066aa2",
+    "target": "cpu",
+    "workload": {
+      "binary": "../../tools/cpu-avs-workload",
+      "config": "../workloads/cpu_qualification_kirin9030.json",
+      "remote_binary": "bin/cpu-avs-workload"
+    },
+    "workload_config_sha256": "28b1c989b9c6bed77cb13308e85770b7f2cc8ecbff53f4ffcd85701b0512a597"
+  },
+  "kind": "cpu-checksum",
+  "profile": "cpu_qualification_kirin9030",
+  "qualification_id": "GOLD-CPU-BOARD-A-0910B",
+  "records": [
+    {
+      "api": "cpu",
+      "backend": "mixed",
+      "checksum": "1a60854766c66a6a",
+      "mode": "compute",
+      "profile": "mixed",
+      "type": "golden",
+      "verify_mode": "checksum",
+      "workload": "cpu"
+    }
+  ],
+  "repeat_count": 1,
+  "schema_version": 1
+}

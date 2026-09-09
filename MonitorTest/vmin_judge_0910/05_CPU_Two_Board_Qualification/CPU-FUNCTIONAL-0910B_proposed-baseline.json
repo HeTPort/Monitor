@@ -1,0 +1,127 @@
+{
+  "approval": null,
+  "calibration": {
+    "accepted_count": 2,
+    "accepted_per_board": {
+      "BOARD-A": 1,
+      "BOARD-B": 1
+    },
+    "accepted_runs": [
+      "CPU-CAL-BOARD-A-0910B-001",
+      "CPU-CAL-BOARD-B-0910B-001"
+    ],
+    "board_ids": [
+      "BOARD-A",
+      "BOARD-B"
+    ],
+    "created_at": "2026-09-09T09:30:52.499730+00:00",
+    "distributions": {
+      "batch_time_ms_p99": {
+        "count": 2,
+        "cv_percent": 4.9872800322823965,
+        "max": 14.9599,
+        "mean": 14.24925,
+        "median": 14.24925,
+        "min": 13.5386,
+        "p05": 13.609665,
+        "p95": 14.888834999999998,
+        "stddev": 0.7106499999999993
+      },
+      "operations_per_sec_avg": {
+        "count": 2,
+        "cv_percent": 8.536733194406883,
+        "max": 1137550990.5115,
+        "mean": 1048079260.3864,
+        "median": 1048079260.3864,
+        "min": 958607530.2613,
+        "p05": 967554703.2738099,
+        "p95": 1128603817.4989898,
+        "stddev": 89471730.12509996
+      }
+    },
+    "policy": {
+      "latency_margin_percent": 10.0,
+      "maximum_cv_percent": 10.0,
+      "minimum_accepted_samples": 2,
+      "minimum_boards": 2,
+      "throughput_margin_percent": 5.0
+    },
+    "rejected_count": 0,
+    "rejected_runs": [],
+    "temperature_range_c": [
+      35.0,
+      60.0
+    ]
+  },
+  "fingerprints": {
+    "correctness": "5b556acf14238b8d0555f95c388aa13daf968f123ad18ab3e2f809f4a6f9307f",
+    "profile": "8e4353137828816b3e07bfade5338324d08c9f9da1547ddfa2a48d1369066aa2"
+  },
+  "golden": {
+    "board_ids": [
+      "BOARD-A",
+      "BOARD-B"
+    ],
+    "checksum": "1a60854766c66a6a",
+    "correctness_fingerprint": "5b556acf14238b8d0555f95c388aa13daf968f123ad18ab3e2f809f4a6f9307f",
+    "created_at": "2026-09-09T09:20:19.477546+00:00",
+    "fingerprint_fields": {
+      "deployed_file_sha256": {
+        "/data/local/tmp/avs/bin/cpu-avs-workload": "0591facae427507f5fabca88e8b453cba05a55b7fcb110da2ad5f58380890a68",
+        "/data/local/tmp/avs/configs/cpu_qualification_kirin9030.json": "28b1c989b9c6bed77cb13308e85770b7f2cc8ecbff53f4ffcd85701b0512a597"
+      },
+      "profile_sha256": "8e4353137828816b3e07bfade5338324d08c9f9da1547ddfa2a48d1369066aa2",
+      "target": "cpu",
+      "workload": {
+        "binary": "../../tools/cpu-avs-workload",
+        "config": "../workloads/cpu_qualification_kirin9030.json",
+        "remote_binary": "bin/cpu-avs-workload"
+      },
+      "workload_config_sha256": "28b1c989b9c6bed77cb13308e85770b7f2cc8ecbff53f4ffcd85701b0512a597"
+    },
+    "kind": "cpu-checksum",
+    "profile": "cpu_qualification_kirin9030",
+    "qualification_id": "GOLD-CPU-2BOARD-0910B",
+    "records": [
+      {
+        "api": "cpu",
+        "backend": "mixed",
+        "checksum": "1a60854766c66a6a",
+        "mode": "compute",
+        "profile": "mixed",
+        "type": "golden",
+        "verify_mode": "checksum",
+        "workload": "cpu"
+      },
+      {
+        "api": "cpu",
+        "backend": "mixed",
+        "checksum": "1a60854766c66a6a",
+        "mode": "compute",
+        "profile": "mixed",
+        "type": "golden",
+        "verify_mode": "checksum",
+        "workload": "cpu"
+      }
+    ],
+    "repeat_count": 2,
+    "schema_version": 1
+  },
+  "id": "CPU-FUNCTIONAL-0910B",
+  "platform": "kirin9030",
+  "profile": "cpu_qualification_kirin9030",
+  "proposal_sha256": "c66ee77b5faef9fff3f364dc3283906d6a9781f9500cdd95d36f6d7546ff6539",
+  "schema_version": 1,
+  "status": "draft",
+  "target": "cpu",
+  "thresholds": {
+    "performance": {
+      "batch_time_ms_p99": {
+        "max": 16.45589
+      },
+      "operations_per_sec_avg": {
+        "min": 910677153.7482349
+      }
+    }
+  }
+}

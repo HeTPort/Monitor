@@ -1,0 +1,12 @@
+{
+  "batch_count": 9480,
+  "contract_version": 2,
+  "exit_code": 0,
+  "result": "PASS",
+  "success_log_interval": 60,
+  "verify_count": 9480,
+  "verify_fail_count": 0,
+  "verify_interval": 1,
+  "verify_mode": "checksum",
+  "verify_pass": true
+}
