@@ -1,6 +1,6 @@
 # Monitor 2.1 打包与设备最小闭环测试计划
 
-更新于 2026-09-02。本计划用于 Kirin9030 实机验收，也可通过替换平台/profile 用于其他板卡。
+更新于 2026-09-08。本计划用于 Kirin9030 实机验收，也可通过替换平台/profile 用于其他板卡。两块单板的 CPU/GPU 完整命令和按问题回收证据见 [双板 verify 运行手册](TWO_BOARD_VERIFY_RUNBOOK.md)；新增场景及限制见 [profile 配置目录](PROFILE_CATALOG.md)。
 
 ## 1. 本轮要证明什么
 
@@ -12,7 +12,7 @@ PC run -> 设备 agent -> workload -> 指定 UART -> PC 协议解析和判错
                          +-> 设备本地追加证据
 ```
 
-probe、pair、deploy 和 verify-deployment 是显式准备，不属于每次 `run`。telemetry 是独立能力；baseline 是可选校验能力。Monitor 不负责修改或恢复 governor、频率、CPU online、功耗策略及 affinity。
+probe、pair、deploy 和 verify-deployment 是显式准备。每次 `run` 启动前还会只读核验当前 profile 资产哈希和 workload verify 协议能力，检查失败就返回准备错误，不会自动补部署。telemetry 是独立能力；baseline 是可选校验能力。Monitor 不负责修改或恢复 governor、频率、CPU online、功耗策略及 affinity。
 
 ### 1.1 命令接口、作用和适用流程
 
@@ -24,10 +24,10 @@ probe、pair、deploy 和 verify-deployment 是显式准备，不属于每次 `r
 | `relay probe` | 读取 ABI；检查已部署 relay 的 version/self-test/termios/tcdrain | relay 首次移植或重新编译后 | `--check-uart` 不发送测试负载 |
 | `deploy --profile P` | 部署 profile P 需要的 agent、relay、workload、配置、shader 和 telemetry plan | 第一次运行 P；P 的资源变化后；设备目录被清理后 | 不运行测试；不会部署其他 profile 的专属配置 |
 | `verify-deployment --profile P` | 只读比较 profile P 的本地/设备哈希 | deploy 后；正式 run 前 | 不补文件、不修复哈希 |
-| `run --profile P` | 启动已部署 agent/workload，接收 UART v2 并给出 PASS/FAIL | CPU/GPU 长压、短 smoke、负向测试；可选 baseline 或 correctness-only golden | 不隐式 probe/pair/deploy/verify，不修改设备策略 |
+| `run --profile P` | 只读检查资产和 verify 能力后启动 agent/workload，接收 UART v2 并给出 PASS/FAIL | CPU/GPU 长压、短 smoke、负向测试；可选 baseline 或 correctness-only golden | 不隐式 probe/pair/deploy，不修改设备策略 |
 | `smoke` | 兼容旧调用的短 profile 别名 | 只用于旧脚本迁移 | 已弃用；新流程统一使用 `run --profile ...smoke...` |
 | `telemetry run` | 单独启动设备本地追加式遥测 | 平台能力验收或需要独立采样时 | 不启动 workload、不占用判错 UART |
-| `collect` | 按 test/attempt ID 拉取设备证据，可校验哈希 | run/telemetry 后集中取证 | 默认不删除设备证据 |
+| `collect` | 按 test/attempt ID 拉取设备证据；artifact-set 支持按分析目的筛选并核验哈希 | 普通 PASS 用 minimal；calibrate 用 calibration；判错用 failure；串口问题用 protocol | 默认不删除设备证据；子集回收禁止清理远端 |
 | `golden` / `calibrate` / `baseline` | 实时采集或消费完整合格运行，生成、校准、批准资格数据 | 需要 checksum/golden/阈值校验时 | 不属于普通 error-only 最小闭环；不会接受半个 supplied cohort |
 | `report` | 从一个已有 PC `result.json` 生成 markdown/json/csv | 测试结束后本地汇总 | 不连接设备、不替代 `collect` |
 | `monitor` | 诊断性读取串口事件 | 排查独立串口/协议问题 | 没有完整 run manifest，不给 DUT verdict |
@@ -63,11 +63,16 @@ probe、pair、deploy 和 verify-deployment 是显式准备，不属于每次 `r
 
 仓库当前没有最后一行对应的实际文件；尖括号表示占位符。positive smoke 不是故障注入，也不应依赖 golden/checksum。
 
+新增 17 个 profile 覆盖 CPU integer/floating-point/matrix/memory/burst/thermal/extreme/idle-control 和 GPU ALU/SFU/texture/fill/light/mid/heavy/thermal/extreme。GPU ALU/SFU 使用实际支持的 Vulkan offscreen fragment shader；Vulkan compute、idle、burst 调度不在当前实现范围。详见 [profile 目录](PROFILE_CATALOG.md)，不要仅按 workload 内置 profile 名称推断能力。
+
+正式正确性 profile 使用 `verify_interval=1`、`success_log_interval=60`、`summary_only=false`。完整运行必须报告 `verify_count`、`verify_fail_count` 和 `batch_count/frame_count`；每单位校验时计数必须一致且大于零。成功 verify 日志抽样不降低校验覆盖。生成 golden 的短运行单独处理，不要求完整持续运行的计数覆盖。
+
 ## 2. 测试前提
 
 - PC 能通过 HDC/ADB 调用设备 shell。
 - PC 与设备 UART 已物理连接。
 - workload 二进制与 GPU shader 已放入打包资源目录。
+- CPU/GPU 二进制必须由此次统一 verify 协议源码重建，支持 `--capabilities` 及 verify 协议 v2；只替换 Monitor 或 JSON 配置不构成升级完成。原二进制/配置产生的 golden 和性能 baseline 需要重建。
 - `avs-uart-relay` 已用与 workload 相同的 OpenHarmony ABI/toolchain 构建并放入平台配置的 `relay.local_asset`。
 - 测试者知道设备序列号、PC 串口和设备 UART；0831 记录优先使用 `/dev/ttyHW0`、9600 baud。
 - 网络和 GitHub 连接不在本计划判定范围内。
@@ -112,7 +117,7 @@ python main.py validate --package
 
 ## 4. 平台一次性准备与 profile 资产准备
 
-PRE-01、02、02A 通常每个平台/BSP 做一次；PRE-03、04 对每个将运行的 profile 做一次，并在资源变化或设备目录清空后重做。以下命令都不应被 `run` 隐式重复。
+PRE-01、02、02A 通常每个平台/BSP 做一次；PRE-03、04 对每个将运行的 profile 做一次，并在资源变化或设备目录清空后重做。`run` 只读复核所需资产和 verify 能力，不会隐式执行这些准备/部署命令。
 
 ### PRE-01 平台身份和能力探测
 
@@ -327,10 +332,10 @@ live capture 中 `--qualification-id` 就是设备/PC `test_id`，每次运行�
 - 离线 golden 为 `source_mode=supplied`，两板 checksum 一致；少传一个 `--run-dir` 返回配置错误 4；
 - 两次持续 run 均为 `validation_mode=golden-reference`、PASS，没有 `--generate-golden`，也没有 baseline 性能阈值；
 - `workload-summary-full.json` 或设备 `workload.log` 含 `operations_per_sec_avg`、`batch_time_ms_p99`、至少配置 duration 的 90%，且 CPU `batch_count>=2`；
-- telemetry 至少有一个 `complete=true` 快照，且同一快照覆盖 profile 全部 required 指标；样本未被 throttling/温度规则拒绝；
+- telemetry 快照全部完整，覆盖 profile 全部 required 指标；长测试还检查时间戳间隔和采样跨度，样本未被 throttling/温度规则拒绝；
 - calibrate 生成 draft，接受 2 个样本和 2 个 board ID；approve 后状态为 approved。
 
-GPU 按相同顺序改用 `gpu_qualification_kirin9030`、`golden gpu` 和 `calibrate gpu`。额外通过条件是每个 correctness source 有 `gpu-golden.rgba`，两份 raw readback 字节完全一致；`deploy --golden` 已核验并部署该文件；持续 summary 有 `fps_avg` 和 `frame_time_p99_ms`；快照包含可解析的 `gpu.frequency`、`gpu.utilization`、`gpu.temperature`、`gpu.hang_count` 和 `gpu.power_policy`。
+GPU 的两板完整命令见 [双板 verify 运行手册](TWO_BOARD_VERIFY_RUNBOOK.md)，不再只靠替换 CPU 命令执行。每个 correctness source 必须有 `gpu-golden.rgba`，两份 raw readback 字节完全一致；`deploy --golden` 已部署且核验该文件；持续 summary 有 `fps_avg` 和 `frame_time_p99_ms`；快照覆盖 GPU profile 的全部 required 指标。
 
 `--min-accepted 2` 只证明命令、证据归一化、指标抽取和 registry 的功能数据链，不是生产基线。
 

@@ -25,6 +25,7 @@ EVENT_TYPES = {
     "heartbeat",
     "batch",
     "verify",
+    "verification_summary",
     "golden",
     "telemetry",
     "kernel",

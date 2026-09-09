@@ -19,6 +19,7 @@ from .config_loader import ConfigError, PlatformConfig, ProfileConfig, load_docu
 from .deployment import AssetSpec, DeploymentError, DeploymentManager
 from .events import EventProtocolError
 from .events import EventDecoder
+from .evidence_collection import collect_subset, validated_hash_entries
 from .path_resolver import PathResolutionError, PathResolver
 from .platform_probe import PlatformProbe, ProbeError
 from .policy_engine import RunExitCode
@@ -35,6 +36,7 @@ from .run_orchestrator import RunError, RunInfrastructureError, RunManifestBuild
 from .transport import ADBTransport, HDCTransport, Transport, TransportError, TransportManager
 from .transport_probe import TransportProbeBackend
 from .uart_protocol import UART_PROTOCOL, UartV2SessionDecoder, discover_uart_session
+from .verification_contract import validate_capabilities, verification_issues, verification_requirement
 
 
 CLI_VERSION = "2.1.0"
@@ -95,6 +97,7 @@ def _concise_reason(reason: Mapping[str, Any]) -> dict[str, Any]:
             "exit_code",
             "error_code",
             "line",
+            "issues",
         ):
             if key in evidence:
                 concise[key] = evidence[key]
@@ -669,6 +672,48 @@ def _verify_existing_assets(transport: Transport, assets: Iterable[AssetSpec]) -
     }
 
 
+def _runtime_preflight(
+    paths: PathResolver, profile: ProfileConfig, transport: Transport,
+    *, baseline: Baseline | None = None, golden: Mapping[str, Any] | None = None,
+    telemetry: bool = False, generating_golden: bool = False,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Read-only identity checks. Never redeploy or repair a device during a run."""
+    assets, _, config_path = _asset_plan(paths, profile, baseline, golden)
+    config = validate_workload_config(config_path, profile.target, device_root=paths.device_root)
+    try:
+        verification_requirement(profile.target, config, strict=baseline is not None or golden is not None)
+    except ValueError as exc:
+        raise ConfigError(str(exc)) from exc
+    if config.get("generate_golden") and not generating_golden:
+        raise ConfigError("run profiles must not set generate_golden; use the golden command")
+    if profile.target == "gpu" and config["verify_mode"] == "golden-image" and not generating_golden:
+        if not any(asset.kind == "golden" for asset in assets):
+            raise ConfigError("GPU golden-image run requires --golden or --baseline with a local readback for SHA-256 verification")
+    platform = load_platform(paths, profile.platform)
+    relay = dict(platform.serial.get("relay", {}))
+    assets.append(AssetSpec(
+        paths.resolve_resource(str(relay.get("local_asset", f"tools/relay/{platform.name}/avs-uart-relay"))),
+        paths.remote(str(relay.get("remote_asset", "bin/avs-uart-relay"))),
+        executable=True, kind="uart-relay",
+    ))
+    if telemetry:
+        assets.extend(_telemetry_assets(paths, profile))
+    report = _verify_existing_assets(transport, assets)
+    binary = next(asset.remote for asset in assets if asset.kind == "workload")
+    probe = transport.invoke((str(binary), "--capabilities"), timeout_s=10.0)
+    if not probe.success:
+        raise DeploymentError("workload --capabilities failed; rebuild and redeploy contract v2 workload")
+    try:
+        capabilities = json.loads(probe.stdout.strip())
+        if not isinstance(capabilities, dict):
+            raise ValueError("capabilities must be a JSON object")
+        validate_capabilities(capabilities, profile.target, str(config["verify_mode"]))
+    except (ValueError, TypeError) as exc:
+        raise DeploymentError(f"unsupported deployed workload: {exc}") from exc
+    report["workload_capabilities"] = capabilities
+    return config, report
+
+
 def _apply_saved_pairing(args: Namespace, paths: PathResolver) -> None:
     pairing_path = paths.resolve_state("pairing.conf")
     if not pairing_path.exists():
@@ -748,11 +793,15 @@ def _execute_live_qualification(
         args, paths, profile, mode
     )
     for repetition in range(count):
+        workload_document, preflight = _runtime_preflight(
+            paths, profile, transport, golden=effective_golden or None,
+            telemetry=mode == "calibration", generating_golden=mode == "golden",
+        )
         attempt_id = new_run_id(f"{test_id}-{repetition + 1:03d}")
         manifest = RunManifestBuilder(paths).build_qualification(
             profile=profile,
             golden=effective_golden,
-            capabilities=None,
+            capabilities=preflight["workload_capabilities"],
             mode=mode,
             test_id=test_id,
             attempt_id=attempt_id,
@@ -764,7 +813,10 @@ def _execute_live_qualification(
             # Golden generation proves correctness only. Its intentionally short
             # measured phase is not a sustained calibration sample.
             telemetry_enabled=mode == "calibration",
+            workload_document=workload_document,
         )
+        manifest["deployment_preflight"] = preflight
+        manifest["manifest_sha256"] = correctness_fingerprint({key: value for key, value in manifest.items() if key != "manifest_sha256"})
         execution = RunOrchestrator(paths.output_root).run_serial(
             manifest,
             transport=transport,
@@ -1002,6 +1054,10 @@ def _sample_from_run(
     required_metrics: Iterable[str] = (),
     expected_duration_s: float | None = None,
     target: str | None = None,
+    verification: Mapping[str, Any] | None = None,
+    expected_profile: ProfileConfig | None = None,
+    expected_golden: Mapping[str, Any] | None = None,
+    telemetry_interval_s: float | None = None,
 ) -> CalibrationSample:
     normalized = resolve_qualification_run(run_dir)
     if normalized.result_path is None or not normalized.summary:
@@ -1012,6 +1068,8 @@ def _sample_from_run(
     telemetry_path = normalized.telemetry_path
     required = {str(metric) for metric in required_metrics}
     telemetry_complete = False
+    snapshot_validity: list[bool] = []
+    telemetry_timestamps: list[int] = []
     throttled = False
     if telemetry_path is not None:
         for line in telemetry_path.read_text(encoding="utf-8").splitlines():
@@ -1025,6 +1083,7 @@ def _sample_from_run(
                 metrics = {payload["metric"]: payload.get("value")}
             if not isinstance(metrics, dict):
                 continue
+            snapshot_complete = False
             if isinstance(payload, dict) and payload.get("complete") is True:
                 covered = {
                     str(key)
@@ -1032,7 +1091,11 @@ def _sample_from_run(
                     if _metric_values(value) and any(item is not None for item in _metric_values(value))
                 }
                 if required.issubset(covered):
-                    telemetry_complete = True
+                    snapshot_complete = True
+            snapshot_validity.append(snapshot_complete)
+            timestamp = event.get("timestamp_ms")
+            if type(timestamp) is int:
+                telemetry_timestamps.append(timestamp)
             for key, value in metrics.items():
                 metric_name = str(key)
                 if metric_name.endswith("temperature") or ".temperature." in metric_name:
@@ -1046,7 +1109,50 @@ def _sample_from_run(
                         item not in (0, 0.0, "0", "none", "off", False, None, "")
                         for item in _metric_values(value)
                     )
+    telemetry_complete = bool(snapshot_validity) and all(snapshot_validity)
+    if telemetry_interval_s is not None and expected_duration_s is not None and expected_duration_s > 2 * telemetry_interval_s:
+        gaps = [later - earlier for earlier, later in zip(telemetry_timestamps, telemetry_timestamps[1:])]
+        if (len(telemetry_timestamps) != len(snapshot_validity) or not gaps
+            or min(gaps) <= 0 or max(gaps) > telemetry_interval_s * 2500
+            or telemetry_timestamps[-1] - telemetry_timestamps[0] < max(0, expected_duration_s * .90 - 2 * telemetry_interval_s) * 1000):
+            telemetry_complete = False
     rejection_reasons: list[str] = []
+    if result.get("verdict") != "PASS" or result.get("exit_code") != 0:
+        rejection_reasons.append("pc_result_not_pass")
+    if verification is not None:
+        rejection_reasons.extend(f"verification:{issue}" for issue in verification_issues(summary, verification))
+        pc_summary = result.get("workload_summary")
+        if not isinstance(pc_summary, dict):
+            rejection_reasons.append("pc_verification_summary_missing")
+        else:
+            for key in ("contract_version", "verify_count", "verify_fail_count", "verify_mode", "verify_interval",
+                        "success_log_interval", "verify_pass", str(verification["unit_metric"])):
+                if type(pc_summary.get(key)) is not type(summary.get(key)) or pc_summary.get(key) != summary.get(key):
+                    rejection_reasons.append(f"pc_native_summary_mismatch:{key}")
+        final_path = normalized.spool_dir / "final.json" if normalized.spool_dir is not None else None
+        if final_path is None or not final_path.is_file():
+            rejection_reasons.append("device_final_missing")
+        else:
+            device_final = json.loads(final_path.read_text(encoding="utf-8"))
+            if device_final.get("attempt_id") != result.get("run_id") or device_final.get("workload_exit_code") != 0 or device_final.get("summary_seen") is not True:
+                rejection_reasons.append("device_final_identity_or_result_mismatch")
+    if expected_profile is not None or expected_golden is not None:
+        manifest_path = normalized.result_path.parent / "run-manifest.json"
+        if not manifest_path.exists():
+            rejection_reasons.append("run_manifest_missing")
+        else:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if manifest.get("run_id") != result.get("run_id"):
+                rejection_reasons.append("run_identity_mismatch")
+            if manifest.get("validation_mode") != "golden-reference":
+                rejection_reasons.append("calibration_requires_golden_reference_run")
+            if expected_profile is not None and (
+                manifest.get("profile", {}).get("sha256") != expected_profile.fingerprint
+                or manifest.get("target") != expected_profile.target
+            ):
+                rejection_reasons.append("profile_fingerprint_mismatch")
+            if expected_golden is not None and (manifest.get("golden_reference") or {}).get("correctness_fingerprint") != expected_golden.get("correctness_fingerprint"):
+                rejection_reasons.append("golden_fingerprint_mismatch")
     if expected_duration_s is not None:
         observed_duration = summary.get("duration_s", summary.get("duration"))
         minimum_duration = expected_duration_s * 0.90
@@ -1103,6 +1209,10 @@ def cmd_calibrate(args: Namespace) -> int:
             required_metrics=profile.telemetry.get("required", []),
             expected_duration_s=expected_duration,
             target=profile.target,
+            verification=verification_requirement(profile.target, workload_document, strict=True),
+            expected_profile=profile,
+            expected_golden=golden,
+            telemetry_interval_s=max(1, (int(profile.telemetry.get("interval_ms", 5000)) + 999) // 1000),
         )
         for board_id, run_dir in run_specs[: args.runs]
     ]
@@ -1187,6 +1297,10 @@ def _execute_run_command(args: Namespace, *, smoke: bool = False) -> int:
     results: list[dict[str, Any]] = []
     final_exit = 0
     for repetition in range(args.repeat):
+        workload_document, preflight = _runtime_preflight(
+            paths, profile, transport, baseline=baseline, golden=golden,
+            telemetry=bool(getattr(args, "telemetry", False)),
+        )
         if explicit_attempt:
             attempt_id = explicit_attempt
         elif args.repeat > 1:
@@ -1204,7 +1318,10 @@ def _execute_run_command(args: Namespace, *, smoke: bool = False) -> int:
             device_uart=args.device_uart,
             telemetry_enabled=bool(getattr(args, "telemetry", False)),
             pc_artifacts=str(getattr(args, "pc_artifacts", "result")),
+            workload_document=workload_document,
         )
+        manifest["deployment_preflight"] = preflight
+        manifest["manifest_sha256"] = correctness_fingerprint({key: value for key, value in manifest.items() if key != "manifest_sha256"})
         agent_argv = _shell_agent_argv(agent_remote, manifest, args.baudrate)
         execution = RunOrchestrator(paths.output_root).run_serial(
             manifest,
@@ -1496,20 +1613,29 @@ def cmd_collect(args: Namespace) -> int:
     if attempt_id:
         local_relative /= attempt_id
     local = paths.resolve_output(local_relative)
-    transfer = transport.pull(remote, local)
-    if not transfer.success:
-        raise TransportError(f"collection failed: {transfer.message}")
+    artifact_set = getattr(args, "artifact_set", "full")
+    subset_record: dict[str, Any] = {}
+    if artifact_set != "full":
+        if not attempt_id or args.remote_run_dir:
+            raise ConfigError("subset collection requires --attempt-id and does not accept --remote-run-dir")
+        if args.remove_remote_after_verify:
+            raise ConfigError("remote cleanup requires full collection; a subset cannot authorize deleting omitted evidence")
+        subset_record = collect_subset(transport, remote, local, artifact_set)
+        transferred_bytes = subset_record["bytes_transferred"]
+    else:
+        transfer = transport.pull(remote, local)
+        if not transfer.success:
+            raise TransportError(f"collection failed: {transfer.message}")
+        transferred_bytes = transfer.bytes_transferred
     verified = False
-    if args.verify_hashes:
+    if args.verify_hashes and artifact_set == "full":
         manifests = list(local.rglob("artifact-hashes.json")) if local.exists() else []
         if not manifests:
             raise TransportError(f"no device artifact-hashes.json found under {local}")
         mismatches: list[str] = []
         for manifest_path in manifests:
             hash_document = json.loads(manifest_path.read_text(encoding="utf-8"))
-            hashes = hash_document.get("sha256", {})
-            if not isinstance(hashes, dict):
-                raise TransportError(f"device artifact hash manifest is malformed: {manifest_path}")
+            hashes = validated_hash_entries(hash_document)
             for relative, expected in hashes.items():
                 artifact = manifest_path.parent / relative
                 if not artifact.exists() or sha256_file(artifact) != expected:
@@ -1534,9 +1660,11 @@ def cmd_collect(args: Namespace) -> int:
         "attempt_id": attempt_id,
         "remote": str(remote),
         "local": str(local),
-        "bytes_transferred": transfer.bytes_transferred,
+        "bytes_transferred": transferred_bytes,
         "verified": verified,
         "remote_removed": remote_removed,
+        "artifact_set": artifact_set,
+        **subset_record,
     }
     output = paths.resolve_output(Path(test_id) / "collection.json", create_parent=True)
     atomic_write_json(output, record)
@@ -1573,6 +1701,7 @@ def cmd_report(args: Namespace) -> int:
             f"- Baseline: {result.get('baseline_id')}",
             f"- Workload result: {result.get('workload_result')}",
             f"- Workload exit: {result.get('workload_exit_code')}",
+            f"- Verification: {json.dumps({key: value for key, value in (result.get('workload_summary') or {}).items() if key in {'verify_mode', 'verify_interval', 'success_log_interval', 'verify_count', 'verify_fail_count', 'batch_count', 'frame_count'}}, ensure_ascii=False)}",
             "",
             "## DUT reasons",
             "",

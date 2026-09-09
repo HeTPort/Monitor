@@ -1,11 +1,11 @@
 {
-  "profile": "mixed",
+  "profile": "burst",
   "api": "cpu",
   "mode": "compute",
   "backend": "mixed",
-  "duration": 60,
+  "duration": 120,
   "warmup": 5,
-  "timeout": 75,
+  "timeout": 160,
   "iterations": 100000,
   "threads": 4,
   "working_set_kb": 256,
@@ -13,6 +13,10 @@
   "verify_interval": 1,
   "success_log_interval": 60,
   "summary_only": false,
+  "per_batch_log": false,
   "heartbeat_interval": 1,
-  "output_format": "jsonl"
+  "output_format": "jsonl",
+  "duty_cycle": 0.5,
+  "burst_period": 2,
+  "burst_active": 1
 }

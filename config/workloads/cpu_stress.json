@@ -10,6 +10,9 @@
   "threads": 4,
   "working_set_kb": 256,
   "verify_mode": "none",
+  "verify_interval": 1,
+  "success_log_interval": 60,
+  "summary_only": false,
   "heartbeat_interval": 1,
   "output_format": "jsonl"
 }

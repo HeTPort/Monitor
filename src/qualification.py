@@ -143,6 +143,7 @@ class CalibrationPolicy:
     latency_margin_percent: float = 10.0
     reject_telemetry_gaps: bool = True
     reject_throttled_samples: bool = True
+    maximum_cv_percent: float | None = None
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any]) -> "CalibrationPolicy":
@@ -150,6 +151,7 @@ class CalibrationPolicy:
         limits = data.get("limits", {})
         throughput = limits.get("throughput", {}) if isinstance(limits, dict) else {}
         latency = limits.get("latency", {}) if isinstance(limits, dict) else {}
+        variation = limits.get("variation", {}) if isinstance(limits, dict) else {}
         return cls(
             minimum_boards=int(data.get("minimum_boards", 2)),
             minimum_accepted_samples=int(data.get("minimum_accepted_samples", 20)),
@@ -157,6 +159,7 @@ class CalibrationPolicy:
             latency_margin_percent=float(latency.get("margin_percent", 10.0)),
             reject_telemetry_gaps=bool(rejection.get("reject_telemetry_gaps", True)),
             reject_throttled_samples=bool(rejection.get("reject_throttled_samples", True)),
+            maximum_cv_percent=float(variation["maximum_percent"]) if "maximum_percent" in variation else None,
         )
 
 
@@ -184,14 +187,24 @@ class CalibrationService:
     ) -> dict[str, Any]:
         if target not in self.DEFAULT_METRICS:
             raise QualificationError(f"unsupported calibration target: {target}")
+        if policy.minimum_boards < 1 or policy.minimum_accepted_samples < 1:
+            raise QualificationError("calibration minimum board/sample counts must be positive")
+        if not (0 <= policy.throughput_margin_percent < 100) or not (0 <= policy.latency_margin_percent < 100):
+            raise QualificationError("calibration margins must be finite and in [0, 100)")
+        if policy.maximum_cv_percent is not None and (not math.isfinite(policy.maximum_cv_percent) or policy.maximum_cv_percent < 0):
+            raise QualificationError("maximum CV must be finite and nonnegative")
         metrics = dict(metric_names or self.DEFAULT_METRICS[target])
         accepted: list[CalibrationSample] = []
         rejected: list[dict[str, Any]] = []
+        seen_runs: set[str] = set()
         for sample in samples:
+            if sample.run_id in seen_runs:
+                raise QualificationError(f"duplicate calibration run_id: {sample.run_id}; one run cannot count as two boards/samples")
+            seen_runs.add(sample.run_id)
             reasons = self._rejection_reasons(sample, policy, temperature_range)
             for metric in metrics.values():
                 value = sample.summary.get(metric)
-                if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(float(value)):
+                if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(float(value)) or value <= 0:
                     reasons.append(f"missing_or_invalid_metric:{metric}")
             if reasons:
                 rejected.append({"run_id": sample.run_id, "board_id": sample.board_id, "reasons": sorted(set(reasons))})
@@ -212,6 +225,11 @@ class CalibrationService:
         for role, metric in metrics.items():
             values = [float(sample.summary[metric]) for sample in accepted]
             distributions[metric] = self._distribution(values)
+            if policy.maximum_cv_percent is not None and distributions[metric]["cv_percent"] > policy.maximum_cv_percent:
+                raise QualificationError(
+                    f"calibration variation too high for {metric}: CV={distributions[metric]['cv_percent']:.3f}% "
+                    f"> {policy.maximum_cv_percent:g}%; stabilize the known-good cohort before approving limits"
+                )
         throughput_metric = metrics["throughput"]
         latency_metric = metrics["latency"]
         minimum_throughput = distributions[throughput_metric]["min"] * (1.0 - policy.throughput_margin_percent / 100.0)
@@ -238,10 +256,12 @@ class CalibrationService:
                     "minimum_accepted_samples": policy.minimum_accepted_samples,
                     "throughput_margin_percent": policy.throughput_margin_percent,
                     "latency_margin_percent": policy.latency_margin_percent,
+                    "maximum_cv_percent": policy.maximum_cv_percent,
                 },
                 "accepted_count": len(accepted),
                 "rejected_count": len(rejected),
                 "board_ids": boards,
+                "accepted_per_board": {board: sum(sample.board_id == board for sample in accepted) for board in boards},
                 "accepted_runs": [sample.run_id for sample in accepted],
                 "rejected_runs": rejected,
                 "distributions": distributions,

@@ -1,18 +1,20 @@
 {
-  "profile": "mixed",
+  "profile": "stress_extreme",
   "api": "cpu",
   "mode": "compute",
   "backend": "mixed",
-  "duration": 60,
-  "warmup": 5,
-  "timeout": 75,
-  "iterations": 100000,
+  "duration": 120,
+  "warmup": 10,
+  "timeout": 180,
+  "iterations": 500000,
   "threads": 4,
-  "working_set_kb": 256,
+  "working_set_kb": 2048,
   "verify_mode": "checksum",
   "verify_interval": 1,
   "success_log_interval": 60,
   "summary_only": false,
+  "per_batch_log": false,
   "heartbeat_interval": 1,
-  "output_format": "jsonl"
+  "output_format": "jsonl",
+  "complexity": "extreme"
 }

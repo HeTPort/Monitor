@@ -1,0 +1,20 @@
+{
+  "profile": "idle",
+  "api": "cpu",
+  "mode": "compute",
+  "backend": "null",
+  "duration": 30,
+  "warmup": 0,
+  "timeout": 60,
+  "iterations": 1,
+  "threads": 1,
+  "working_set_kb": 1,
+  "verify_mode": "none",
+  "verify_interval": 1,
+  "success_log_interval": 60,
+  "summary_only": false,
+  "per_batch_log": false,
+  "heartbeat_interval": 1,
+  "output_format": "jsonl",
+  "duty_cycle": 0
+}

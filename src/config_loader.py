@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from pathlib import PurePosixPath
@@ -13,6 +15,8 @@ from typing import Any, Mapping, Sequence
 SUPPORTED_SCHEMA_VERSION = 1
 VALID_TARGETS = {"cpu", "gpu"}
 VALID_VERIFY_MODES = {"cpu": {"none", "checksum"}, "gpu": {"none", "golden-image"}}
+CPU_BACKENDS = {"null", "integer", "floating_point", "matrix", "memory", "mixed"}
+GPU_SHADERS = {"alu", "sfu", "texture", "fill", "mixed"}
 
 
 class ConfigError(ValueError):
@@ -78,7 +82,12 @@ def validate_workload_config(
     *,
     device_root: PurePosixPath = PurePosixPath("/data/local/tmp/avs"),
 ) -> dict[str, Any]:
-    """Validate the workload JSON contract used by deployed CPU/GPU binaries."""
+    """Validate live-run configuration and return canonical verification settings.
+
+    Legacy checksum_interval is accepted as an alias, never together with
+    verify_interval. The returned mapping uses only the canonical field; callers
+    must deploy this mapping when they need the normalized on-device contract.
+    """
 
     resolved = path.expanduser().resolve(strict=True)
     try:
@@ -100,6 +109,52 @@ def validate_workload_config(
         )
     if document.get("output_format") != "jsonl":
         raise ConfigError(f"workload {resolved}.output_format must be 'jsonl'")
+    for cli_spelling in ("verify-interval", "checksum-interval", "success-log-interval", "summary-only", "per-batch-log", "per-frame-log"):
+        if cli_spelling in document:
+            raise ConfigError(f"workload {resolved}: JSON must use {cli_spelling.replace('-', '_')!r}, not CLI spelling {cli_spelling!r}")
+    if "checksum_interval" in document and "verify_interval" in document:
+        raise ConfigError(f"workload {resolved}: use verify_interval or legacy checksum_interval, not both")
+    if "checksum_interval" in document:
+        warnings.warn(
+            f"{resolved}: checksum_interval is deprecated; use verify_interval for actual verification cadence",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        document["verify_interval"] = document.pop("checksum_interval")
+    for name, default, minimum in (
+        ("verify_interval", 1, 1 if verify_mode != "none" else 0),
+        ("success_log_interval", 60, 0),
+    ):
+        value = document.setdefault(name, default)
+        if type(value) is not int or not minimum <= value <= 0xFFFFFFFF:
+            raise ConfigError(f"workload {resolved}.{name} must be an integer from {minimum} to 4294967295")
+    for name in ("summary_only", "per_batch_log" if target == "cpu" else "per_frame_log"):
+        value = document.setdefault(name, False)
+        if not isinstance(value, bool):
+            raise ConfigError(f"workload {resolved}.{name} must be a boolean")
+    if document["summary_only"]:
+        raise ConfigError(f"workload {resolved}.summary_only must be false for live heartbeat and failure reporting")
+    expected_mode = "compute" if target == "cpu" else "offscreen"
+    builtin_profile = document.get("profile", "mixed" if target == "cpu" else "game_mid")
+    inherited_mode = "compute" if target == "gpu" and builtin_profile in {"alu", "sfu"} else expected_mode
+    if document.get("mode", inherited_mode) != expected_mode:
+        raise ConfigError(f"workload {resolved}.mode must be {expected_mode!r} for target {target}")
+    if target == "cpu" and document.get("backend", "mixed") not in CPU_BACKENDS:
+        raise ConfigError(f"workload {resolved}.backend must be one of {sorted(CPU_BACKENDS)}")
+    if target == "gpu":
+        if document.get("shader", "mixed") not in GPU_SHADERS:
+            raise ConfigError(f"workload {resolved}.shader must be one of {sorted(GPU_SHADERS)}")
+        if document.get("rt_format", "RGBA8") != "RGBA8" or type(document.get("samples", 1)) is not int or document.get("samples", 1) != 1:
+            raise ConfigError(f"workload {resolved}: Vulkan supports RGBA8 with samples=1")
+    inherited_duty = (
+        {"idle": 0.0, "ui_burst": 0.2, "game_light": 0.6, "burst": 0.5}.get(builtin_profile, 1.0)
+        if target == "gpu" else 0.5 if builtin_profile == "burst" else 1.0
+    )
+    duty_cycle = document.get("duty_cycle", inherited_duty)
+    if isinstance(duty_cycle, bool) or not isinstance(duty_cycle, (int, float)) or not math.isfinite(duty_cycle) or not 0 <= duty_cycle <= 1:
+        raise ConfigError(f"workload {resolved}.duty_cycle must be a finite number from 0 to 1")
+    if target == "gpu" and duty_cycle != 1:
+        raise ConfigError(f"workload {resolved}: Vulkan backend does not implement duty_cycle/burst scheduling")
     positive_fields = ["duration", "timeout", "iterations", "heartbeat_interval"]
     positive_fields.extend(["threads", "working_set_kb"] if target == "cpu" else ["width", "height", "gpu_timeout_ms"])
     for name in positive_fields:

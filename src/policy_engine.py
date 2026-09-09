@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import IntEnum
+import math
 from typing import Any, Mapping
 
 from .events import EventEnvelope, EventProtocolError
+from .verification_contract import VERIFICATION_FIELDS, verification_issues
 
 
 class RunExitCode(IntEnum):
@@ -35,6 +37,7 @@ class PolicyLimits:
     performance: dict[str, dict[str, float]] = field(default_factory=dict)
     telemetry: dict[str, dict[str, float]] = field(default_factory=dict)
     required_telemetry: tuple[str, ...] = ()
+    verification: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any] | None) -> "PolicyLimits":
@@ -50,6 +53,7 @@ class PolicyLimits:
             performance={key: dict(value) for key, value in performance.items()},
             telemetry={key: dict(value) for key, value in telemetry.items()},
             required_telemetry=tuple(required),
+            verification=dict(raw.get("verification", {})),
         )
 
 
@@ -99,12 +103,25 @@ class PolicyEngine:
         self.agent_workload_exit_code: int | None = None
         self._pre_run_exit: RunExitCode | None = None
         self._user_aborted = False
+        self._verification_evidence: dict[str, Any] = {}
 
     def process(self, event: EventEnvelope) -> None:
         payload = event.payload
         if event.type == "summary":
             self._process_summary(payload, event)
-        elif event.type == "verify" and payload.get("pass") is False:
+        elif event.type == "verification_summary":
+            if self.workload_summary is not None:
+                self._infra("protocol", "LATE_VERIFICATION_SUMMARY", payload, event)
+            for key, value in payload.items():
+                if key not in VERIFICATION_FIELDS:
+                    continue
+                if key in self._verification_evidence and (
+                    type(value) is not type(self._verification_evidence[key]) or value != self._verification_evidence[key]
+                ):
+                    self._infra("protocol", "CONFLICTING_VERIFICATION_EVIDENCE", {key: value}, event)
+                else:
+                    self._verification_evidence[key] = value
+        elif event.type == "verify" and (payload.get("pass") is False or payload.get("result") == "FAIL"):
             self._dut("correctness", "VERIFY_FAIL", payload, event)
         elif event.type == "telemetry":
             self._process_telemetry(payload, event)
@@ -212,7 +229,13 @@ class PolicyEngine:
         if self.workload_summary is not None:
             self._infra("protocol", "DUPLICATE_SUMMARY", payload, event)
             return
-        self.workload_summary = dict(payload)
+        merged = dict(self._verification_evidence)
+        for key, value in payload.items():
+            if key in merged and (type(value) is not type(merged[key]) or value != merged[key]):
+                self._infra("protocol", "CONFLICTING_VERIFICATION_EVIDENCE", {key: value}, event)
+            merged[key] = value
+        payload = merged
+        self.workload_summary = merged
         result = payload.get("result")
         exit_code = payload.get("exit_code")
         self.workload_result = str(result) if result is not None else None
@@ -224,8 +247,15 @@ class PolicyEngine:
                 {"result": result, "exit_code": exit_code},
                 event,
             )
-        if payload.get("verify_pass") is False or int(payload.get("verify_fail_count", 0) or 0) > 0:
+        failures = payload.get("verify_fail_count", 0)
+        if type(failures) is not int or failures < 0:
+            self._infra("correctness", "INVALID_VERIFY_FAIL_COUNT", payload, event)
+        if payload.get("verify_pass") is False or (type(failures) is int and failures > 0):
             self._dut("correctness", "SUMMARY_VERIFY_FAIL", payload, event)
+        if self.workload_result == "PASS" and self.workload_exit_code == 0:
+            issues = verification_issues(payload, self.limits.verification)
+            if issues:
+                self._infra("correctness", "VERIFICATION_EVIDENCE_INVALID", {"issues": issues}, event)
         for metric, bounds in self.limits.performance.items():
             self._check_bound(metric, payload.get(metric), bounds, "performance", event)
 
@@ -262,7 +292,7 @@ class PolicyEngine:
         scope: str,
         event: EventEnvelope,
     ) -> None:
-        if not isinstance(value, (int, float)) or isinstance(value, bool):
+        if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value):
             self._infra(scope, "INVALID_METRIC_VALUE", {"metric": metric, "value": value}, event)
             return
         minimum = bounds.get("min")

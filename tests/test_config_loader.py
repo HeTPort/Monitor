@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+import warnings
 from pathlib import Path
 
 from src.config_loader import (
@@ -30,6 +31,104 @@ def valid_profile() -> dict:
 
 
 class ConfigLoaderTests(unittest.TestCase):
+    def test_verification_settings_are_canonical_and_do_not_rewrite_source(self) -> None:
+        for target in ("cpu", "gpu"):
+            source = Path(__file__).parents[1] / "config" / "workloads" / f"{target}_qualification_kirin9030.json"
+            document = json.loads(source.read_text(encoding="utf-8"))
+            document.pop("verify_interval", None)
+            document.pop("checksum_interval", None)
+            document.pop("success_log_interval", None)
+            with self.subTest(target=target), tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "workload.json"
+                path.write_text(json.dumps(document), encoding="utf-8")
+                normalized = validate_workload_config(path, target)
+                self.assertEqual(normalized["verify_interval"], 1)
+                self.assertEqual(normalized["success_log_interval"], 60)
+                self.assertNotIn("verify_interval", json.loads(path.read_text(encoding="utf-8")))
+                document["checksum_interval"] = 3
+                path.write_text(json.dumps(document), encoding="utf-8")
+                with warnings.catch_warnings(record=True) as notices:
+                    warnings.simplefilter("always")
+                    normalized = validate_workload_config(path, target)
+                self.assertEqual(normalized["verify_interval"], 3)
+                self.assertNotIn("checksum_interval", normalized)
+                self.assertTrue(any("deprecated" in str(item.message) for item in notices))
+
+    def test_rejects_ambiguous_invalid_or_suppressed_verification_contract(self) -> None:
+        for target in ("cpu", "gpu"):
+            source = Path(__file__).parents[1] / "config" / "workloads" / f"{target}_qualification_kirin9030.json"
+            base = json.loads(source.read_text(encoding="utf-8"))
+            base.pop("checksum_interval", None)
+            base["verify_interval"] = 1
+            cases = [
+                ({"checksum_interval": 1}, "not both"),
+                ({"verify-interval": 2}, "CLI spelling"),
+                ({"verify_interval": 0}, "verify_interval"),
+                ({"verify_interval": True}, "verify_interval"),
+                ({"verify_interval": 1.0}, "verify_interval"),
+                ({"verify_interval": "1"}, "verify_interval"),
+                ({"verify_interval": 2**32}, "verify_interval"),
+                ({"success_log_interval": -1}, "success_log_interval"),
+                ({"success_log_interval": False}, "success_log_interval"),
+                ({"success_log_interval": 1.5}, "success_log_interval"),
+                ({"summary_only": True}, "live heartbeat"),
+                ({"summary_only": "false"}, "boolean"),
+                ({"per_batch_log" if target == "cpu" else "per_frame_log": 1}, "boolean"),
+            ]
+            for update, error in cases:
+                with self.subTest(target=target, update=update), tempfile.TemporaryDirectory() as tmp:
+                    path = Path(tmp) / "workload.json"
+                    path.write_text(json.dumps({**base, **update}), encoding="utf-8")
+                    with self.assertRaisesRegex(ConfigError, error):
+                        validate_workload_config(path, target)
+
+    def test_disabled_verification_and_success_logging_accept_zero(self) -> None:
+        for target in ("cpu", "gpu"):
+            source = Path(__file__).parents[1] / "config" / "workloads" / f"{target}_smoke.json"
+            document = json.loads(source.read_text(encoding="utf-8"))
+            document.pop("checksum_interval", None)
+            document.update(verify_interval=0, success_log_interval=0)
+            with self.subTest(target=target), tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "workload.json"
+                path.write_text(json.dumps(document), encoding="utf-8")
+                normalized = validate_workload_config(path, target)
+                self.assertEqual(normalized["verify_interval"], 0)
+                self.assertEqual(normalized["success_log_interval"], 0)
+
+    def test_rejects_unimplemented_vulkan_modes_and_scheduling(self) -> None:
+        source = Path(__file__).parents[1] / "config" / "workloads" / "gpu_smoke.json"
+        base = json.loads(source.read_text(encoding="utf-8"))
+        for update, error in (
+            ({"mode": "compute"}, "offscreen"),
+            ({"shader": "none"}, "shader"),
+            ({"rt_format": "RGBA16F"}, "RGBA8"),
+            ({"samples": 4}, "samples=1"),
+            ({"samples": True}, "samples=1"),
+            ({"duty_cycle": 0.5}, "does not implement"),
+            ({"duty_cycle": float("nan")}, "finite number"),
+        ):
+            with self.subTest(update=update), tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "workload.json"
+                path.write_text(json.dumps({**base, **update}), encoding="utf-8")
+                with self.assertRaisesRegex(ConfigError, error):
+                    validate_workload_config(path, "gpu")
+
+    def test_vulkan_validation_respects_unoverridden_builtin_profile_defaults(self) -> None:
+        source = Path(__file__).parents[1] / "config" / "workloads" / "gpu_smoke.json"
+        base = json.loads(source.read_text(encoding="utf-8"))
+        base.pop("mode", None)
+        base.pop("duty_cycle", None)
+        for profile, error in (("alu", "offscreen"), ("sfu", "offscreen"), ("game_light", "does not implement"), ("burst", "does not implement"), ("idle", "does not implement")):
+            with self.subTest(profile=profile), tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "workload.json"
+                document = {**base, "profile": profile}
+                path.write_text(json.dumps(document), encoding="utf-8")
+                with self.assertRaisesRegex(ConfigError, error):
+                    validate_workload_config(path, "gpu")
+                document.update(mode="offscreen", duty_cycle=1)
+                path.write_text(json.dumps(document), encoding="utf-8")
+                validate_workload_config(path, "gpu")
+
     def test_positive_smoke_configs_are_error_only(self) -> None:
         config_root = Path(__file__).parents[1] / "config" / "workloads"
         expected_modes = {

@@ -101,12 +101,22 @@ def resolve_qualification_run(path: Path) -> QualificationRunArtifacts:
     )
 
     summary: dict[str, Any] = {}
+    native_summary_path = spool_dir / "workload-summary.json" if spool_dir is not None else None
+    if native_summary_path is not None and native_summary_path.exists():
+        try:
+            loaded = json.loads(native_summary_path.read_text(encoding="utf-8"))
+            if not isinstance(loaded, dict) or loaded.get("type") != "summary":
+                raise ValueError("native summary must be a summary object")
+            summary = loaded
+        except ValueError as exc:
+            raise QualificationError(f"invalid native workload summary {native_summary_path}: {exc}") from exc
     workload_log = spool_dir / "workload.log" if spool_dir is not None else None
-    if workload_log is not None and workload_log.exists():
+    if not summary and workload_log is not None and workload_log.exists():
         summary = _native_summary(workload_log) or {}
     if not summary:
         summary_path = _first_existing(
             [
+                *( [spool_dir / "workload-summary.json"] if spool_dir is not None else [] ),
                 *( [pc_run_dir / "workload-summary-full.json"] if pc_run_dir is not None else [] ),
                 *( [pc_run_dir / "workload-summary.json"] if pc_run_dir is not None else [] ),
                 requested / "workload-summary-full.json",

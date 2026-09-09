@@ -1,18 +1,19 @@
 {
-  "profile": "mixed",
+  "profile": "memory",
   "api": "cpu",
   "mode": "compute",
-  "backend": "mixed",
+  "backend": "memory",
   "duration": 60,
   "warmup": 5,
   "timeout": 75,
-  "iterations": 100000,
+  "iterations": 500000,
   "threads": 4,
-  "working_set_kb": 256,
+  "working_set_kb": 1024,
   "verify_mode": "checksum",
   "verify_interval": 1,
   "success_log_interval": 60,
   "summary_only": false,
+  "per_batch_log": false,
   "heartbeat_interval": 1,
   "output_format": "jsonl"
 }

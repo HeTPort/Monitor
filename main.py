@@ -386,6 +386,7 @@ Examples:
     collect_parser = subparsers.add_parser('collect', help='Pull append-only device evidence by test ID')
     collect_parser.add_argument('--test-id', required=True)
     collect_parser.add_argument('--attempt-id')
+    collect_parser.add_argument('--artifact-set', choices=('full', 'minimal', 'calibration', 'failure', 'protocol'), default='full', help='Select and hash-verify only useful evidence; subsets require --attempt-id and never delete remote files')
     collect_parser.add_argument('--remote-run-dir', help=argparse.SUPPRESS)
     collect_parser.add_argument('--verify-hashes', action='store_true')
     collect_parser.add_argument('--remove-remote-after-verify', action='store_true')

@@ -20,6 +20,7 @@ from .path_resolver import PathResolver
 from .policy_engine import PolicyEngine, PolicyLimits, PolicyResult
 from .transport import CommandResult, Transport
 from .uart_protocol import UART_PROTOCOL, UartV2Decoder, frame_wire_seconds
+from .verification_contract import verification_requirement
 
 
 class RunError(RuntimeError):
@@ -65,6 +66,7 @@ class RunManifestBuilder:
         device_uart: str | None = None,
         telemetry_enabled: bool = False,
         pc_artifacts: str = "result",
+        workload_document: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         del capabilities, kernel_mode, kernel_rules_path
         if not device_uart:
@@ -164,7 +166,12 @@ class RunManifestBuilder:
                 "shutdown_timeout_s": 10,
             },
             "logs": {"device_local": True, "streamed_to_pc": False},
-            "policy": {"thresholds": thresholds, "required_telemetry": []},
+            "policy": {
+                "thresholds": thresholds, "required_telemetry": [],
+                "verification": verification_requirement(
+                    profile.target, workload_document, strict=baseline is not None or golden is not None,
+                ) if workload_document is not None else {},
+            },
             "assets": [],
         }
         manifest["manifest_sha256"] = document_sha256(manifest)
@@ -189,6 +196,7 @@ class RunManifestBuilder:
         device_uart: str | None = None,
         pc_artifacts: str = "full",
         telemetry_enabled: bool = False,
+        workload_document: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         if mode not in {"smoke", "golden", "calibration"}:
             raise RunError(f"unsupported qualification mode: {mode}")
@@ -206,6 +214,7 @@ class RunManifestBuilder:
             device_uart=device_uart,
             telemetry_enabled=telemetry_enabled,
             pc_artifacts=pc_artifacts,
+            workload_document=workload_document,
         )
         manifest["qualification"] = {
             "mode": mode,
@@ -224,6 +233,7 @@ class RunManifestBuilder:
             manifest["qualification"]["final_timeout_s"] = float(final_timeout_s)
         argv = manifest["workload"]["argv"]
         if mode == "golden":
+            manifest["policy"]["verification"] = {"required": False, "reason": "golden-generation"}
             argv.extend(("--generate-golden", "true"))
             if profile.target == "gpu":
                 argv.extend(("--golden-file", f"{manifest['spool_dir']}/gpu-golden.rgba"))
@@ -387,7 +397,7 @@ class RunOrchestrator:
                     if event.type == "summary":
                         workload_completed = True
                         workload_completed_at = now
-                        store.write_json("workload-summary.json", event.payload)
+                        store.write_json("workload-summary.json", policy.workload_summary)
                     if event.type == "agent_final":
                         final_seen = True
                         break
@@ -572,5 +582,6 @@ class RunOrchestrator:
                 "performance": thresholds.get("performance", {}),
                 "telemetry": thresholds.get("telemetry", {}),
                 "required_telemetry": policy.get("required_telemetry", []),
+                "verification": policy.get("verification", {}),
             }
         )

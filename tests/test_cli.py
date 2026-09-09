@@ -656,16 +656,25 @@ class CLITests(unittest.TestCase):
                 attempt.mkdir(parents=True)
                 spool.mkdir(parents=True)
                 (attempt / "result.json").write_text(
-                    json.dumps({"run_id": attempt.name, "verdict": "PASS"}), encoding="utf-8"
+                    json.dumps({"run_id": attempt.name, "verdict": "PASS", "exit_code": 0}), encoding="utf-8"
                 )
+                (attempt / "run-manifest.json").write_text(json.dumps({
+                    "run_id": attempt.name, "validation_mode": "golden-reference", "target": "cpu",
+                    "profile": {"sha256": ProfileConfig.from_file(profile_path).fingerprint},
+                    "golden_reference": {"correctness_fingerprint": json.loads(golden_path.read_text(encoding="utf-8"))["correctness_fingerprint"]},
+                }), encoding="utf-8")
                 summary = {
                     "type": "summary", "result": "PASS", "exit_code": 0,
                     "operations_per_sec_avg": 1000.0 + index,
                     "batch_time_ms_p99": 10.0 + index,
                     "duration_s": 1.0,
                     "batch_count": 2,
+                    "contract_version": 2, "verify_mode": "checksum", "verify_interval": 1,
+                    "success_log_interval": 60, "verify_count": 2, "verify_fail_count": 0, "verify_pass": True,
                 }
                 (spool / "workload.log").write_text(json.dumps(summary) + "\n", encoding="utf-8")
+                (attempt / "result.json").write_text(json.dumps({"run_id": attempt.name, "verdict": "PASS", "exit_code": 0, "workload_summary": summary}), encoding="utf-8")
+                (spool / "final.json").write_text(json.dumps({"attempt_id": attempt.name, "workload_exit_code": 0, "summary_seen": True}), encoding="utf-8")
                 telemetry = {
                     "payload": {
                         "sample_id": 1,
