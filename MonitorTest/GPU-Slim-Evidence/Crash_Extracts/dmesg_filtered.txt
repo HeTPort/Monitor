@@ -1,0 +1,50 @@
+[61796.909534] [0] pid=683 tid=47749 comm=OS_FFRT_2_1602  [dfa_block_dump_error_reg:932] dfa-udk dfa_block_dump_error_reg 932:[DFA] QUE_PROC 11 [ ok]SQH:0x00000000 SQT:0x00000000 CQH:0x00000000 CQT:0x00000000 CQIE:0x00000000 CQIS:0x00000000
+[61796.910113] [0] pid=683 tid=47749 comm=OS_FFRT_2_1602  [dfa_block_dump_error_reg:932] dfa-udk dfa_block_dump_error_reg 932:[DFA] QUE_PROC 38 [ ok]SQH:0x00000f80 SQT:0x00000f80 CQH:0x000007c0 CQT:0x000007c0 CQIE:0x00000001 CQIS:0x00000000
+[61796.911011] [0] pid=683 tid=47749 comm=OS_FFRT_2_1602  [dfa_block_dump_error_reg:932] dfa-udk dfa_block_dump_error_reg 932:[DFA] QUE_PROC 79 [ ok]SQH:0x00000000 SQT:0x00000000 CQH:0x00000000 CQT:0x00000000 CQIE:0x00000000 CQIS:0x00000000
+[61796.911049] [0] pid=683 tid=47749 comm=OS_FFRT_2_1602  [udk_block:320]Dump inflight udk bio info begin
+[61796.911065] [0] pid=683 tid=47749 comm=OS_FFRT_2_1602  [udk_block:346]inflight bio number=0
+[61796.911075] [0] pid=683 tid=47749 comm=OS_FFRT_2_1602  [udk_block:347]Dump inflight udk bio info end
+[61796.911188] [0] pid=683 tid=47749 comm=OS_FFRT_2_1602  [guardmgr:407]=============== sysrq end: dumpstackblocked mono time:[61766.873329]===============
+[61796.952005] [0] pid=653 tid=653 comm=faultloggerd    [hmseh:392]avc: denied { getattr } for pid=653, comm="/system/bin/faultloggerd"  path="/proc/684/task/684/status" dev="" ino=1025139 scontext=u:r:faultloggerd:s0 tcontext=u:r:hdf_devmgr:s0 tclass=file permissive=0
+[61796.952038] [0] pid=653 tid=653 comm=faultloggerd    [fs_vfs_ops:1409]sec chk of stat failed
+[61796.961129] [5] pid=52024 tid=52024 comm=hiperf          [hmseh:392]avc: denied { read } for pid=52024, comm="/system/bin/hiperf"  path="/dev/sysevent" dev="" ino=3 scontext=u:r:hiperf:s0 tcontext=u:object_r:dev_sysevent:s0 tclass=chr_file permissive=0
+[61797.068040] [4] pid=72 tid=381 comm=kworker/u29:6   [hkb0957c][coul_core]not support ntc, use default temp
+[61797.087112] [9] pid=2 tid=41 comm=wk:0/0/1/14     [ffts_proc_release:331]  [FFTS_DRV] [W] 1 callback not register
+[61797.087118] [9] pid=2 tid=41 comm=wk:0/0/1/14     [ffts_proc_release:331]  [FFTS_DRV] [W] 2 callback not register
+[61797.136981] [3] pid=680 tid=680 comm=samgr           [hmseh:392]avc: denied { getattr } for pid=680, comm="/system/bin/samgr"  path="/proc/52033/cmdline" dev="" ino=1101509 scontext=u:r:samgr:s0 tcontext=u:r:hidumper:s0 tclass=file permissive=0
+[61797.138258] [4] pid=1 tid=1 comm=init            <6>[pid=1][PARAM][INFO][param_service.c:195]Handle set param msgId 11165 pid 680 key: ohos.ctl.start
+[61797.138466] [4] pid=1 tid=1 comm=init            <6>[pid=1][Init][INFO][init_common_service.c:711]ServiceStart starting:hidumper_service
+[61797.361130] [5] pid=52033 tid=52062 comm=OS_IPC_2_52062  [dhext_transfs:140]get sb_index and d_index error, ret:E_HM_OPNOTSUPP
+[61797.361348] [5] pid=52033 tid=52062 comm=OS_IPC_2_52062  [binderfs_proto:1130]binderfs: death notify, pid=52033, target_pid= 
+[61797.491813] [0] pid=1386 tid=2340 comm=OS_IPC_1_1410   [hkb0957c][coul_core]not support ntc, use default temp
+[61797.499944] [0] pid=1386 tid=2340 comm=OS_IPC_1_1410   [hk4214c11a][I/buck_charge_ic_manager] get_vbus: vbus=5031 ret=0
+[61797.550279] [6] pid=72 tid=381 comm=kworker/u29:6   [hk16310828][coul_hardware]cc_out=0xe03e34,cc_in=0x401666,cout_time=42404,cin_time=19116,cc_adj=5618uah
+[61797.551125] [6] pid=72 tid=381 comm=kworker/u29:6   [hkd9c066ef][coul_core]RBATT_ADJ: batt 0, iavg_ma=0, UUC= 0 uAh, pc= 0.0, uuc_type=0 (1:tbl)
+[61797.551151] [6] pid=72 tid=381 comm=kworker/u29:6   [hkd9c066ef][coul_core]calculate_unusable_charge_uah batt 0, uuc_tbl=0 uAh, emer_uuc=70000 uAh, basp_zero_uuc=0 uAh, batt_uuc=0 uAh
+[61797.551175] [6] pid=72 tid=381 comm=kworker/u29:6   [hkd9c066ef][coul_core]batt 0, FCC=3022000uAh, UUC=0uAh, RC=0uAh, CC=5618uAh, delta_RC=0uAh, Rbatt=279mOhm
+[61797.551198] [6] pid=72 tid=381 comm=kworker/u29:6   [hkd9c066ef][coul_core]batt 0, limit FCC = 0uAh, FCC 3022000uAh, term flag= 1
+[61797.582922] [3] pid=52063 tid=52064 comm=OS_IPC_0_52064  [binderfs_proto:1130]binderfs: death notify, pid=52063, target_pid= 
+[61797.595114] [1] pid=683 tid=50097 comm=OS_FFRT_2_1608  [fs_vfs_ops:1409]sec chk of stat failed
+[61797.918311] [3] pid=2 tid=216 comm=tppmgr-idle-3   [dumpstack:137][AS_00563]: sysmgr load start 0xffffff800d000000
+[61797.918458] [11] pid=2 tid=224 comm=tppmgr-idle-11  [dumpstack:194]print cpu[11] stack
+[61797.918464] [11] pid=2 tid=224 comm=tppmgr-idle-11  [dumpstack:137][AS_00567]: sysmgr load start 0xffffff800d000000
+[61797.918471] [11] pid=2 tid=224 comm=tppmgr-idle-11  [dumpstack:140][AS_00567] actv_0 [tppmgr-idle-11] backtrace start. preempt disabled:0
+[61797.918727] [11] pid=2 tid=224 comm=tppmgr-idle-11  [dumpstack:95][AS_00567] <0000000000248518> [FP: ffffff80743928c0] <unknown> (sysmgr.elf)
+[61797.918985] [11] pid=2 tid=224 comm=tppmgr-idle-11  [dumpstack:95][AS_00567] <00000000009ad360> [FP: ffffff8074392980] <unknown> (sysmgr.elf)
+[61797.919272] [11] pid=2 tid=224 comm=tppmgr-idle-11  [dumpstack:95][AS_00567] <000000000047dc90> [FP: ffffff80743929e0] <unknown> (sysmgr.elf)
+[61797.919292] [11] pid=2 tid=224 comm=tppmgr-idle-11  [dumpstack:95][AS_00567] <0000000000000000> [FP: 0000000000000000] <unknown> (unknown)
+[61797.919295] [11] pid=2 tid=224 comm=tppmgr-idle-11  [dumpstack:142][AS_00567] actv_0 [tppmgr-idle-11] backtrace end.
+[61797.919298] [11] pid=2 tid=224 comm=tppmgr-idle-11  [dumpstack:147][AS_00567] base actv dumped.
+[61797.920112] [3] pid=2 tid=216 comm=tppmgr-idle-3   [dumpstack:147][AS_00563] base actv dumped.
+[61797.920115] [2] pid=2 tid=215 comm=tppmgr-idle-2   [dumpstack:147][AS_00562] base actv dumped.
+[61798.174822] [0] pid=1 tid=1 comm=init            <6>[pid=1][Init][INFO][kickdog_init.c:114]Kickdog: Kick proc begin
+[61798.503746] [1] pid=5795 tid=5813 comm=bms_behavior    [hk4214c11a][I/buck_charge_ic_manager] get_vbus: vbus=5037 ret=0
+[61799.468163] [4] pid=72 tid=381 comm=kworker/u29:6   [hk39d0367d][I/bat_temp] default temp api: temp 25
+[61800.271183] [4] pid=72 tid=154 comm=kworker/u29:0   [hk1971fed7][iomcu_ipc_tcp]:[iomc_tcp_amsm_recv_handler]tag[0x37]cmd[0x46]len[24]
+[61800.396852] [4] pid=72 tid=408 comm=mspc_apm_ta_thr [hk4cb2bbb2]apm_sr_status_flag:4  mspc_apm_ta_thread  115
+[61800.649779] [3] pid=683 tid=51507 comm=OS_FFRT_3_4402  [hked8f06a][I/power_if] sysfs_get=ibus user=default type=all
+[61800.654622] [4] pid=683 tid=51507 comm=OS_FFRT_3_4402  [hked8f06a][I/power_if] sysfs_get=vbus user=default type=all
+[61800.656234] [4] pid=683 tid=51507 comm=OS_FFRT_3_4402  [hk4214c11a][I/buck_charge_ic_manager] get_vbus: vbus=5031 ret=0
+[61800.682862] [5] pid=72 tid=381 comm=kworker/u29:6   [hk370b3114][contexthub_log] pkt->buffer_type: 1
+[61800.682875] [5] pid=72 tid=381 comm=kworker/u29:6   [hk370b3114][I/sensorhub] [contexthub_log] [cma_logbuff_flush_callback][cma_r f1000][cma_rear f2000]
+[61800.682892] [5] pid=72 tid=381 comm=kworker/u29:6   [hk370b3114][I/sensorhub] [contexthub_log] [copy_cma_buff_to_local][cma_r f2000][cma_rear f2000][sensorhub_r 0][sensorhub_rear 1000]

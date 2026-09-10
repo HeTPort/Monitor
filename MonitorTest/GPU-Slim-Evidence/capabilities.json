@@ -1,0 +1,1 @@
+{"workload":"gpu","version":"2.1.0","contract_version":2,"features":["verify_interval","success_log_interval","verify_count","failure_verify","live_heartbeat","success_log_rate_limit"],"success_log_min_period_ms":1000,"verify_modes":["none","crc","checksum","golden-image","pixel-diff","compute-compare"]}

@@ -1,0 +1,12 @@
+{
+  "contract_version": 2,
+  "exit_code": 0,
+  "frame_count": 2722,
+  "result": "PASS",
+  "success_log_interval": 60,
+  "verify_count": 0,
+  "verify_fail_count": 0,
+  "verify_interval": 1,
+  "verify_mode": "none",
+  "verify_pass": true
+}

@@ -1,0 +1,190 @@
+root@het-pc:/home/het/projects/workload/workload/gpuworkload# cat CMakeLists.txt
+cmake_minimum_required(VERSION 3.16)
+project(gpu_avs_workload CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# 检测是否为 OpenHarmony 编译环境
+if(CMAKE_SYSTEM_NAME STREQUAL "OHOS" OR DEFINED OHOS_NDK_HOME)
+    set(BUILDING_FOR_OHOS TRUE)
+else()
+    set(BUILDING_FOR_OHOS FALSE)
+endif()
+
+option(GPU_AVS_ENABLE_NULL "Enable Null backend" ON)
+option(GPU_AVS_ENABLE_GLES "Enable GLES backend" OFF)
+option(GPU_AVS_ENABLE_VULKAN "Enable Vulkan backend" OFF)
+option(GPU_AVS_ENABLE_OPENCL "Enable OpenCL backend" OFF)
+
+add_executable(gpu-avs-workload
+    src/main.cpp
+    src/config.cpp
+    src/profile.cpp
+    src/logger.cpp
+    src/heartbeat.cpp
+    src/metrics.cpp
+    src/runner.cpp
+    src/verifier.cpp
+    src/crc32.cpp
+    src/utils.cpp
+    src/backend_factory.cpp
+)
+
+target_include_directories(gpu-avs-workload PRIVATE
+    include
+)
+
+find_package(Threads REQUIRED)
+target_link_libraries(gpu-avs-workload PRIVATE Threads::Threads)
+
+# ================== NULL Backend ==================
+if(GPU_AVS_ENABLE_NULL)
+    target_sources(gpu-avs-workload PRIVATE
+        src/backends/null/null_backend.cpp
+    )
+    target_compile_definitions(gpu-avs-workload PRIVATE GPU_AVS_ENABLE_NULL=1)
+else()
+    target_compile_definitions(gpu-avs-workload PRIVATE GPU_AVS_ENABLE_NULL=0)
+endif()
+
+# ================== GLES Backend ==================
+if(GPU_AVS_ENABLE_GLES)
+    target_sources(gpu-avs-workload PRIVATE
+        src/backends/gles/gles_context.cpp
+        src/backends/gles/gles_backend.cpp
+    )
+
+    if(BUILDING_FOR_OHOS)
+        find_library(EGL_LIBRARY EGL)
+        #find_library(GLESV2_LIBRARY GLESv2)
+        find_library(GLESV3_LIBRARY GLESv3)
+    else()
+        # Android / 标准 Linux 环境
+        find_library(EGL_LIBRARY EGL)
+        find_library(GLESV2_LIBRARY GLESv2)
+    endif()
+
+    if(NOT EGL_LIBRARY)
+        message(FATAL_ERROR "EGL library not found")
+    endif()
+
+    #if(NOT GLESV2_LIBRARY)
+    #    message(FATAL_ERROR "GLESv2 library not found")
+    #endif()
+    if(BUILDING_FOR_OHOS AND NOT GLESV3_LIBRARY)
+        message(FATAL_ERROR "GLESv3 library not found in OHOS NDK")
+    endif()
+    target_link_libraries(gpu-avs-workload PRIVATE
+        ${EGL_LIBRARY}
+        #${GLESV2_LIBRARY}
+        ${GLESV3_LIBRARY}
+    )
+
+    target_compile_definitions(gpu-avs-workload PRIVATE GPU_AVS_ENABLE_GLES=1)
+else()
+    target_compile_definitions(gpu-avs-workload PRIVATE GPU_AVS_ENABLE_GLES=0)
+endif()
+
+# ================== VULKAN Backend ==================
+if(GPU_AVS_ENABLE_VULKAN)
+    target_sources(gpu-avs-workload PRIVATE
+        src/backends/vulkan/vulkan_backend.cpp
+        src/backends/vulkan/vulkan_graphics_backend.cpp
+        src/backends/vulkan/vulkan_shader_loader.cpp
+    )
+    target_compile_definitions(gpu-avs-workload PRIVATE GPU_AVS_ENABLE_VULKAN_GRAPHICS=1)
+    if(BUILDING_FOR_OHOS)
+        # OHOS 的 FindVulkan.cmake 可能不兼容，直接用 find_library 寻找 libvulkan.z.so
+        find_library(VULKAN_LIBRARY vulkan)
+        if(NOT VULKAN_LIBRARY)
+            message(FATAL_ERROR "Vulkan library not found in OHOS NDK")
+        endif()
+        target_link_libraries(gpu-avs-workload PRIVATE ${VULKAN_LIBRARY})
+    else()
+        # Android / 标准 Linux 环境
+        find_package(Vulkan REQUIRED)
+        target_link_libraries(gpu-avs-workload PRIVATE Vulkan::Vulkan)
+    endif()
+
+    target_compile_definitions(gpu-avs-workload PRIVATE GPU_AVS_ENABLE_VULKAN=1)
+
+    # --- Shader 编译逻辑 (glslangValidator 运行在主机上，与交叉编译目标无关，无需修改) ---
+    find_program(GLSLANG_VALIDATOR glslangValidator)
+    if(NOT GLSLANG_VALIDATOR)
+        message(FATAL_ERROR "glslangValidator not found, required for Vulkan shader compilation")
+    endif()
+
+    set(VULKAN_SHADER_OUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/shaders/vulkan)
+    file(MAKE_DIRECTORY ${VULKAN_SHADER_OUT_DIR})
+
+    set(VULKAN_SHADER_OUTPUTS
+        ${VULKAN_SHADER_OUT_DIR}/workload.comp.spv
+        ${VULKAN_SHADER_OUT_DIR}/fullscreen.vert.spv
+        ${VULKAN_SHADER_OUT_DIR}/workload.frag.spv
+    )
+
+    add_custom_command(OUTPUT ${VULKAN_SHADER_OUT_DIR}/workload.comp.spv
+        COMMAND ${GLSLANG_VALIDATOR} -V ${CMAKE_CURRENT_SOURCE_DIR}/shaders/vulkan/workload.comp -o ${VULKAN_SHADER_OUT_DIR}/workload.comp.spv
+        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/shaders/vulkan/workload.comp
+        COMMENT "Compiling Vulkan compute shader: workload.comp"
+        VERBATIM
+    )
+
+    add_custom_command(OUTPUT ${VULKAN_SHADER_OUT_DIR}/fullscreen.vert.spv
+        COMMAND ${GLSLANG_VALIDATOR} -V ${CMAKE_CURRENT_SOURCE_DIR}/shaders/vulkan/fullscreen.vert -o ${VULKAN_SHADER_OUT_DIR}/fullscreen.vert.spv
+        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/shaders/vulkan/fullscreen.vert
+        COMMENT "Compiling Vulkan vertex shader: fullscreen.vert"
+        VERBATIM
+    )
+
+    add_custom_command(OUTPUT ${VULKAN_SHADER_OUT_DIR}/workload.frag.spv
+        COMMAND ${GLSLANG_VALIDATOR} -V ${CMAKE_CURRENT_SOURCE_DIR}/shaders/vulkan/workload.frag -o ${VULKAN_SHADER_OUT_DIR}/workload.frag.spv
+        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/shaders/vulkan/workload.frag
+        COMMENT "Compiling Vulkan fragment shader: workload.frag"
+        VERBATIM
+    )
+
+    add_custom_target(vulkan_shaders DEPENDS ${VULKAN_SHADER_OUTPUTS})
+    add_dependencies(gpu-avs-workload vulkan_shaders)
+
+    target_compile_definitions(gpu-avs-workload PRIVATE GPU_AVS_VULKAN_SHADER_DIR="${VULKAN_SHADER_OUT_DIR}")
+else()
+    target_compile_definitions(gpu-avs-workload PRIVATE GPU_AVS_ENABLE_VULKAN=0)
+endif()
+
+# ================== OPENCL Backend ==================
+if(GPU_AVS_ENABLE_OPENCL)
+    target_sources(gpu-avs-workload PRIVATE
+        src/backends/opencl/opencl_backend.cpp
+    )
+
+    if(BUILDING_FOR_OHOS)
+        # OHOS 环境下直接查找 libOpenCL.z.so
+        find_library(OPENCL_LIBRARY OpenCL)
+        if(NOT OPENCL_LIBRARY)
+            message(FATAL_ERROR "OpenCL library not found in OHOS NDK")
+        endif()
+        target_link_libraries(gpu-avs-workload PRIVATE ${OPENCL_LIBRARY})
+    else()
+        # Android / 标准 Linux 环境
+        find_package(OpenCL REQUIRED)
+        target_link_libraries(gpu-avs-workload PRIVATE OpenCL::OpenCL)
+    endif()
+
+    target_compile_definitions(gpu-avs-workload PRIVATE GPU_AVS_ENABLE_OPENCL=1)
+else()
+    target_compile_definitions(gpu-avs-workload PRIVATE GPU_AVS_ENABLE_OPENCL=0)
+endif()
+
+# ================== 编译选项 ==================
+if(MSVC)
+    target_compile_options(gpu-avs-workload PRIVATE /W4)
+else()
+    target_compile_options(gpu-avs-workload PRIVATE
+        -Wall
+        -Wextra
+        -Werror=return-type
+    )
+endif()

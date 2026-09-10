@@ -1,0 +1,275 @@
+PS D:\h60106817\release> $MON = 'D:\h60106817\release\vmin_judge.exe'
+PS D:\h60106817\release> $DEVICE = '0123456789ABCDEF'
+PS D:\h60106817\release> $PC_SERIAL = 'COM8'
+PS D:\h60106817\release> $DEVICE_UART = '/dev/ttyHW0'
+PS D:\h60106817\release> $SESSION = Get-Date -Format yyyyMMdd-HHmmss
+PS D:\h60106817\release> $LOCAL = ".\AVS-results\GPU-TEARDOWN-$SESSION"
+PS D:\h60106817\release> hdc shell
+# ls /data/local/tmp/avs
+bin  configs  shaders  tests
+# rm -r /data/local/tmp/avs
+# ls /data/local/tmp/avs
+ls: /data/local/tmp/avs: No such file or directory
+# exit
+PS D:\h60106817\release> New-Item -ItemType Directory -Force $LOCAL | Out-Null
+PS D:\h60106817\release> Start-Transcript "$LOCAL\pc-transcript.txt"
+已启动脚本，输出文件为 .\AVS-results\GPU-TEARDOWN-20260910-103601\pc-transcript.txt
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE deploy --profile gpu_smoke_kirin9030
+complete: True
+verified: True
+manifest: D:\h60106817\release\output\deployment-manifest.json
+PS D:\h60106817\release> if ($LASTEXITCODE -ne 0) { throw 'gpu smoke deploy failed' }
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE deploy --profile gpu_stress_kirin9030
+complete: True
+verified: True
+manifest: D:\h60106817\release\output\deployment-manifest.json
+PS D:\h60106817\release> if ($LASTEXITCODE -ne 0) { throw 'gpu stress deploy failed' }
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE verify-deployment --profile gpu_smoke_kirin9030
+complete: True
+verified: True
+manifest: D:\h60106817\release\output\deployment-verification.json
+PS D:\h60106817\release> if ($LASTEXITCODE -ne 0) { throw 'gpu smoke deployment verification failed' }
+PS D:\h60106817\release> & $MON --transport hdc --device $DEVICE verify-deployment --profile gpu_stress_kirin9030
+complete: True
+verified: True
+manifest: D:\h60106817\release\output\deployment-verification.json
+PS D:\h60106817\release> if ($LASTEXITCODE -ne 0) { throw 'gpu stress deployment verification failed' }
+PS D:\h60106817\release> $REMOTE = "/data/local/tmp/avs/tests/GPU-TEARDOWN-T1-$SESSION"
+PS D:\h60106817\release> & hdc -t $DEVICE shell "mkdir -p $REMOTE"
+PS D:\h60106817\release> if ($LASTEXITCODE -ne 0) { throw 'cannot create remote evidence directory' }
+PS D:\h60106817\release>
+PS D:\h60106817\release> $HashPaths = @(
+>>     '/data/local/tmp/avs/bin/gpu-avs-workload',
+>>     '/data/local/tmp/avs/configs/gpu_smoke_kirin9030.json',
+>>     '/data/local/tmp/avs/configs/gpu_stress_kirin9030.json',
+>>     '/data/local/tmp/avs/shaders/vulkan/fullscreen.vert.spv',
+>>     '/data/local/tmp/avs/shaders/vulkan/workload.frag.spv'
+>> )
+PS D:\h60106817\release> foreach ($Path in $HashPaths) {
+>>     & hdc -t $DEVICE shell "sha256sum $Path" |
+>>         Add-Content "$LOCAL\input-sha256.txt"
+>> }
+PS D:\h60106817\release>
+PS D:\h60106817\release> & hdc -t $DEVICE shell '/data/local/tmp/avs/bin/gpu-avs-workload --version' |
+>>     Set-Content "$LOCAL\version.txt"
+PS D:\h60106817\release> & hdc -t $DEVICE shell '/data/local/tmp/avs/bin/gpu-avs-workload --capabilities' |
+>>     Set-Content "$LOCAL\capabilities.json"
+PS D:\h60106817\release> & hdc -t $DEVICE shell 'ls -lR /data/log/faultlog 2>&1' |
+>>     Set-Content "$LOCAL\faultlog-before.txt"
+PS D:\h60106817\release> & hdc -t $DEVICE shell 'hilog -d 2>&1' |
+>>     Set-Content "$LOCAL\hilog-before.txt"
+PS D:\h60106817\release>
+PS D:\h60106817\release> function Invoke-DeviceCase {
+>>     param(
+>>         [string]$Name,
+>>         [string]$Arguments,
+>>         [int]$Repeat
+>>     )
+>>
+>>     for ($Index = 1; $Index -le $Repeat; $Index++) {
+>>         $Tag = "$Name-$Index"
+>>         $Command = "cd /data/local/tmp/avs; " +
+>>             "./bin/gpu-avs-workload $Arguments " +
+>>             "> $REMOTE/$Tag.stdout 2> $REMOTE/$Tag.stderr; " +
+>>             "rc=`$?; echo `$rc > $REMOTE/$Tag.exit; sync"
+>>
+>>         & hdc -t $DEVICE shell $Command
+>>         if ($LASTEXITCODE -ne 0) { throw "HDC failed while launching $Tag" }
+>>     }
+>> }
+PS D:\h60106817\release>
+PS D:\h60106817\release> Invoke-DeviceCase 'control' '--capabilities' 3
+PS D:\h60106817\release> Invoke-DeviceCase 'smoke' '--config /data/local/tmp/avs/configs/gpu_smoke_kirin9030.json' 3
+PS D:\h60106817\release> Invoke-DeviceCase 'stress' '--config /data/local/tmp/avs/configs/gpu_stress_kirin9030.json' 3
+PS D:\h60106817\release>
+PS D:\h60106817\release> & hdc -t $DEVICE shell 'ls -lR /data/log/faultlog 2>&1' |
+>>     Set-Content "$LOCAL\faultlog-after.txt"
+PS D:\h60106817\release> & hdc -t $DEVICE shell 'hilog -d 2>&1' |
+>>     Set-Content "$LOCAL\hilog-after.txt"
+PS D:\h60106817\release> & hdc -t $DEVICE shell 'dmesg 2>&1' |
+>>     Set-Content "$LOCAL\dmesg-after.txt"
+PS D:\h60106817\release> & hdc -t $DEVICE file recv $REMOTE "$LOCAL\device"
+FileTransfer finish, Size:46457, File count = 27, time:283ms rate:164.16kB/s
+PS D:\h60106817\release> if ($LASTEXITCODE -ne 0) { throw 'failed to pull native test evidence' }
+PS D:\h60106817\release>
+PS D:\h60106817\release>
+PS D:\h60106817\release>
+PS D:\h60106817\release>
+PS D:\h60106817\release>
+PS D:\h60106817\release>
+PS D:\h60106817\release>
+PS D:\h60106817\release>
+PS D:\h60106817\release>
+PS D:\h60106817\release>
+PS D:\h60106817\release>
+PS D:\h60106817\release> $Failures = @()
+PS D:\h60106817\release> foreach ($ExitFile in Get-ChildItem "$LOCAL\device" -Recurse -Filter '*.exit') {
+>>     $Tag = $ExitFile.BaseName
+>>     $ExitCode = (Get-Content $ExitFile.FullName -Raw).Trim()
+>>     $Stdout = Join-Path $ExitFile.DirectoryName "$Tag.stdout"
+>>     $Stderr = Join-Path $ExitFile.DirectoryName "$Tag.stderr"
+>>
+>>     if ($ExitCode -ne '0') {
+>>         $Failures += "$Tag real exit=$ExitCode"
+>>     }
+>>     if ($Tag -notlike 'control-*') {
+>>         $JsonLines = @(Get-Content $Stdout | ForEach-Object {
+>>             try { $_ | ConvertFrom-Json -ErrorAction Stop } catch { $null }
+>>         })
+>>         $Summaries = @($JsonLines | Where-Object { $_.type -eq 'summary' })
+>>         if ($Summaries.Count -ne 1) {
+>>             $Failures += "$Tag summary count=$($Summaries.Count)"
+>>         } elseif ($Summaries[0].result -ne 'PASS' -or $Summaries[0].exit_code -ne 0) {
+>>             $Failures += "$Tag summary is not PASS/0"
+>>         }
+>>     }
+>>     if ((Get-Item $Stderr).Length -ne 0) {
+>>         $Failures += "$Tag stderr is not empty"
+>>     }
+>> }
+PS D:\h60106817\release>
+PS D:\h60106817\release> if ($Failures.Count -ne 0) {
+>>     $Failures | Set-Content "$LOCAL\native-validation-failures.txt"
+>>     $Failures
+>> } else {
+>>     'T1 native lifecycle matrix PASS' |
+>>         Set-Content "$LOCAL\native-validation-pass.txt"
+>> }
+PS D:\h60106817\release> # 1. 检查 T1 机械验证结果
+PS D:\h60106817\release> Write-Host "检查 T1 原生验证结果..." -ForegroundColor Cyan
+检查 T1 原生验证结果...
+PS D:\h60106817\release> if (Test-Path "$LOCAL\native-validation-failures.txt") {
+>>     Write-Host "T1 矩阵存在失败项：" -ForegroundColor Red
+>>     Get-Content "$LOCAL\native-validation-failures.txt"
+>> } else {
+>>     Write-Host "T1 矩阵全部 PASS（或未生成 failures 文件）" -ForegroundColor Green
+>> }
+T1 矩阵全部 PASS（或未生成 failures 文件）
+PS D:\h60106817\release>
+PS D:\h60106817\release> # 2. 拉取设备端可能产生的 native crash 日志
+PS D:\h60106817\release> Write-Host "开始拉取设备端 faultlog 崩溃日志..." -ForegroundColor Cyan
+开始拉取设备端 faultlog 崩溃日志...
+PS D:\h60106817\release> # 尝试把 faultlog 目录里的 cppcrash 文件拷贝到我们的测试目录再拉回
+PS D:\h60106817\release> & hdc -t $DEVICE shell "mkdir -p $REMOTE/faultlogs"
+PS D:\h60106817\release> & hdc -t $DEVICE shell "cp /data/log/faultlog/faultlogger/cppcrash-* $REMOTE/faultlogs/ 2>/dev/null"
+PS D:\h60106817\release> & hdc -t $DEVICE shell "cp /data/log/faultlog/temp/cppcrash-* $REMOTE/faultlogs/ 2>/dev/null"
+PS D:\h60106817\release> & hdc -t $DEVICE file recv "$REMOTE/faultlogs" "$LOCAL\device\faultlogs"
+FileTransfer finish, Size:25226025, File count = 57, time:1402ms rate:17992.89kB/s
+PS D:\h60106817\release>
+PS D:\h60106817\release> Write-Host "faultlog 拉取完成。请检查 $LOCAL\device\faultlogs 目录下是否有文件。" -ForegroundColor Green
+faultlog 拉取完成。请检查 .\AVS-results\GPU-TEARDOWN-20260910-103601\device\faultlogs 目录下是否有文件。
+PS D:\h60106817\release> Write-Host "开始执行 T2: Monitor 包装复现..." -ForegroundColor Cyan
+开始执行 T2: Monitor 包装复现...
+PS D:\h60106817\release>
+PS D:\h60106817\release> function Invoke-MonitorGpuCase {
+>>     param(
+>>         [string]$Name,
+>>         [string]$Profile
+>>     )
+>>
+>>     $TestId = "GPU-$Name-$SESSION"
+>>     for ($Index = 1; $Index -le 3; $Index++) {
+>>         $AttemptId = '{0}-{1:D3}' -f $TestId, $Index
+>>         Write-Host "Running $AttemptId..." -ForegroundColor Yellow
+>>
+>>         $RunOutput = & $MON --transport hdc --device $DEVICE `
+>>             --pc-serial $PC_SERIAL --device-uart $DEVICE_UART --json `
+>>             run --profile $Profile --test-id $TestId --attempt-id $AttemptId `
+>>             --pc-artifacts full 2>&1
+>>         $RunExit = $LASTEXITCODE
+>>         $RunOutput | Set-Content "$LOCAL\$AttemptId-monitor-run.txt"
+>>         $RunExit | Set-Content "$LOCAL\$AttemptId-monitor-exit.txt"
+>>
+>>         Write-Host "Collecting $AttemptId..." -ForegroundColor Yellow
+>>         $CollectOutput = & $MON --transport hdc --device $DEVICE --json `
+>>             collect --test-id $TestId --attempt-id $AttemptId `
+>>             --artifact-set full --verify-hashes 2>&1
+>>         $CollectExit = $LASTEXITCODE
+>>         $CollectOutput | Set-Content "$LOCAL\$AttemptId-monitor-collect.txt"
+>>         $CollectExit | Set-Content "$LOCAL\$AttemptId-collect-exit.txt"
+>>     }
+>> }
+PS D:\h60106817\release>
+PS D:\h60106817\release> Invoke-MonitorGpuCase 'SMOKE' 'gpu_smoke_kirin9030'
+Running GPU-SMOKE-20260910-103601-001...
+Collecting GPU-SMOKE-20260910-103601-001...
+Running GPU-SMOKE-20260910-103601-002...
+Collecting GPU-SMOKE-20260910-103601-002...
+Running GPU-SMOKE-20260910-103601-003...
+Collecting GPU-SMOKE-20260910-103601-003...
+PS D:\h60106817\release> Invoke-MonitorGpuCase 'STRESS' 'gpu_stress_kirin9030'
+Running GPU-STRESS-20260910-103601-001...
+Collecting GPU-STRESS-20260910-103601-001...
+Running GPU-STRESS-20260910-103601-002...
+Collecting GPU-STRESS-20260910-103601-002...
+Running GPU-STRESS-20260910-103601-003...
+Collecting GPU-STRESS-20260910-103601-003...
+PS D:\h60106817\release>
+PS D:\h60106817\release> # 结束 transcript 记录
+PS D:\h60106817\release> Stop-Transcript
+已停止脚本，输出文件为 D:\h60106817\release\AVS-results\GPU-TEARDOWN-20260910-103601\pc-transcript.txt
+PS D:\h60106817\release> Write-Host "T2 测试执行完毕，Transcript 已停止。" -ForegroundColor Green
+T2 测试执行完毕，Transcript 已停止。
+PS D:\h60106817\release> # 把 Monitor collect 下来的结果目录也移到统一归档目录下
+PS D:\h60106817\release> Copy-Item "D:\h60106817\release\output\GPU-SMOKE-*" "$LOCAL\" -Recurse -Force
+PS D:\h60106817\release> Copy-Item "D:\h60106817\release\output\GPU-STRESS-*" "$LOCAL\" -Recurse -Force
+PS D:\h60106817\release>  $Local = "D:\h60106817\release\AVS-results\GPU-TEARDOWN-20260910-103601"
+PS D:\h60106817\release>  $SlimDir = "D:\h60106817\release\GPU-Slim-Evidence"
+PS D:\h60106817\release>
+PS D:\h60106817\release> # 1. 清理并创建精简目录
+PS D:\h60106817\release> if (Test-Path $SlimDir) { Remove-Item $SlimDir -Recurse -Force }
+PS D:\h60106817\release> New-Item -ItemType Directory -Force -Path $SlimDir | Out-Null
+PS D:\h60106817\release> New-Item -ItemType Directory -Force -Path "$SlimDir\T1_Native" | Out-Null
+PS D:\h60106817\release> New-Item -ItemType Directory -Force -Path "$SlimDir\T2_Monitor" | Out-Null
+PS D:\h60106817\release> New-Item -ItemType Directory -Force -Path "$SlimDir\Crash_Extracts" | Out-Null
+PS D:\h60106817\release>
+PS D:\h60106817\release> Write-Host "开始提取精简证据..." -ForegroundColor Cyan
+开始提取精简证据...
+PS D:\h60106817\release>
+PS D:\h60106817\release> # 2. 提取环境信息
+PS D:\h60106817\release> Copy-Item "$Local\input-sha256.txt" "$SlimDir\"
+PS D:\h60106817\release> Copy-Item "$Local\version.txt" "$SlimDir\"
+PS D:\h60106817\release> Copy-Item "$Local\capabilities.json" "$SlimDir\"
+PS D:\h60106817\release> Copy-Item "$Local\native-validation-pass.txt" "$SlimDir\"
+PS D:\h60106817\release>
+PS D:\h60106817\release> # 3. 提取 T1 原生测试结果 (只要 stdout/stderr/exit)
+PS D:\h60106817\release> Copy-Item "$Local\device\*.exit" "$SlimDir\T1_Native\"
+PS D:\h60106817\release> Copy-Item "$Local\device\*.stderr" "$SlimDir\T1_Native\"
+PS D:\h60106817\release> Copy-Item "$Local\device\*.stdout" "$SlimDir\T1_Native\"
+PS D:\h60106817\release>
+PS D:\h60106817\release> # 4. 提取 T2 Monitor 测试结果 (只要 result 和 summary)
+PS D:\h60106817\release>  $T2Dirs = Get-ChildItem $Local -Directory | Where-Object { $_.Name -like "GPU-*" }
+PS D:\h60106817\release> foreach ($Dir in $T2Dirs) {
+>>     $SubDirs = Get-ChildItem $Dir.FullName -Directory | Where-Object { $_.Name -like "*-0*" }
+>>     foreach ($Sub in $SubDirs) {
+>>         $Target = "$SlimDir\T2_Monitor\$($Dir.Name)__$($Sub.Name)"
+>>         New-Item -ItemType Directory -Force -Path $Target | Out-Null
+>>         Copy-Item "$($Sub.FullName)\result.json" "$Target\"
+>>         Copy-Item "$($Sub.FullName)\workload-summary.json" "$Target\" -ErrorAction SilentlyContinue
+>>     }                                                                                                                >> }                                                                                                                    PS D:\h60106817\release>                                                                                                PS D:\h60106817\release> # 5. 关键：从 faultlogs 中只提取属于 gpu-avs-workload 的崩溃栈前 200 行                        PS D:\h60106817\release> Write-Host "正在过滤 native crash 栈..." -ForegroundColor Yellow                               正在过滤 native crash 栈...
+PS D:\h60106817\release>  $CrashFiles = Get-ChildItem "$Local\device\faultlogs" -Filter "cppcrash-*" | Sort-Object LastWriteTime -Descending | Select-Object -First 3
+PS D:\h60106817\release>  $CrashIndex = 1
+PS D:\h60106817\release> foreach ($Crash in $CrashFiles) {
+>>     $CrashContent = Get-Content $Crash.FullName -TotalCount 200
+>>     $CrashContent | Set-Content "$SlimDir\Crash_Extracts\crash_stack_$CrashIndex.txt"
+>>     $CrashIndex++
+>> }
+PS D:\h60106817\release>
+PS D:\h60106817\release> # 6. 从 dmesg 中只提取包含 GPU 或 SIGSEGV 的关键行
+PS D:\h60106817\release> Write-Host "正在过滤 dmesg..." -ForegroundColor Yellow
+正在过滤 dmesg...
+PS D:\h60106817\release> Select-String -Path "$Local\dmesg-after.txt" -Pattern "gpu","SIGSEGV","11","fault" |
+>>     Select-Object -First 50 |
+>>     ForEach-Object { $_.Line } |
+>>     Set-Content "$SlimDir\Crash_Extracts\dmesg_filtered.txt"
+PS D:\h60106817\release>
+PS D:\h60106817\release> # 7. 打包成 ZIP
+PS D:\h60106817\release>  $ZipPath = "D:\h60106817\release\GPU-Slim-Evidence.zip"
+PS D:\h60106817\release> if (Test-Path $ZipPath) { Remove-Item $ZipPath -Force }
+PS D:\h60106817\release> Compress-Archive -Path "$SlimDir\*" -DestinationPath $ZipPath -CompressionLevel Optimal
+PS D:\h60106817\release>
+PS D:\h60106817\release> Write-Host "提取完成！请上传此文件：" -ForegroundColor Green
+提取完成！请上传此文件：
+PS D:\h60106817\release> Write-Host $ZipPath -ForegroundColor Green
+D:\h60106817\release\GPU-Slim-Evidence.zip
+PS D:\h60106817\release> Invoke-Item $SlimDir

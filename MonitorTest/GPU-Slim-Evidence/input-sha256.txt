@@ -1,0 +1,5 @@
+864b76c16ddf68c46e93cf0a8b5c9c461bd5822665379cb7709167d50dc980ef  /data/local/tmp/avs/bin/gpu-avs-workload
+5a91ca9656e9657add4e2f07d9537693358aacc88bc8307ca0382c651a541066  /data/local/tmp/avs/configs/gpu_smoke_kirin9030.json
+5b0ba0ea91bef4a2e91da5df7f8759e193410ebad04744bd99ee1c64f534ae07  /data/local/tmp/avs/configs/gpu_stress_kirin9030.json
+e12aae1cfc3959515badec3c7b85433622e83c56fb7ad9f30bc92d9f65a4ed17  /data/local/tmp/avs/shaders/vulkan/fullscreen.vert.spv
+31ef0207fc83a5fc07769b4aac227eaa77c533341b021b40954a6cf7382bf37c  /data/local/tmp/avs/shaders/vulkan/workload.frag.spv
