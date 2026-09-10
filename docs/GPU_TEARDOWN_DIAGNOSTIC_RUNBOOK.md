@@ -247,3 +247,66 @@ Stop-Transcript
 ## 本轮完成标准
 
 本问题只有在以下条件同时满足时才能关闭：根因由 native stack 或可重复 A/B 实验支持；修复前能稳定失败、修复后 clean build 的 T1/T2 全部通过；新增自动生命周期/退出契约测试通过；真机 Vulkan smoke/stress 连续三次无 SIGSEGV；Monitor 仍严格拒绝 summary 与真实退出码不一致的运行。
+
+## 0910 复测后的剩余最小闭环
+
+`MonitorTest/GPU-Slim-Evidence` 已完成本手册的 T1/T2：原生 control/smoke/stress 3+3+3 全部真实退出 0，Monitor smoke/stress 3+3 全部 PASS，summary、workload 和 PC 退出码均为 0。当前已验证设备二进制 SHA-256 为 `864b76c16ddf68c46e93cf0a8b5c9c461bd5822665379cb7709167d50dc980ef`。
+
+这批结果足以停止盲目修改 Destroy，但还缺少从源码到设备二进制的最小溯源闭环。无需再上传完整运行目录；只需在实际 GPU workload 源码目录保存以下输出：
+
+```bash
+git rev-parse HEAD
+git status --short
+
+grep -E '^(CMAKE_GENERATOR|CMAKE_BUILD_TYPE|CMAKE_CXX_FLAGS|CMAKE_CXX_FLAGS_RELEASE|OHOS_STL):' \
+  build-ohos-arm64/CMakeCache.txt
+
+grep -m 1 '"command"' build-ohos-arm64/compile_commands.json
+
+sha256sum \
+  build-ohos-arm64/gpu-avs-workload \
+  /mnt/d/h60106817/release/tools/gpu-avs-workload
+```
+
+并在 PC 上再次读取设备文件哈希：
+
+```powershell
+$DEVICE = '0123456789ABCDEF'
+hdc -t $DEVICE shell `
+    'sha256sum /data/local/tmp/avs/bin/gpu-avs-workload'
+```
+
+需要提交的最小材料只有：上述命令原始输出、`CMakeCache.txt` 中匹配到的行、第一条真实编译命令，以及 build/release/device 三处 SHA-256。若 0909 失败 binary 或旧 release 目录仍存在，再增加旧 binary 的 SHA-256；若已丢失，明确记录“旧失败产物不可用”，无需补传无关日志。
+
+当前正式提交的 `gpuworkload/CMakeLists.txt` 是此前为鸿蒙/OHOS 框架下 standalone workload 构建准备的版本。安卓/鸿蒙双框架集成另有一套 CMake，本文件不能替代、覆盖或宣称兼容那套构建；双框架验证必须继续使用其自己的 CMake 和入口。
+
+### 何时需要追加 Release 复测
+
+若同时满足以下条件，本轮已经完成的 T1/T2 无需重复：
+
+- `CMAKE_BUILD_TYPE=Release`，或记录证明使用了等价的多配置 Release 生成器；
+- 编译命令包含预期的 Release 优化和同一 OHOS NDK/ABI/STL 选项；
+- build、release、device 三处二进制 SHA-256 完全一致。
+
+如果 build type 为空、编译选项无法确认，或三处哈希任意一处不同，应使用全新目录重新构建。不要复用 `build-ohos-arm64`，也不要删除它，以便保留当前证据：
+
+```bash
+cmake -S . -B build-ohos-arm64-release-clean \
+  -DCMAKE_TOOLCHAIN_FILE="$OHOS_NDK_HOME/build/cmake/ohos.toolchain.cmake" \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DOHOS_ARCH=arm64-v8a \
+  -DOHOS_STL=c++_static \
+  -DGPU_AVS_ENABLE_GLES=ON \
+  -DGPU_AVS_ENABLE_VULKAN=ON
+
+cmake --build build-ohos-arm64-release-clean --verbose --parallel
+sha256sum build-ohos-arm64-release-clean/gpu-avs-workload
+```
+
+将该 binary 明确复制到 release、重新 deploy 并核对三处哈希后，只追加以下测试，不必再重复 smoke/control：
+
+1. 使用“测试 1”中的 `Invoke-DeviceCase` 原生运行 `gpu_stress_kirin9030.json` 3 次。
+2. 使用“测试 2”中的 `Invoke-MonitorGpuCase` 经 Monitor 运行 `gpu_stress_kirin9030` 3 次。
+3. 六次均要求恰好一个 PASS/0 summary、真实 workload exit=0、Monitor verdict=PASS、stderr 为空，且 faultlog 前后对比没有新增 `gpu-avs-workload` crash。
+
+0910 精简包中的三份 crash 摘录进程名是 `foundation`/`com.ohos.formrenderservice`，并非 `gpu-avs-workload`；其时间也早于本轮测试，不能作为本轮失败证据。后续筛选 dmesg/hilog 时不要使用裸字符串 `11`，应限定为 `gpu-avs-workload|SIGSEGV|vulkan|gpu fault|device lost` 等具体模式，并始终保留测试前后清单。
