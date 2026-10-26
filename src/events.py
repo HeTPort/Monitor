@@ -13,8 +13,10 @@ EVENT_SOURCES = {
     "agent",
     "cpu-workload",
     "gpu-workload",
+    "npu-workload",
     "cpu-telemetry",
     "gpu-telemetry",
+    "npu-telemetry",
     "kernel",
 }
 EVENT_TYPES = {
@@ -24,6 +26,7 @@ EVENT_TYPES = {
     "start",
     "heartbeat",
     "batch",
+    "inference",
     "verify",
     "verification_summary",
     "golden",

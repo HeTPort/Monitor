@@ -147,7 +147,7 @@ class ConfigLoaderTests(unittest.TestCase):
     def test_all_bundled_workloads_have_target_compatible_schema(self) -> None:
         config_root = Path(__file__).parents[1] / "config" / "workloads"
         for path in sorted(config_root.glob("*.json")):
-            target = "gpu" if path.name.startswith("gpu_") else "cpu"
+            target = path.name.split("_", 1)[0]
             with self.subTest(path=path.name):
                 document = validate_workload_config(path, target)
                 self.assertEqual(document["output_format"], "jsonl")

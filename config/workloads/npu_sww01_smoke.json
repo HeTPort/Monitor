@@ -1,0 +1,20 @@
+{
+  "profile": "sww01",
+  "api": "npu",
+  "mode": "inference",
+  "backend": "null",
+  "input_manifest": "../../tools/npu/profiles/sww01/manifest.json",
+  "duration": 2,
+  "inferences": 10,
+  "warmup_inferences": 0,
+  "timeout": 15,
+  "inference_timeout_ms": 5000,
+  "verify_mode": "checksum",
+  "verify_interval": 1,
+  "success_log_interval": 60,
+  "heartbeat_interval": 1,
+  "output_format": "jsonl",
+  "summary_only": false,
+  "per_inference_log": false,
+  "fail_fast": true
+}

@@ -1,0 +1,7 @@
+warning: smoke is deprecated; use run with the same short profile
+Cannot use PC serial port COM9: Access is denied: port is busy
+Device UART write failed on /dev/ttyS2: remote write failed
+----------------------------------------------------------------------
+Ran 172 tests in 33.735s
+
+OK (skipped=12)

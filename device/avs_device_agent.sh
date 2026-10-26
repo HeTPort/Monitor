@@ -41,7 +41,7 @@ while [ "$#" -gt 0 ]; do
 done
 case "$test_id" in *[!A-Za-z0-9._:-]*|'') echo "avs-device-agent: invalid test id" >&2; exit 2 ;; esac
 case "$attempt_id" in *[!A-Za-z0-9._:-]*|'') echo "avs-device-agent: invalid attempt id" >&2; exit 2 ;; esac
-case "$target" in cpu|gpu) ;; *) echo "avs-device-agent: invalid target" >&2; exit 2 ;; esac
+case "$target" in cpu|gpu|npu) ;; *) echo "avs-device-agent: invalid target" >&2; exit 2 ;; esac
 for numeric in "$baudrate" "$timeout_s" "$max_frame" "$tail_guard" "$safe_utilization" "$telemetry_interval_s" "$telemetry_shutdown_s"; do
     case "$numeric" in *[!0-9]*|'') echo "avs-device-agent: invalid numeric option" >&2; exit 2 ;; esac
 done
@@ -165,8 +165,10 @@ emit_wire() {
 emit_verification_summary() {
     verification_payload='{'
     verification_separator=
-    case "$target" in cpu) unit_key=batch_count ;; gpu) unit_key=frame_count ;; esac
-    for verification_key in contract_version verify_count verify_fail_count verify_mode verify_interval success_log_interval "$unit_key"; do
+    case "$target" in cpu) unit_key=batch_count ;; gpu) unit_key=frame_count ;; npu) unit_key=inference_count ;; esac
+    extra_keys=
+    [ "$target" != npu ] || extra_keys="backend fallback_used checksum golden_checksum device_time_valid inferences_per_sec_avg host_inference_time_ms_p99 device_inference_time_ms_p99"
+    for verification_key in $extra_keys contract_version verify_count verify_fail_count verify_mode verify_interval success_log_interval "$unit_key"; do
         json_scalar "$1" "$verification_key"
         [ "$json_present" = true ] || continue
         verification_field="\"$verification_key\":$json_value"
@@ -186,7 +188,7 @@ emit_verification_summary() {
 
 emit_first_verify_failure() {
     failure_payload='{"result":"FAIL","pass":false'
-    case "$target" in cpu) unit_key=batch ;; gpu) unit_key=frame ;; esac
+    case "$target" in cpu) unit_key=batch ;; gpu) unit_key=frame ;; npu) unit_key=inference ;; esac
     # Evidence detail is opportunistic; the failing verdict always fits first.
     # Unabridged evidence (including every repeated failure) remains local.
     for failure_key in "$unit_key" mismatch_count checksum golden_checksum verify_mode pixel_diff_count compute_mismatch_count; do
@@ -226,7 +228,7 @@ handle_workload_line() {
     json_scalar "$native_line" type
     event_type=${json_value#\"}; event_type=${event_type%\"}
     case "$event_type" in
-        batch) emit_local "$target-workload" batch "$native_line" ;;
+        batch|inference) emit_local "$target-workload" "$event_type" "$native_line" ;;
         start|golden)
             refresh_local_clock
             emit_local "$target-workload" "$event_type" "$native_line"

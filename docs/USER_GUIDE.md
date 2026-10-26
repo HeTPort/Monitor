@@ -302,3 +302,5 @@ Kirin9030 的 `/sys/kernel/debug/lpmcu_debug/cluster_volt` 是调压入口，不
 | 6 | 用户中止 |
 
 常见定位顺序：先看 PC `result.json`，再按其中的 `device_evidence` 使用 `collect` 拉取 `events.jsonl`、`workload.log`、`final.json` 和 telemetry。不要先归因于网络；核心 UART 判定与设备本地证据不依赖 GitHub。
+
+For NPU model assets, runtime dependencies, execution-position evidence and the shared deployment/run/qualification workflow, see [NPU_USER_GUIDE.md](NPU_USER_GUIDE.md). Device acceptance remains separate from null/fake-runtime software conformance.

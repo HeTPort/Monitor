@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$Python = "python",
-    [switch]$SkipTests
+    [switch]$SkipTests,
+    [switch]$IncludeNpu
 )
 
 $ErrorActionPreference = "Stop"
@@ -15,6 +16,7 @@ try {
         "tools\shaders\vulkan\fullscreen.vert.spv",
         "tools\shaders\vulkan\workload.frag.spv"
     )
+    if ($IncludeNpu) { $requiredAssets += @("tools\npu-avs-workload", "tools\npu\profiles\kws01\manifest.json", "tools\npu\profiles\ic01\manifest.json", "tools\npu\profiles\ad01\manifest.json", "tools\npu\profiles\sww01\manifest.json") }
     foreach ($asset in $requiredAssets) {
         if (-not (Test-Path -LiteralPath (Join-Path $projectRoot $asset) -PathType Leaf)) {
             throw "Required release asset is missing: $asset. Stage the HarmonyOS workload builds and compiled SPIR-V before packaging."
@@ -29,6 +31,10 @@ try {
 
         $ErrorActionPreference = $oldErrorActionPreference
         if ($LASTEXITCODE -ne 0) { throw "Unit tests failed" }
+    }
+    if ($IncludeNpu) {
+        & $Python main.py validate --package --include-npu
+        if ($LASTEXITCODE -ne 0) { throw "NPU package validation failed; stage the device assets and runtime configuration." }
     }
     & $Python -c "import serial, yaml, PyInstaller"
     if ($LASTEXITCODE -ne 0) {

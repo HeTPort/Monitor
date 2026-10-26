@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "name": "npu_ad01_qualification",
+  "target": "npu",
+  "platform": "kirin9030",
+  "purpose": "qualification",
+  "workload": {
+    "binary": "../../tools/npu-avs-workload",
+    "remote_binary": "bin/npu-avs-workload",
+    "config": "../workloads/npu_ad01_qualification.json",
+    "target_abi": "aarch64-linux",
+    "assets": []
+  },
+  "scheduler_requirements": {},
+  "baseline": null,
+  "telemetry": {
+    "interval_ms": 1000,
+    "required": [],
+    "optional": []
+  },
+  "kernel_monitor": "critical",
+  "runtime_budgets": {
+    "overall_timeout_s": 120,
+    "heartbeat_timeout_s": 20
+  }
+}

@@ -47,3 +47,5 @@ python -m unittest discover -s tests -v
 ```powershell
 .\scripts\build.ps1
 ```
+
+NPU integration and device preparation: [NPU guide](docs/NPU_USER_GUIDE.md). Executed software checks and outstanding board acceptance: [NPU validation](docs/NPU_VALIDATION.md).

@@ -28,7 +28,7 @@ done
 
 case "$test_id" in *[!A-Za-z0-9._:-]*|'') echo "invalid test id" >&2; exit 2 ;; esac
 case "$attempt_id" in *[!A-Za-z0-9._:-]*|'') echo "invalid attempt id" >&2; exit 2 ;; esac
-case "$target" in cpu|gpu) ;; *) echo "invalid target" >&2; exit 2 ;; esac
+case "$target" in cpu|gpu|npu) ;; *) echo "invalid target" >&2; exit 2 ;; esac
 case "$interval_s:$duration_s" in *[!0-9:]*|:*) echo "invalid interval/duration" >&2; exit 2 ;; esac
 [ "$interval_s" -gt 0 ] || interval_s=1
 [ -n "$output" ] && [ -r "$plan" ] || { echo "readable plan and output are required" >&2; exit 2; }

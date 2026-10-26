@@ -58,3 +58,27 @@ Calibration takes complete, correct, stable sustained samples with required tele
 ## Existing Kirin9020 profiles
 
 `cpu_mixed_big4` and `gpu_vulkan_mixed` remain Kirin9020 profiles with their existing scheduler metadata. They also use the new verification/logging fields. Do not substitute them for Kirin9030 profiles or infer that their core-affinity/OPP metadata applies to another platform. The older `config/workload_profiles.yaml` is a legacy registry; the profile YAML directory is the catalog used by the main CLI.
+
+- `npu_kws01_smoke`: NPU kws01, smoke; see NPU_USER_GUIDE.md for asset/runtime and qualification prerequisites.
+
+- `npu_kws01_load`: NPU kws01, load; see NPU_USER_GUIDE.md for asset/runtime and qualification prerequisites.
+
+- `npu_kws01_qualification`: NPU kws01, qualification; see NPU_USER_GUIDE.md for asset/runtime and qualification prerequisites.
+
+- `npu_ic01_smoke`: NPU ic01, smoke; see NPU_USER_GUIDE.md for asset/runtime and qualification prerequisites.
+
+- `npu_ic01_load`: NPU ic01, load; see NPU_USER_GUIDE.md for asset/runtime and qualification prerequisites.
+
+- `npu_ic01_qualification`: NPU ic01, qualification; see NPU_USER_GUIDE.md for asset/runtime and qualification prerequisites.
+
+- `npu_ad01_smoke`: NPU ad01, smoke; see NPU_USER_GUIDE.md for asset/runtime and qualification prerequisites.
+
+- `npu_ad01_load`: NPU ad01, load; see NPU_USER_GUIDE.md for asset/runtime and qualification prerequisites.
+
+- `npu_ad01_qualification`: NPU ad01, qualification; see NPU_USER_GUIDE.md for asset/runtime and qualification prerequisites.
+
+- `npu_sww01_smoke`: NPU sww01, smoke; see NPU_USER_GUIDE.md for asset/runtime and qualification prerequisites.
+
+- `npu_sww01_load`: NPU sww01, load; see NPU_USER_GUIDE.md for asset/runtime and qualification prerequisites.
+
+- `npu_sww01_qualification`: NPU sww01, qualification; see NPU_USER_GUIDE.md for asset/runtime and qualification prerequisites.

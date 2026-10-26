@@ -238,7 +238,7 @@ Examples:
         help='List available workload profiles',
         description='Show all available workload profiles'
     )
-    list_parser.add_argument('--target', choices=['cpu', 'gpu'])
+    list_parser.add_argument('--target', choices=['cpu', 'gpu', 'npu'])
 
     # ─────────────────────────────────────────────────────────────────
     # validate command
@@ -251,6 +251,7 @@ Examples:
     validate_parser.add_argument('--profile')
     validate_parser.add_argument('--baseline')
     validate_parser.add_argument('--package', action='store_true')
+    validate_parser.add_argument('--include-npu', action='store_true', help='Include NPU assets in --package validation')
 
     probe_parser = subparsers.add_parser('probe', help='Discover normalized device capabilities')
     probe_parser.add_argument('--platform', required=True)
@@ -265,7 +266,7 @@ Examples:
 
     deploy_parser = subparsers.add_parser('deploy', help='Hash-verified device asset deployment')
     deploy_selection = deploy_parser.add_mutually_exclusive_group(required=True)
-    deploy_selection.add_argument('--target', choices=['cpu', 'gpu', 'all'])
+    deploy_selection.add_argument('--target', choices=['cpu', 'gpu', 'npu', 'all'])
     deploy_selection.add_argument('--profile')
     deploy_reference = deploy_parser.add_mutually_exclusive_group()
     deploy_reference.add_argument('--baseline', help='Approved baseline whose GPU golden asset must be deployed')
@@ -275,15 +276,15 @@ Examples:
 
     verify_parser = subparsers.add_parser('verify-deployment', help='Verify already deployed assets without changing the device')
     verify_selection = verify_parser.add_mutually_exclusive_group(required=True)
-    verify_selection.add_argument('--target', choices=['cpu', 'gpu', 'all'])
+    verify_selection.add_argument('--target', choices=['cpu', 'gpu', 'npu', 'all'])
     verify_selection.add_argument('--profile')
     verify_reference = verify_parser.add_mutually_exclusive_group()
     verify_reference.add_argument('--baseline')
     verify_reference.add_argument('--golden', metavar='MANIFEST')
 
-    golden_parser = subparsers.add_parser('golden', help='Create CPU/GPU golden artifacts from qualified runs')
+    golden_parser = subparsers.add_parser('golden', help='Create CPU/GPU/NPU golden artifacts from qualified runs')
     golden_subparsers = golden_parser.add_subparsers(dest='golden_target', required=True)
-    for target in ('cpu', 'gpu'):
+    for target in ('cpu', 'gpu', 'npu'):
         target_parser = golden_subparsers.add_parser(target)
         target_parser.add_argument('--profile', required=True)
         target_parser.add_argument('--runs', type=int, default=10, help='Exact number of qualified runs to consume or capture')
@@ -297,14 +298,17 @@ Examples:
             help='Supply exactly --runs collected runs, or omit all values for live capture',
         )
         target_parser.add_argument('--qualification-id')
-        if target == 'cpu':
+        if target in ('cpu', 'npu'):
             target_parser.add_argument('--accept-checksum')
+            if target == 'npu':
+                target_parser.add_argument('--approver', required=True)
+                target_parser.add_argument('--conditions', required=True, help='Known-good voltage/frequency/temperature and runtime validation reference')
         else:
             target_parser.add_argument('--readback-name', default='gpu-golden.rgba')
 
-    calibrate_parser = subparsers.add_parser('calibrate', help='Propose CPU/GPU limits from qualified runs')
+    calibrate_parser = subparsers.add_parser('calibrate', help='Propose CPU/GPU/NPU limits from qualified runs')
     calibrate_subparsers = calibrate_parser.add_subparsers(dest='calibration_target', required=True)
-    for target in ('cpu', 'gpu'):
+    for target in ('cpu', 'gpu', 'npu'):
         target_parser = calibrate_subparsers.add_parser(target)
         target_parser.add_argument('--profile', required=True)
         target_parser.add_argument('--runs', type=int, default=30)

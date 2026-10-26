@@ -318,7 +318,7 @@ class CLITests(unittest.TestCase):
     def test_deploy_and_collect_help_expose_only_safe_contracts(self) -> None:
         deploy = self.run_cli("deploy", "--help")
         self.assertEqual(deploy.returncode, 0, deploy.stderr)
-        self.assertIn("--target {cpu,gpu,all} | --profile PROFILE", deploy.stdout)
+        self.assertIn("--target {cpu,gpu,npu,all} | --profile PROFILE", deploy.stdout)
         self.assertNotIn("--no-verify-hashes", deploy.stdout)
 
         collect = self.run_cli("collect", "--help")

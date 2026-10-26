@@ -1,0 +1,92 @@
+npu contract tests passed
+
+Test       : null
+ExitCode   : 0
+Result     : PASS
+Inferences : 3
+Verified   : True
+Target     : none
+
+Test       : reference-repeatability
+ExitCode   : 0
+Result     : PASS
+Inferences : 5
+Verified   : True
+Target     : cpu_reference
+
+Test       : kws01-contract
+ExitCode   : 0
+Result     : PASS
+Inferences : 2
+Verified   : True
+Target     : none
+
+Test       : ic01-contract
+ExitCode   : 0
+Result     : PASS
+Inferences : 2
+Verified   : True
+Target     : none
+
+Test       : ad01-contract
+ExitCode   : 0
+Result     : PASS
+Inferences : 2
+Verified   : True
+Target     : none
+
+Test       : sww01-contract
+ExitCode   : 0
+Result     : PASS
+Inferences : 2
+Verified   : True
+Target     : none
+
+Test       : delegate-runtime-required
+ExitCode   : 2
+Result     : API_ERROR
+Inferences : 0
+Verified   : False
+Target     : external_npu_delegate
+
+Test       : delegate-lifecycle
+ExitCode   : 0
+Result     : PASS
+Inferences : 2
+Verified   : True
+Target     : external_npu_delegate
+
+Test       : checksum-failure
+ExitCode   : 1
+Result     : CHECKSUM_FAIL
+Inferences : 1
+Verified   : False
+Target     : cpu_reference
+
+Test       : inference-timeout
+ExitCode   : 3
+Result     : TIMEOUT
+Inferences : 0
+Verified   : False
+Target     : none
+
+Test       : global-timeout-bound
+ExitCode   : 3
+Result     : TIMEOUT
+Inferences : 0
+Verified   : False
+Target     : none
+
+Test       : unsupported-backend
+ExitCode   : 2
+Result     : API_ERROR
+Inferences : 0
+Verified   : False
+Target     :
+
+Test       : unsupported-profile
+ExitCode   : 2
+Result     : API_ERROR
+Inferences : 0
+Verified   : False
+Target     : cpu_reference

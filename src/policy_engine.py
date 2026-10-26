@@ -136,7 +136,9 @@ class PolicyEngine:
             self._dut(scope, str(payload.get("code", "LIMIT_VIOLATION")), payload, event)
         elif event.type == "error":
             origin = str(payload.get("origin", event.source))
-            if origin in {"agent", "transport", "artifact", "restoration"} or event.source == "agent":
+            if event.source == "npu-workload" and payload.get("error_code") in {"BACKEND_INIT_FAILED", "MANIFEST_LOAD_FAILED", "UNSUPPORTED_BACKEND", "UNSUPPORTED_PROFILE", "UNKNOWN_PROFILE"}:
+                self._infra("npu-runtime", str(payload["error_code"]), payload, event)
+            elif origin in {"agent", "transport", "artifact", "restoration"} or event.source == "agent":
                 self._infra("agent", str(payload.get("error_code", "AGENT_ERROR")), payload, event)
             else:
                 self._dut("workload", str(payload.get("error_code", payload.get("error_type", "WORKLOAD_ERROR"))), payload, event)

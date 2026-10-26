@@ -1,0 +1,16 @@
+test_actual_check_count_excludes_warmup (__main__.MonitorContractTests.test_actual_check_count_excludes_warmup) ... ok
+test_all_models_execute_null_contract (__main__.MonitorContractTests.test_all_models_execute_null_contract) ... ok
+test_capabilities_do_not_initialize_missing_runtime (__main__.MonitorContractTests.test_capabilities_do_not_initialize_missing_runtime) ... ok
+test_fake_delegate_runs_are_only_protocol_evidence (__main__.MonitorContractTests.test_fake_delegate_runs_are_only_protocol_evidence) ... ok
+test_golden_generation_is_not_a_measured_or_verified_inference (__main__.MonitorContractTests.test_golden_generation_is_not_a_measured_or_verified_inference) ... ok
+test_json_escaped_manifest_path_is_decoded (__main__.MonitorContractTests.test_json_escaped_manifest_path_is_decoded) ... ok
+test_strict_config_rejects_duplicate_malformed_alias_and_wrong_types (__main__.MonitorContractTests.test_strict_config_rejects_duplicate_malformed_alias_and_wrong_types) ... ok
+test_success_sampling_and_rate_limit_do_not_change_checks (__main__.MonitorContractTests.test_success_sampling_and_rate_limit_do_not_change_checks) ... ok
+test_summary_only_does_not_hide_failed_verification (__main__.MonitorContractTests.test_summary_only_does_not_hide_failed_verification) ... ok
+test_verification_disabled_has_zero_actual_checks (__main__.MonitorContractTests.test_verification_disabled_has_zero_actual_checks) ... ok
+test_wrong_golden_failure_is_immediate_even_when_logs_disabled (__main__.MonitorContractTests.test_wrong_golden_failure_is_immediate_even_when_logs_disabled) ... ok
+
+----------------------------------------------------------------------
+Ran 11 tests in 1.760s
+
+OK

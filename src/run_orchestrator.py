@@ -20,6 +20,7 @@ from .path_resolver import PathResolver
 from .policy_engine import PolicyEngine, PolicyLimits, PolicyResult
 from .transport import CommandResult, Transport
 from .uart_protocol import UART_PROTOCOL, UartV2Decoder, frame_wire_seconds
+from .target_adapters import get_target
 from .verification_contract import verification_requirement
 
 
@@ -69,6 +70,14 @@ class RunManifestBuilder:
         workload_document: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         del capabilities, kernel_mode, kernel_rules_path
+        if profile.target == "npu":
+            budgets = profile.raw.get("runtime_budgets", {})
+            for name, default in (("overall_timeout_s", overall_timeout_s), ("heartbeat_timeout_s", heartbeat_timeout_s)):
+                value = budgets.get(name, default)
+                if type(value) not in (int, float) or not __import__("math").isfinite(value) or value <= 0:
+                    raise RunError(f"invalid NPU {name}")
+            overall_timeout_s = float(budgets.get("overall_timeout_s", overall_timeout_s))
+            heartbeat_timeout_s = float(budgets.get("heartbeat_timeout_s", heartbeat_timeout_s))
         if not device_uart:
             raise RunError("device UART must be resolved from an explicit value, saved pairing, or platform config")
         if pc_artifacts not in {"result", "full"}:
@@ -81,11 +90,15 @@ class RunManifestBuilder:
         if baseline is not None:
             self._validate_baseline(profile, baseline)
         if golden is not None:
-            if profile.target == "cpu" and not golden.get("checksum"):
+            if profile.target in {"cpu", "npu"} and not golden.get("checksum"):
                 raise RunError("CPU golden reference is missing checksum")
             if profile.target == "gpu" and not golden.get("remote_path"):
                 raise RunError("GPU golden reference is missing remote_path")
 
+        if profile.target == "npu" and (golden is not None or baseline is not None):
+            correctness = baseline.golden if baseline is not None else golden
+            if correctness.get("kind") != "npu-checksum" or not isinstance(correctness.get("approval"), Mapping) or correctness.get("approval", {}).get("known_good") is not True or not correctness.get("approval", {}).get("approver"):
+                raise RunError("NPU requires an approved checksum golden")
         remote_attempt = self.paths.remote(PurePosixPath("tests") / resolved_test_id / resolved_attempt_id)
         remote_binary = self.paths.remote(
             str(profile.workload.get("remote_binary", f"bin/{profile.target}-avs-workload"))
@@ -93,12 +106,12 @@ class RunManifestBuilder:
         remote_config = self.paths.remote(f"configs/{profile.name}.json")
         workload_argv = [str(remote_binary), "--config", str(remote_config)]
         if baseline is not None:
-            if profile.target == "cpu" and baseline.golden.get("checksum"):
+            if profile.target in {"cpu", "npu"} and baseline.golden.get("checksum"):
                 workload_argv.extend(("--golden-checksum", str(baseline.golden["checksum"])))
             if profile.target == "gpu" and baseline.golden.get("remote_path"):
                 workload_argv.extend(("--golden-file", str(baseline.golden["remote_path"])))
         elif golden is not None:
-            if profile.target == "cpu" and golden.get("checksum"):
+            if profile.target in {"cpu", "npu"} and golden.get("checksum"):
                 workload_argv.extend(("--golden-checksum", str(golden["checksum"])))
             if profile.target == "gpu" and golden.get("remote_path"):
                 workload_argv.extend(("--golden-file", str(golden["remote_path"])))
@@ -174,6 +187,9 @@ class RunManifestBuilder:
             },
             "assets": [],
         }
+        if profile.target == "npu" and (golden is not None or baseline is not None):
+            correctness = baseline.golden if baseline is not None else golden
+            manifest["policy"]["verification"].update(expected_checksum=str(correctness["checksum"]).lower(), real_npu=True)
         manifest["manifest_sha256"] = document_sha256(manifest)
         return manifest
 
@@ -238,7 +254,12 @@ class RunManifestBuilder:
             if profile.target == "gpu":
                 argv.extend(("--golden-file", f"{manifest['spool_dir']}/gpu-golden.rgba"))
         elif mode == "calibration":
-            if profile.target == "cpu" and golden.get("checksum"):
+            if profile.target == "npu":
+                manifest["validation_mode"] = "golden-reference"
+                manifest["golden_reference"] = {"qualification_id": golden.get("qualification_id"), "correctness_fingerprint": golden.get("correctness_fingerprint")}
+                manifest["policy"]["verification"] = verification_requirement("npu", workload_document or {}, strict=True)
+                manifest["policy"]["verification"].update(expected_checksum=str(golden["checksum"]).lower(), real_npu=True)
+            if profile.target in {"cpu", "npu"} and golden.get("checksum"):
                 argv.extend(("--golden-checksum", str(golden["checksum"])))
             if profile.target == "gpu" and golden.get("remote_path"):
                 argv.extend(("--golden-file", str(golden["remote_path"])))
@@ -301,8 +322,8 @@ class RunOrchestrator:
         store.write_json("run-manifest.json", dict(manifest))
         if capabilities:
             store.write_json("capabilities.json", dict(capabilities))
-        if deployment:
-            store.write_json("deployment-manifest.json", dict(deployment))
+        if deployment or manifest.get("deployment_preflight"):
+            store.write_json("deployment-manifest.json", dict(deployment or manifest["deployment_preflight"]))
         if "profile" in manifest:
             store.write_json("effective-profile.json", dict(manifest["profile"]))
         serial_transport = manifest.get("serial_transport", {})
@@ -390,7 +411,7 @@ class RunOrchestrator:
                         agent_started = True
                         last_workload_activity = now
                     if event.source.endswith("-workload") and event.type in {
-                        "start", "heartbeat", "batch", "verify", "golden", "summary", "error", "violation"
+                        "start", "heartbeat", "batch", "inference", "verify", "golden", "summary", "error", "violation"
                     }:
                         agent_started = True
                         last_workload_activity = now
@@ -431,6 +452,9 @@ class RunOrchestrator:
                     "agent_final_seen": final_seen,
                 },
                 **result.to_dict(),
+                **({"normalized_metrics": get_target("npu").metrics(result.workload_summary or {}),
+                    "npu_placement": (deployment or manifest.get("deployment_preflight") or {}).get("npu_placement", {"status": "unknown"}),
+                    "correctness_scope": "golden-generation" if manifest.get("qualification", {}).get("mode") == "golden" else "approved-external-golden" if manifest.get("golden_reference") or manifest.get("baseline") else "run-consistency"} if manifest.get("target") == "npu" else {}),
             }
             result_path = store.finalize(result_document)
             return RunExecution(result=result, result_path=result_path, event_count=event_count)

@@ -475,3 +475,7 @@ $RUN_DIR = "$OUT\MC-CPU-$SESSION\MC-CPU-$SESSION-001"
 ```
 
 最终判定：PRE-01 至 PRE-04 是环境准备完成；MC-01 至 MC-05 全部通过是最小闭环完成；QUAL-01 只表示资格化功能数据链打通，QUAL-02/03 才表示生产 baseline 全流程通过；TEL、DIAG 和报告生成按独立接口记录。24 个叶命令和关键参数分支全部有证据后，才能称为设计/使用文档的完整接口验收。
+
+## NPU device acceptance
+
+Use [NPU_USER_GUIDE.md](NPU_USER_GUIDE.md) for the shared command sequence and [NPU_VALIDATION.md](NPU_VALIDATION.md) for the software/device boundary. Stage the device executable, all four checked model/input manifests, and actual vendor libraries. Accept the KWS01 device closure before expanding the remaining three models. Do not approve qualification without trusted golden generation conditions, verified actual check counts, bound vendor placement diagnostics, complete native/PC/FINAL evidence and a production cohort under the existing policy. NPU telemetry paths must be discovered on the device and declared explicitly; no CPU/GPU substitute is accepted.

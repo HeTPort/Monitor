@@ -1,0 +1,23 @@
+{
+  "profile": "ad01",
+  "api": "npu",
+  "mode": "inference",
+  "backend": "tflite_delegate",
+  "input_manifest": "../../tools/npu/profiles/ad01/manifest.json",
+  "duration": 60,
+  "inferences": 0,
+  "warmup_inferences": 1,
+  "timeout": 95,
+  "inference_timeout_ms": 5000,
+  "verify_mode": "checksum",
+  "verify_interval": 1,
+  "success_log_interval": 60,
+  "heartbeat_interval": 1,
+  "output_format": "jsonl",
+  "summary_only": false,
+  "per_inference_log": false,
+  "fail_fast": true,
+  "runtime_library": "../../tools/npu/lib/libtensorflowlite_c.so",
+  "delegate_library": "../../tools/npu/lib/libvendor_delegate.so",
+  "delegate_options": ""
+}

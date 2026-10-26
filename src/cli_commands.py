@@ -36,6 +36,7 @@ from .run_orchestrator import RunError, RunInfrastructureError, RunManifestBuild
 from .transport import ADBTransport, HDCTransport, Transport, TransportError, TransportManager
 from .transport_probe import TransportProbeBackend
 from .uart_protocol import UART_PROTOCOL, UartV2SessionDecoder, discover_uart_session
+from .target_adapters import get_target
 from .verification_contract import validate_capabilities, verification_issues, verification_requirement
 
 
@@ -340,8 +341,10 @@ def _resolve_golden_reference(paths: PathResolver, profile: ProfileConfig, value
     if golden.get("profile") != profile.name:
         raise QualificationError(f"golden profile {golden.get('profile')!r} does not match {profile.name!r}")
     _require_current_correctness(paths, profile, golden)
-    if profile.target == "cpu":
-        if golden.get("kind") != "cpu-checksum":
+    if profile.target in {"cpu", "npu"}:
+        if profile.target == "npu" and (golden.get("kind") != "npu-checksum" or not isinstance(golden.get("approval"), Mapping) or golden.get("approval", {}).get("known_good") is not True or not golden.get("approval", {}).get("approver")):
+            raise QualificationError("NPU golden must carry explicit known-good approval")
+        if profile.target == "cpu" and golden.get("kind") != "cpu-checksum":
             raise QualificationError(f"golden kind must be cpu-checksum for CPU profile: {golden_path}")
         checksum = golden.get("checksum")
         if not isinstance(checksum, str) or not checksum:
@@ -370,13 +373,18 @@ def _asset_plan(
     agent = paths.resolve_resource("device/avs_device_agent.sh")
     workload = paths.resolve_input(str(profile.workload["binary"]), owner=profile.source_path)
     workload_config = _workload_config_path(paths, profile)
-    validate_workload_config(workload_config, profile.target, device_root=paths.device_root)
+    config = validate_workload_config(workload_config, profile.target, device_root=paths.device_root)
     agent_remote = paths.remote("bin/avs-device-agent")
     assets = [
         AssetSpec(agent, agent_remote, executable=True, kind="agent"),
         AssetSpec(workload, paths.remote(str(profile.workload.get("remote_binary", f"bin/{profile.target}-avs-workload"))), executable=True, kind="workload"),
         AssetSpec(workload_config, paths.remote(f"configs/{profile.name}.json"), kind="workload-config"),
     ]
+    if profile.target == "npu":
+        adapter = get_target("npu")
+        adapter.check_binary(workload, profile)
+        npu_assets, _ = adapter.plan_assets(paths, profile, workload_config, config)
+        assets = [asset for asset in assets if asset.kind != "workload-config"] + npu_assets
     declared_assets = profile.workload.get("assets", [])
     if not isinstance(declared_assets, list):
         raise ConfigError(f"profile {profile.name} workload.assets must be a list")
@@ -397,6 +405,10 @@ def _asset_plan(
                 kind=str(declared.get("kind", "workload-asset")),
             )
         )
+    if profile.target == "npu":
+        for asset in assets:
+            if asset.kind == "npu-dependency":
+                get_target("npu").check_binary(asset.local, profile)
     if baseline is not None and golden is not None:
         raise ConfigError("baseline and golden reference are mutually exclusive")
     correctness = baseline.golden if baseline is not None else golden
@@ -406,6 +418,9 @@ def _asset_plan(
             golden_path = paths.resolve_input(str(local_golden))
             remote_golden = _gpu_golden_remote(paths, profile)
             assets.append(AssetSpec(golden_path, remote_golden, kind="golden"))
+    destinations = [str(asset.remote) for asset in assets]
+    if len(set(destinations)) != len(destinations):
+        raise ConfigError("asset plan contains duplicate remote destinations")
     return assets, agent_remote, workload_config
 
 
@@ -426,7 +441,7 @@ def _telemetry_parser(metric: str, interface: Mapping[str, Any]) -> str:
 
 def _telemetry_plan_bytes(profile: ProfileConfig, platform: PlatformConfig) -> bytes:
     """Resolve a profile/platform pair into a shell-readable, data-only telemetry plan."""
-    domain = platform.cpu if profile.target == "cpu" else platform.gpu
+    domain = getattr(platform, get_target(profile.target).name)
     interfaces = domain.get("interfaces", {}) if isinstance(domain, Mapping) else {}
     required = list(dict.fromkeys(profile.telemetry.get("required", [])))
     optional = [item for item in dict.fromkeys(profile.telemetry.get("optional", [])) if item not in required]
@@ -442,7 +457,7 @@ def _telemetry_plan_bytes(profile: ProfileConfig, platform: PlatformConfig) -> b
             if priority == "required":
                 raise ConfigError(f"platform {platform.name} has no telemetry interface for required metric {metric}")
             continue
-        if name == "temperature" and not interface:
+        if name == "temperature" and not interface and profile.target != "npu":
             # Compatibility for older platform files. New platforms should use
             # typed, platform-specific telemetry_candidates.
             interface = {
@@ -497,7 +512,7 @@ def _requested_deployment_profiles(args: Namespace, paths: PathResolver) -> list
     if getattr(args, "profile", None):
         profiles = [load_profile(paths, args.profile)]
     else:
-        defaults = {"cpu": "cpu_mixed_big4", "gpu": "gpu_vulkan_mixed"}
+        defaults = {"cpu": "cpu_mixed_big4", "gpu": "gpu_vulkan_mixed", "npu": "npu_kws01_smoke"}
         targets = ("cpu", "gpu") if args.target == "all" else (args.target,)
         profiles = [load_profile(paths, defaults[target]) for target in targets]
     for profile in profiles:
@@ -622,6 +637,8 @@ def _workload_fingerprint_fields(paths: PathResolver, profile: ProfileConfig) ->
         "workload": profile.workload,
         "workload_config_sha256": sha256_file(workload_config),
         "deployed_file_sha256": files,
+        **({"installed_libraries": profile.workload.get("installed_libraries", {}),
+            "placement_evidence_sha256": sha256_file(paths.resolve_input(profile.workload["placement_evidence"], owner=profile.source_path)) if profile.workload.get("placement_evidence") else None} if profile.target == "npu" else {}),
     }
 
 
@@ -672,6 +689,22 @@ def _verify_existing_assets(transport: Transport, assets: Iterable[AssetSpec]) -
     }
 
 
+
+def _verify_npu_dependencies(paths, profile, transport, config):
+    from .artifact_store import sha256_file
+    adapter = get_target("npu")
+    for key, entry in adapter.installed_libraries(profile, config).items():
+        remote = PurePosixPath(entry["path"])
+        if transport.sha256(remote) != entry["sha256"]:
+            raise DeploymentError(f"installed NPU {key} identity mismatch")
+        cached = paths.resolve_output(f"dependency-cache/{entry['sha256']}.so", create_parent=True)
+        if not cached.exists() or sha256_file(cached) != entry["sha256"]:
+            pulled = transport.pull(remote, cached)
+            if not pulled.success or not cached.is_file() or sha256_file(cached) != entry["sha256"]:
+                raise DeploymentError(f"cannot verify installed NPU dependency: {remote}")
+        adapter.check_binary(cached, profile)
+
+
 def _runtime_preflight(
     paths: PathResolver, profile: ProfileConfig, transport: Transport,
     *, baseline: Baseline | None = None, golden: Mapping[str, Any] | None = None,
@@ -689,6 +722,9 @@ def _runtime_preflight(
     if profile.target == "gpu" and config["verify_mode"] == "golden-image" and not generating_golden:
         if not any(asset.kind == "golden" for asset in assets):
             raise ConfigError("GPU golden-image run requires --golden or --baseline with a local readback for SHA-256 verification")
+    npu_identity_assets = list(assets)
+    if profile.target == "npu" and baseline is not None:
+        _require_current_correctness(paths, profile, baseline.golden)
     platform = load_platform(paths, profile.platform)
     relay = dict(platform.serial.get("relay", {}))
     assets.append(AssetSpec(
@@ -710,6 +746,15 @@ def _runtime_preflight(
         validate_capabilities(capabilities, profile.target, str(config["verify_mode"]))
     except (ValueError, TypeError) as exc:
         raise DeploymentError(f"unsupported deployed workload: {exc}") from exc
+    if profile.target == "npu":
+        adapter = get_target("npu")
+        if config["profile"] not in capabilities.get("profiles", []) or config["backend"] not in capabilities.get("backends", []):
+            raise DeploymentError("deployed NPU workload lacks configured profile/backend")
+        _verify_npu_dependencies(paths, profile, transport, config)
+        if profile.raw.get("purpose") == "qualification" or baseline is not None or golden is not None:
+            report["npu_placement"] = adapter.qualification_evidence(paths, profile, config, npu_identity_assets)
+            if not generating_golden and golden is None and baseline is None:
+                raise ConfigError("NPU qualification requires an approved external golden or baseline")
     report["workload_capabilities"] = capabilities
     return config, report
 
@@ -913,6 +958,10 @@ def cmd_verify_deployment(args: Namespace) -> int:
     paths.ensure_writable_roots()
     transport = _transport(args, paths)
     manifest = _verify_existing_assets(transport, _deployment_assets(args, paths))
+    for selected in _requested_deployment_profiles(args, paths):
+        if selected.target == "npu":
+            config = validate_workload_config(_workload_config_path(paths, selected), "npu")
+            _verify_npu_dependencies(paths, selected, transport, config)
     output = paths.resolve_output("deployment-verification.json", create_parent=True)
     atomic_write_json(output, manifest)
     print_command_result(args, {"complete": True, "verified": True, "manifest": str(output)})
@@ -957,6 +1006,10 @@ def cmd_golden(args: Namespace) -> int:
         raise CommandError("--known-good acknowledgement is required", int(RunExitCode.INVALID_CONFIGURATION))
     paths = make_paths(args)
     profile = load_profile(paths, args.profile)
+    if profile.target == "npu":
+        identity_assets, _, source_config = _asset_plan(paths, profile, None)
+        source_document = validate_workload_config(source_config, "npu")
+        get_target("npu").qualification_evidence(paths, profile, source_document, identity_assets)
     if profile.target != args.golden_target:
         raise ConfigError(f"profile target is {profile.target}, command target is {args.golden_target}")
     if args.runs < 1:
@@ -981,26 +1034,34 @@ def cmd_golden(args: Namespace) -> int:
         run_specs = [(args.board_id, run_dir) for run_dir in live]
     records: list[dict[str, Any]] = []
     for _, run_dir in run_specs[: args.runs]:
+        if profile.target == "npu":
+            from .npu_qualification import validate_source_run
+            native_summary, _ = validate_source_run(run_dir, profile, golden=True)
         found = _events_from_run(run_dir, "golden")
         if len(found) != 1:
             raise QualificationError(f"expected one golden event in {run_dir}, found {len(found)}")
+        if profile.target == "npu" and (found[0].get("checksum") != native_summary.get("checksum")
+                or found[0].get("backend") != "tflite_delegate"):
+            raise QualificationError("NPU golden event disagrees with native summary")
         records.append(found[0])
     service = GoldenService(paths.resolve_output("qualification"))
     fields = _workload_fingerprint_fields(paths, profile)
     board_ids = [board_id for board_id, _ in run_specs[: args.runs]]
-    if profile.target == "cpu":
+    if profile.target in {"cpu", "npu"}:
         if args.accept_checksum:
             observed = {str(record.get("checksum", "")).lower() for record in records}
             if observed != {args.accept_checksum.lower().removeprefix("0x")}:
                 raise QualificationError(
                     f"observed CPU golden {sorted(observed)} does not match --accept-checksum {args.accept_checksum}"
                 )
-        manifest = service.create_cpu(
+        creator = service.create_npu if profile.target == "npu" else service.create_cpu
+        manifest = creator(
             qualification_id=qualification_id,
             profile=profile.name,
             fingerprint_fields=fields,
             golden_records=records,
             board_ids=board_ids,
+            **({"approver": args.approver, "conditions": args.conditions} if profile.target == "npu" else {}),
         )
     else:
         readbacks: list[Path] = []
@@ -1162,6 +1223,11 @@ def _sample_from_run(
             rejection_reasons.append(
                 f"qualification_duration_too_short:{float(observed_duration):g}<{minimum_duration:g}"
             )
+        if target == "npu":
+            if summary.get("backend") != "tflite_delegate" or summary.get("fallback_used") is not False:
+                rejection_reasons.append("npu_real_backend_required")
+            if type(summary.get("inference_count")) is not int or summary.get("inference_count", 0) < 2:
+                rejection_reasons.append("npu_measured_inferences_missing")
         if target == "cpu":
             batch_count = summary.get("batch_count")
             if not isinstance(batch_count, int) or isinstance(batch_count, bool):
@@ -1201,7 +1267,12 @@ def cmd_calibrate(args: Namespace) -> int:
     workload_document = validate_workload_config(
         _workload_config_path(paths, profile), profile.target, device_root=paths.device_root
     )
+    if profile.target == "npu":
+        identity_assets, _, _ = _asset_plan(paths, profile, None)
+        get_target("npu").qualification_evidence(paths, profile, workload_document, identity_assets)
     expected_duration = float(workload_document["duration"])
+    if profile.target == "npu" and expected_duration <= 0:
+        raise ConfigError("NPU calibration requires sustained duration, not inference-count-only capture")
     samples = [
         _sample_from_run(
             run_dir,
@@ -1216,6 +1287,11 @@ def cmd_calibrate(args: Namespace) -> int:
         )
         for board_id, run_dir in run_specs[: args.runs]
     ]
+    if profile.target == "npu":
+        from .npu_qualification import validate_source_run
+        for index, (_, run_dir) in enumerate(run_specs):
+            _, placement = validate_source_run(run_dir, profile)
+            samples[index] = replace(samples[index], qualification_evidence=placement)
     temp_range = tuple(float(item) for item in args.temperature_range.split(":"))
     if len(temp_range) != 2:
         raise ConfigError("--temperature-range must be MIN:MAX")
@@ -1404,12 +1480,20 @@ def cmd_simulate(args: Namespace) -> int:
         profile = load_profile(paths, args.profile)
         if args.baseline:
             policy["thresholds"] = _resolve_baseline(args, paths, profile).thresholds
+        if profile.target == "npu":
+            config = validate_workload_config(_workload_config_path(paths, profile), "npu")
+            policy["verification"] = verification_requirement("npu", config, strict=bool(args.baseline))
+            if args.baseline:
+                baseline = _resolve_baseline(args, paths, profile)
+                _require_current_correctness(paths, profile, baseline.golden)
+                policy["verification"].update(expected_checksum=baseline.golden["checksum"], real_npu=True)
     manifest = {
         "schema_version": 1,
         "run_id": run_id,
         **({"test_id": test_id, "attempt_id": run_id} if test_id is not None else {}),
         "profile": {"id": args.profile},
-        "baseline": {"id": args.baseline},
+        **({"target": profile.target} if args.profile and profile.target == "npu" else {}),
+        "baseline": {"id": args.baseline} if args.baseline else None,
         "policy": policy,
         "overall_timeout_s": 86400,
         "heartbeat_timeout_s": 86400,
@@ -1701,8 +1785,11 @@ def cmd_report(args: Namespace) -> int:
             f"- Baseline: {result.get('baseline_id')}",
             f"- Workload result: {result.get('workload_result')}",
             f"- Workload exit: {result.get('workload_exit_code')}",
-            f"- Verification: {json.dumps({key: value for key, value in (result.get('workload_summary') or {}).items() if key in {'verify_mode', 'verify_interval', 'success_log_interval', 'verify_count', 'verify_fail_count', 'batch_count', 'frame_count'}}, ensure_ascii=False)}",
+            f"- Verification: {json.dumps({key: value for key, value in (result.get('workload_summary') or {}).items() if key in {'verify_mode', 'verify_interval', 'success_log_interval', 'verify_count', 'verify_fail_count', 'batch_count', 'frame_count', 'inference_count'}}, ensure_ascii=False)}",
             "",
+            *([f"- Normalized metrics: {json.dumps(result.get('normalized_metrics', {}), ensure_ascii=False)}",
+               f"- Correctness scope: {result.get('correctness_scope', 'unknown')}",
+               f"- NPU placement: {json.dumps(result.get('npu_placement', {}), ensure_ascii=False)}", ""] if "normalized_metrics" in result else []),
             "## DUT reasons",
             "",
             "```json",
@@ -1746,6 +1833,8 @@ def cmd_validate_v2(args: Namespace) -> int:
     for name in profile_names:
         try:
             profile = load_profile(paths, name)
+            if args.package and profile.target == "npu" and not getattr(args, "include_npu", False) and not args.profile:
+                continue
             checked.append(f"profile:{profile.name}")
             resolved_configs.append(
                 {"kind": "profile", "name": profile.name, "path": str(profile.source_path), "sha256": profile.fingerprint}
@@ -1764,6 +1853,9 @@ def cmd_validate_v2(args: Namespace) -> int:
                 workload_config = paths.resolve_input(str(profile.workload["config"]), owner=profile.source_path)
                 validate_workload_config(workload_config, profile.target, device_root=paths.device_root)
                 checked.append(f"workload-config:{profile.name}")
+                if profile.target == "npu":
+                    _asset_plan(paths, profile, None)
+                    checked.append(f"npu-assets:{profile.name}")
             paths.resolve_input(str(profile.workload["binary"]), owner=profile.source_path)
             checked.append(f"workload-binary:{profile.name}")
             for declared in profile.workload.get("assets", []):

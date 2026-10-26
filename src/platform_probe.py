@@ -85,13 +85,13 @@ class PlatformProbe:
         self.backend = backend
 
     def probe(self, *, full: bool = True, domains: Iterable[str] | None = None) -> dict[str, Any]:
-        selected_domains = set(domains or ("cpu", "gpu"))
-        invalid_domains = selected_domains.difference({"cpu", "gpu"})
+        selected_domains = set(domains or (("cpu", "gpu", "npu") if self.platform.npu else ("cpu", "gpu")))
+        invalid_domains = selected_domains.difference({"cpu", "gpu", "npu"})
         if invalid_domains:
             raise ProbeError(f"unsupported probe domains: {', '.join(sorted(invalid_domains))}")
         platform_identity = self._probe_platform_identity()
         capabilities: dict[str, Any] = {}
-        for domain, section in (("cpu", self.platform.cpu), ("gpu", self.platform.gpu)):
+        for domain, section in (("cpu", self.platform.cpu), ("gpu", self.platform.gpu), ("npu", self.platform.npu)):
             if domain not in selected_domains:
                 continue
             interfaces = section.get("interfaces", {})

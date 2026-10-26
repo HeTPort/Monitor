@@ -336,3 +336,11 @@ The refactor is complete when:
 - calibration reads device-native full metrics and accepts only sustained golden-checked runs with complete required telemetry;
 - raw simulation and monitor decode the same UART-v2 framing as `run`;
 - unit, shell, protocol, and packaging validation pass.
+
+## Target adapters and NPU
+
+`src/target_adapters.py` is a static registry. CPU/GPU entries expose their existing metric and verification-unit conventions; their native compute/deployment implementations remain in place. NPU owns strict config validation, manifest/tensor/hash checking, asset layout preservation, effective device config generation, runtime identity/ABI checks and vendor placement attestation validation. The common CLI, transport, agent, UART v2 decoder, policy engine, artifact store and baseline registry remain shared.
+
+`src/npu_qualification.py` validates paired PC/device known-good evidence, FINAL identity, source hashes and placement binding. `GoldenService.create_npu` creates an exact-checksum reference with explicit approver/conditions; `CalibrationService` maps NPU inference throughput and host latency and applies the existing cohort policy plus NPU real-backend/reference/placement requirements. It does not interpret unknown execution placement as NPU placement, turn repeated-output agreement into independent correctness, or manufacture missing check counts.
+
+Schema 1 native events, verification contract 2 and UART protocol 2 remain separate versioned interfaces. NPU adds `inference`, `npu-workload` and `npu-telemetry`. Split UART verification metadata carries measured inference counts and essential correctness/backend fields; raw native summaries remain local. Normalized metrics retain native units and missing device-time semantics. See [NPU_USER_GUIDE.md](NPU_USER_GUIDE.md).

@@ -59,8 +59,8 @@ class Baseline:
             if not isinstance(data.get(key), str) or not data[key]:
                 raise BaselineError(f"baseline.{key} must be a non-empty string")
         _safe_id(data["id"])
-        if data["target"] not in {"cpu", "gpu"}:
-            raise BaselineError("baseline.target must be cpu or gpu")
+        if data["target"] not in {"cpu", "gpu", "npu"}:
+            raise BaselineError("baseline.target must be cpu, gpu or npu")
         if data["status"] not in BASELINE_STATES:
             raise BaselineError(f"baseline.status must be one of {sorted(BASELINE_STATES)}")
         mappings: dict[str, dict[str, Any]] = {}

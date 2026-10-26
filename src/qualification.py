@@ -13,6 +13,7 @@ from typing import Any, Iterable, Mapping
 
 from .artifact_store import atomic_write_json, sha256_file
 from .config_loader import document_sha256
+from .target_adapters import get_target
 
 
 class QualificationError(RuntimeError):
@@ -32,6 +33,10 @@ class GoldenService:
 
     def __init__(self, qualification_root: Path):
         self.root = qualification_root.expanduser().resolve()
+
+    def create_npu(self, **kwargs):
+        from .npu_qualification import create_npu
+        return create_npu(self, **kwargs)
 
     def create_cpu(
         self,
@@ -133,6 +138,7 @@ class CalibrationSample:
     telemetry_complete: bool = True
     throttled: bool = False
     rejection_reasons: tuple[str, ...] = ()
+    qualification_evidence: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -169,6 +175,7 @@ class CalibrationService:
     DEFAULT_METRICS = {
         "cpu": {"throughput": "operations_per_sec_avg", "latency": "batch_time_ms_p99"},
         "gpu": {"throughput": "fps_avg", "latency": "frame_time_p99_ms"},
+        "npu": {"throughput": get_target("npu").throughput, "latency": get_target("npu").latency},
     }
 
     def calibrate(
@@ -193,6 +200,8 @@ class CalibrationService:
             raise QualificationError("calibration margins must be finite and in [0, 100)")
         if policy.maximum_cv_percent is not None and (not math.isfinite(policy.maximum_cv_percent) or policy.maximum_cv_percent < 0):
             raise QualificationError("maximum CV must be finite and nonnegative")
+        if target == "npu" and (golden.get("kind") != "npu-checksum" or not isinstance(golden.get("approval"), Mapping) or golden.get("approval", {}).get("known_good") is not True or not golden.get("approval", {}).get("approver")):
+            raise QualificationError("NPU calibration needs an explicitly approved external golden")
         metrics = dict(metric_names or self.DEFAULT_METRICS[target])
         accepted: list[CalibrationSample] = []
         rejected: list[dict[str, Any]] = []
@@ -202,6 +211,16 @@ class CalibrationService:
                 raise QualificationError(f"duplicate calibration run_id: {sample.run_id}; one run cannot count as two boards/samples")
             seen_runs.add(sample.run_id)
             reasons = self._rejection_reasons(sample, policy, temperature_range)
+            if target == "npu":
+                from .verification_contract import verification_requirement, verification_issues
+                try:
+                    requirement = verification_requirement("npu", sample.summary, strict=True)
+                    requirement.update(expected_checksum=golden["checksum"], real_npu=True)
+                    reasons.extend(verification_issues(sample.summary, requirement))
+                except ValueError as exc:
+                    reasons.append(str(exc))
+                if sample.qualification_evidence.get("status") != "full_npu":
+                    reasons.append("npu_placement_not_proven")
             for metric in metrics.values():
                 value = sample.summary.get(metric)
                 if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(float(value)) or value <= 0:

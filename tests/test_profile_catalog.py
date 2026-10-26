@@ -47,7 +47,7 @@ class ProfileCatalogTests(unittest.TestCase):
                 self.assertEqual(config["verify_interval"], 1)
                 self.assertEqual(config["success_log_interval"], 60)
                 self.assertFalse(config["summary_only"])
-                self.assertGreater(config["timeout"], config["duration"] + config["warmup"])
+                self.assertGreater(config["timeout"], config["duration"] + config.get("warmup", 0))
                 if config["verify_mode"] == "golden-image":
                     golden_path = config["golden_file"]
                     self.assertNotIn(golden_path, golden_paths, "each GPU correctness config needs its own golden")

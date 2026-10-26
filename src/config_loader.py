@@ -13,7 +13,7 @@ from typing import Any, Mapping, Sequence
 
 
 SUPPORTED_SCHEMA_VERSION = 1
-VALID_TARGETS = {"cpu", "gpu"}
+VALID_TARGETS = {"cpu", "gpu", "npu"}
 VALID_VERIFY_MODES = {"cpu": {"none", "checksum"}, "gpu": {"none", "golden-image"}}
 CPU_BACKENDS = {"null", "integer", "floating_point", "matrix", "memory", "mixed"}
 GPU_SHADERS = {"alu", "sfu", "texture", "fill", "mixed"}
@@ -96,8 +96,11 @@ def validate_workload_config(
         raise ConfigError(f"invalid workload JSON {resolved}: {exc}") from exc
     if not isinstance(document, dict):
         raise ConfigError(f"workload configuration root must be a mapping: {resolved}")
-    if target not in VALID_VERIFY_MODES:
+    if target not in VALID_TARGETS:
         raise ConfigError(f"unsupported workload target: {target}")
+    if target == "npu":
+        from .target_adapters import get_target
+        return get_target(target).validate_config(document)
     api = document.get("api")
     expected_api = "cpu" if target == "cpu" else "vulkan"
     if api != expected_api:
@@ -214,6 +217,15 @@ class ProfileConfig:
         argv = workload.get("argv", [])
         if not isinstance(argv, list) or not all(isinstance(item, str) for item in argv):
             raise ConfigError(f"{context}.workload.argv: expected a list of strings")
+        if target == "npu":
+            if data.get("purpose", "load") not in {"smoke", "load", "qualification"}:
+                raise ConfigError(f"{context}.purpose: expected smoke, load or qualification")
+            if not isinstance(data.get("runtime_budgets", {}), dict):
+                raise ConfigError(f"{context}.runtime_budgets: expected mapping")
+            if workload.get("target_abi", "aarch64-linux") not in {"host-test", "aarch64-linux"}:
+                raise ConfigError(f"{context}.workload.target_abi: unsupported ABI")
+            if argv:
+                raise ConfigError(f"{context}: NPU launch options belong in workload.config; workload.argv is unsupported")
         assets = workload.get("assets", [])
         if not isinstance(assets, list):
             raise ConfigError(f"{context}.workload.assets: expected a list")
@@ -291,6 +303,7 @@ class PlatformConfig:
     thermal: dict[str, Any]
     source_path: Path
     raw: dict[str, Any] = field(repr=False)
+    npu: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_file(cls, path: Path) -> "PlatformConfig":
@@ -299,7 +312,7 @@ class PlatformConfig:
         version = require_schema_version(data, context)
         name = _require(data, "name", str, context)
         sections: dict[str, dict[str, Any]] = {}
-        for section in ("identity", "transport", "serial", "cpu", "gpu", "thermal"):
+        for section in ("identity", "transport", "serial", "cpu", "gpu", "thermal", "npu"):
             value = data.get(section) or {}
             if not isinstance(value, dict):
                 raise ConfigError(f"{context}.{section}: expected mapping")
