@@ -1,0 +1,15 @@
+{
+  "target": "host",
+  "engine": "direct",
+  "components": [
+    "cpu"
+  ],
+  "output": "C:\\Users\\HeT\\AppData\\Local\\Temp\\build with spaces h2bmx1tu\\host\\release\\20261026T135907Z-16c1bc",
+  "ndk_ready": false
+}
+[cpu] not-executed -std=c++17 -O2 -DNDEBUG -Wall -Wextra -Wpedantic -pthread -I D:\Monitor-main\npu-workload\cpuworkload\include -I D:\Monitor-main\npu-workload\cpuworkload\src -static-libgcc -static-libstdc++ D:\Monitor-main\npu-workload\cpuworkload\src\backend_factory.cpp D:\Monitor-main\npu-workload\cpuworkload\src\config.cpp D:\Monitor-main\npu-workload\cpuworkload\src\crc32.cpp D:\Monitor-main\npu-workload\cpuworkload\src\heartbeat.cpp D:\Monitor-main\npu-workload\cpuworkload\src\logger.cpp D:\Monitor-main\npu-workload\cpuworkload\src\main.cpp D:\Monitor-main\npu-workload\cpuworkload\src\metrics.cpp D:\Monitor-main\npu-workload\cpuworkload\src\profile.cpp D:\Monitor-main\npu-workload\cpuworkload\src\runner.cpp D:\Monitor-main\npu-workload\cpuworkload\src\utils.cpp D:\Monitor-main\npu-workload\cpuworkload\src\verifier.cpp D:\Monitor-main\npu-workload\cpuworkload\src\backends\floating_point\floating_point_backend.cpp D:\Monitor-main\npu-workload\cpuworkload\src\backends\integer\integer_backend.cpp D:\Monitor-main\npu-workload\cpuworkload\src\backends\matrix\matrix_backend.cpp D:\Monitor-main\npu-workload\cpuworkload\src\backends\memory\memory_backend.cpp D:\Monitor-main\npu-workload\cpuworkload\src\backends\mixed\mixed_backend.cpp D:\Monitor-main\npu-workload\cpuworkload\src\backends\null\null_backend.cpp -o "C:\Users\HeT\AppData\Local\Temp\build with spaces h2bmx1tu\host\release\20261026T135907Z-16c1bc\cpu\cpu-avs-workload.exe"
+构建记录：C:\Users\HeT\AppData\Local\Temp\build with spaces h2bmx1tu\host\release\20261026T135907Z-16c1bc\build-manifest.json
+----------------------------------------------------------------------
+Ran 5 tests in 0.721s
+
+OK

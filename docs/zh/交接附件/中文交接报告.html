@@ -1,0 +1,332 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CPU GPU NPU 中文交接报告</title><style>
+body{font:16px/1.8 "Microsoft YaHei","Noto Sans CJK SC",Arial,sans-serif;color:#17212b;max-width:1240px;margin:36px auto;padding:0 24px}h1,h2,h3,h4{color:#142a43;line-height:1.4}h1{font-size:30px}h2{font-size:26px;margin-top:36px}h3{font-size:21px;margin-top:30px}nav{border-bottom:1px solid #cbd5e1;padding-bottom:20px}nav ul{display:flex;gap:10px 28px;flex-wrap:wrap;padding-left:22px}a{color:#235c91}code{background:#eef2f6;padding:2px 5px;border-radius:3px;word-break:break-word}pre{padding:18px;background:#f3f5f8;border:1px solid #d9e0e7;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px}pre code{padding:0;background:none}.table{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:14px;margin:16px 0}th,td{border:1px solid #d5dde5;padding:10px 12px;vertical-align:top}th{background:#203b5b;color:white;text-align:left}tr:nth-child(even){background:#f3f6f9}section{margin-bottom:48px}p{margin:12px 0}@media print{body{max-width:none;font-size:10pt;margin:0;padding:0}nav{display:none}h2{break-before:page}h3{break-after:avoid}pre{font-size:8pt}.table{overflow:visible}table{font-size:8pt}thead{display:table-header-group}tr{break-inside:avoid}a{color:inherit;text-decoration:none}@page{size:A4;margin:16mm}}
+</style></head><body><h1>CPU GPU NPU 中文交接报告</h1><p>用例原理、统一编译、使用与设计、七天执行与日志交接。实际板端记录尚待运行产生；不包含调压/Vmin结论。</p><nav><ul><li><a href="#0">交接报告</a></li><li><a href="#1">用例总表</a></li><li><a href="#2">编译指南</a></li><li><a href="#3">使用指南</a></li><li><a href="#4">设计指南</a></li><li><a href="#5">七天压测与日志交接</a></li><li><a href="#6">交接验证记录</a></li></ul></nav><section id="0"><h2>CPU GPU NPU 工具交接报告</h2>
+<h3>交接范围和结论</h3>
+<p>本次交接包含统一后的负载源码、Monitor NPU 接入、跨平台集中构建入口、用例原理总表、详细操作与设计手册，以及七天用例执行和证据汇总脚本。软件主机检查与板端压测是两类记录：现有主机测试证明协议与框架行为；实际一周日志须在真实板卡上执行后产生。</p>
+<p>当前没有调压接口，板卡随实际可用设备选择。测试结论限定为给定板卡、运行库、配置和已观察运行条件下的用例运行与稳定性。没有电压扫描、功率测量或厂商执行证据时，不扩大为 AVS 量产资格化结论。</p>
+<h3>代码位置和统一情况</h3>
+<div class="table"><table><thead><tr><th>内容</th><th>本次交接目录</th><th>依据</th></tr></thead><tbody>
+<tr><td>Monitor</td><td><code>D:\Monitor-main\npu-monitor</code></td><td>继承 <code>74bc567</code> 的 CPU/GPU 校验证据机制，并包含 NPU 接入提交 <code>8ba26ac</code></td></tr>
+<tr><td>CPU GPU NPU 负载</td><td><code>D:\Monitor-main\npu-workload</code></td><td>NPU 主线 <code>ccf431f</code>、NPU 协议提交 <code>8551028</code>，合入 GitHub CPU/GPU 分支 <code>5d6aca9</code></td></tr>
+<tr><td>统一编译入口</td><td>workload 根目录 <code>build.ps1</code> / <code>build.sh</code></td><td>两者均调用 <code>scripts/build.py</code>，不再要求人工混用旧源码目录</td></tr>
+<tr><td>七天采集工具</td><td>Monitor <code>scripts/soak.py</code></td><td>日计划、平台/依赖检查、运行、收集、续跑和中文汇总</td></tr>
+</tbody></table></div>
+<p>GitHub workload 已成功拉取，确认 main 为 <code>ccf431f</code>、CPU/GPU 校验分支为 <code>5d6aca9</code>。两者共同祖先为 <code>7980139</code>，原先确实分叉；现已保留历史合并，README 冲突按三类负载共存解决。CPU/GPU/NPU 均输出 verification contract 2，实际编译产物的 <code>--capabilities</code> 和主机运行结果需要一起归档。</p>
+<p>GitHub Monitor 的 HTTPS 拉取连续出现连接失败/低速超时，未能确认远端最新提交。当前 Monitor 依据本地已验证版本继续工作，不能把本报告表述为“Monitor GitHub 最新主线已同步”。网络恢复后，应先 fetch 和审查差异，再重跑回归；不要直接覆盖现场目录。</p>
+<p>原始 <code>D:\Monitor</code>、<code>D:\workload</code> 及旧 worktree 没有被覆盖。本次成果保存在两个独立开发目录。交接时应提供实际提交号、<code>git status</code>、构建 manifest 和产物 SHA-256，不能只传目录截图或按修改日期推断版本。</p>
+<h3>功能状态</h3>
+<div class="table"><table><thead><tr><th>项目</th><th>已提供</th><th>板端仍需确认</th></tr></thead><tbody>
+<tr><td>CPU</td><td>整数/浮点/矩阵/内存/混合、突发、热持续；实际校验计数</td><td>实际核簇调度、温度/频率、不同板卡工作量是否适配</td></tr>
+<tr><td>GPU</td><td>null/GLES/Vulkan/OpenCL 编译选择、Vulkan 各 shader、离屏图像校验</td><td>真驱动/SDK、shader 部署、hang/恢复与 golden 的可重复性</td></tr>
+<tr><td>NPU</td><td>四模型 manifest、模型/输入哈希、delegate 管理、计数、失败锁存、资格化门槛</td><td>厂商 runtime/delegate、ABI、完整 NPU 执行位置及真实推理</td></tr>
+<tr><td>Monitor</td><td>共用 CLI、部署核验、UART v2、身份/序号/CRC/FINAL、收集/重放/报告</td><td>设备连接、串口、平台身份和遥测路径</td></tr>
+<tr><td>周记录</td><td>七天计划、板卡模板、操作日志、追加台账、汇总报告</td><td>实际执行日期、真实时长、异常现场和操作者结论</td></tr>
+</tbody></table></div>
+<h3>交付时必须保留的证据</h3>
+<p>源码提交和工作区状态、生效配置、编译器/SDK 身份、构建日志、产物 SHA-256、板卡型号与序列号、平台探测、运行身份、PC result、设备原始 workload/events/summary/FINAL、遥测、收集哈希和故障操作记录构成一次可追溯运行。任何重试保留新 attempt，不能用成功重试覆盖第一次失败。</p>
+<p>NPU 的 <code>fallback_used=false</code> 仅说明 runner 没有主动回退；无厂商证据时执行位置保持未知。无独立已批准 golden 时，checksum 结果不得写成独立正确性证明。GPU 负载模式 <code>verify_mode=none</code> 的 PASS 仅说明未观察到显式错误。</p>
+<h3>维护和现场职责</h3>
+<p>接手者先用主机 <code>--test</code> 核实环境和协议，再选择对应设备 SDK 编译目标产物。现场操作者确认板卡身份、实际后端和散热/锁频条件，逐项部署并保留证据。主管周报应阅读“实际日期覆盖、实测负载时长、完整证据通过项、失败/中断、跳过原因”五类信息，而不是只看 PASS 数量。</p>
+<p>当前统一 workload 提交为 <code>eed83c67645bddaf481b6fe6fdfb8a35455267e4</code>。Monitor 最终交接提交以交接包版本清单为准。</p></section><section id="1"><h2>CPU GPU NPU 用例总表</h2>
+<p>本表从当前 Monitor profile 和生效 workload JSON 提取参数。原理依据当前 workload 源码。内置 profile 是默认参数集合，Monitor 配置可覆盖默认值；验收以表中的实际配置为准。</p>
+<p>源码版本：workload GitHub main ccf431f 与 CPU/GPU 协议分支 5d6aca9 已在交接分支合并，保留 NPU 增强。Monitor 以本地 8ba26ac 为基础；GitHub Monitor 的远端核对受连接故障限制。</p>
+<h3>CPU Monitor 用例</h3>
+<div class="table"><table><thead><tr><th>profile</th><th>实现和原理</th><th>测量 / 预热 / 超时</th><th>使用与判定</th></tr></thead><tbody>
+<tr><td><code>cpu_burst_qualification_kirin9030</code></td><td>整数浮点矩阵内存混合突发；按混合后端组合执行多类确定性计算，提高多种路径的活动量。 活跃/休眠交替，观察负载切换。</td><td>120s / 5 秒 / 160s</td><td>checksum；外部 golden 才提供已批准参考</td></tr>
+<tr><td><code>cpu_floating_point_qualification_kirin9030</code></td><td>标量双精度浮点运算；循环执行 double 乘加、差分与数值范围调整，再对结果位模式计算 checksum。</td><td>60s / 5 秒 / 75s</td><td>checksum；外部 golden 才提供已批准参考</td></tr>
+<tr><td><code>cpu_idle_control_kirin9030</code></td><td>空闲或框架对照；不执行真实计算后端，用于心跳、调度及日志链路检查。</td><td>30s / 0 秒 / 60s</td><td>仅显式错误/超时判定，不证明正确性</td></tr>
+<tr><td><code>cpu_integer_qualification_kirin9030</code></td><td>64 位整数混合运算；加法、异或、位移旋转和乘法构成确定性运算链；循环输出 checksum。</td><td>60s / 5 秒 / 75s</td><td>checksum；外部 golden 才提供已批准参考</td></tr>
+<tr><td><code>cpu_matrix_qualification_kirin9030</code></td><td>确定性矩阵乘法；三重循环执行矩阵乘加，输入由种子生成，结果映射为 checksum。</td><td>60s / 5 秒 / 75s</td><td>checksum；外部 golden 才提供已批准参考</td></tr>
+<tr><td><code>cpu_memory_qualification_kirin9030</code></td><td>工作集随机读写；种子生成工作集，根据状态选择索引，读改写并抽样归并 checksum。</td><td>60s / 5 秒 / 75s</td><td>checksum；外部 golden 才提供已批准参考</td></tr>
+<tr><td><code>cpu_mixed_big4</code></td><td>整数浮点矩阵内存混合；按混合后端组合执行多类确定性计算，提高多种路径的活动量。</td><td>60s / 5 秒 / 75s</td><td>checksum；外部 golden 才提供已批准参考</td></tr>
+<tr><td><code>cpu_qualification_kirin9030</code></td><td>整数浮点矩阵内存混合；按混合后端组合执行多类确定性计算，提高多种路径的活动量。</td><td>60s / 5 秒 / 75s</td><td>checksum；外部 golden 才提供已批准参考</td></tr>
+<tr><td><code>cpu_smoke_kirin9030</code></td><td>整数浮点矩阵内存混合；按混合后端组合执行多类确定性计算，提高多种路径的活动量。</td><td>10s / 1 秒 / 20s</td><td>仅显式错误/超时判定，不证明正确性</td></tr>
+<tr><td><code>cpu_stress_extreme_qualification_kirin9030</code></td><td>整数浮点矩阵内存混合高强度；按混合后端组合执行多类确定性计算，提高多种路径的活动量。 提高迭代次数、分辨率或工作集。</td><td>120s / 10 秒 / 180s</td><td>checksum；外部 golden 才提供已批准参考</td></tr>
+<tr><td><code>cpu_stress_kirin9030</code></td><td>整数浮点矩阵内存混合；按混合后端组合执行多类确定性计算，提高多种路径的活动量。</td><td>60s / 5 秒 / 75s</td><td>仅显式错误/超时判定，不证明正确性</td></tr>
+<tr><td><code>cpu_thermal_qualification_kirin9030</code></td><td>整数浮点矩阵内存混合持续升温；按混合后端组合执行多类确定性计算，提高多种路径的活动量。 延长持续执行时间观察温度、频率和吞吐随时间变化。</td><td>600s / 10 秒 / 660s</td><td>checksum；外部 golden 才提供已批准参考</td></tr>
+</tbody></table></div>
+<h4>参数和边界</h4>
+<ul>
+<li><code>cpu_burst_qualification_kirin9030</code>：threads=4; working_set_kb=256; iterations=100000; duty_cycle=0.5。实际功耗与瓶颈需测量，名称不证明最大功耗。 配置：<code>config/workloads/cpu_burst_qualification_kirin9030.json</code>。</li>
+<li><code>cpu_floating_point_qualification_kirin9030</code>：threads=4; working_set_kb=64; iterations=100000。编译器可优化代码，但没有显式承诺 SIMD/FMA 指令。 配置：<code>config/workloads/cpu_floating_point_qualification_kirin9030.json</code>。</li>
+<li><code>cpu_idle_control_kirin9030</code>：threads=1; working_set_kb=1; iterations=1; duty_cycle=0。不能作为持续计算压力或低功耗状态已进入的证明。 配置：<code>config/workloads/cpu_idle_control_kirin9030.json</code>。</li>
+<li><code>cpu_integer_qualification_kirin9030</code>：threads=4; working_set_kb=64; iterations=100000。主要观察整数执行路径；不保证特定指令端口或 NEON 覆盖。 配置：<code>config/workloads/cpu_integer_qualification_kirin9030.json</code>。</li>
+<li><code>cpu_matrix_qualification_kirin9030</code>：threads=4; working_set_kb=96; iterations=20000。属于软件矩阵核，不等于专用矩阵指令或 NPU 负载。 配置：<code>config/workloads/cpu_matrix_qualification_kirin9030.json</code>。</li>
+<li><code>cpu_memory_qualification_kirin9030</code>：threads=4; working_set_kb=1024; iterations=500000。改变工作集可改变缓存/内存压力；不是完整 DRAM 故障测试。 配置：<code>config/workloads/cpu_memory_qualification_kirin9030.json</code>。</li>
+<li><code>cpu_mixed_big4</code>：threads=4; working_set_kb=256; iterations=100000。实际功耗与瓶颈需测量，名称不证明最大功耗。 配置：<code>config/workloads/cpu_mixed_big4.json</code>。</li>
+<li><code>cpu_qualification_kirin9030</code>：threads=4; working_set_kb=256; iterations=100000。实际功耗与瓶颈需测量，名称不证明最大功耗。 配置：<code>config/workloads/cpu_qualification_kirin9030.json</code>。</li>
+<li><code>cpu_smoke_kirin9030</code>：threads=1; working_set_kb=64; iterations=10000。实际功耗与瓶颈需测量，名称不证明最大功耗。 配置：<code>config/workloads/cpu_smoke.json</code>。</li>
+<li><code>cpu_stress_extreme_qualification_kirin9030</code>：threads=4; working_set_kb=2048; iterations=500000。实际功耗与瓶颈需测量，名称不证明最大功耗。 配置：<code>config/workloads/cpu_stress_extreme_qualification_kirin9030.json</code>。</li>
+<li><code>cpu_stress_kirin9030</code>：threads=4; working_set_kb=256; iterations=100000。实际功耗与瓶颈需测量，名称不证明最大功耗。 配置：<code>config/workloads/cpu_stress.json</code>。</li>
+<li><code>cpu_thermal_qualification_kirin9030</code>：threads=4; working_set_kb=512; iterations=200000。实际功耗与瓶颈需测量，名称不证明最大功耗。 配置：<code>config/workloads/cpu_thermal_qualification_kirin9030.json</code>。</li>
+</ul>
+<h3>GPU Monitor 用例</h3>
+<div class="table"><table><thead><tr><th>profile</th><th>实现和原理</th><th>测量 / 预热 / 超时</th><th>使用与判定</th></tr></thead><tbody>
+<tr><td><code>gpu_alu_qualification_kirin9030</code></td><td>片段着色器算术；每像素循环进行向量乘加、fract 和分量混合。</td><td>60s / 5 秒 / 90s</td><td>严格图像 golden；必须为同一配置单独生成</td></tr>
+<tr><td><code>gpu_fill_qualification_kirin9030</code></td><td>填充和渲染目标写入；简单片段输出写入离屏 RGBA8 渲染目标，以分辨率改变工作量。</td><td>60s / 5 秒 / 90s</td><td>严格图像 golden；必须为同一配置单独生成</td></tr>
+<tr><td><code>gpu_load_heavy_kirin9030</code></td><td>图形算术纹理混合；片段着色器同时进行算术迭代、坐标扰动与纹理采样。</td><td>60s / 5 秒 / 120s</td><td>仅显式错误/超时判定，不证明正确性</td></tr>
+<tr><td><code>gpu_load_light_kirin9030</code></td><td>图形算术纹理混合；片段着色器同时进行算术迭代、坐标扰动与纹理采样。</td><td>60s / 5 秒 / 95s</td><td>仅显式错误/超时判定，不证明正确性</td></tr>
+<tr><td><code>gpu_load_mid_kirin9030</code></td><td>图形算术纹理混合；片段着色器同时进行算术迭代、坐标扰动与纹理采样。</td><td>60s / 5 秒 / 95s</td><td>仅显式错误/超时判定，不证明正确性</td></tr>
+<tr><td><code>gpu_qualification_kirin9030</code></td><td>图形算术纹理混合；片段着色器同时进行算术迭代、坐标扰动与纹理采样。</td><td>60s / 5 秒 / 90s</td><td>严格图像 golden；必须为同一配置单独生成</td></tr>
+<tr><td><code>gpu_sfu_qualification_kirin9030</code></td><td>片段着色器超越函数；循环 sin/cos 运算形成持续着色计算。</td><td>60s / 5 秒 / 90s</td><td>严格图像 golden；必须为同一配置单独生成</td></tr>
+<tr><td><code>gpu_smoke_kirin9030</code></td><td>图形算术纹理混合；片段着色器同时进行算术迭代、坐标扰动与纹理采样。</td><td>10s / 1 秒 / 20s</td><td>仅显式错误/超时判定，不证明正确性</td></tr>
+<tr><td><code>gpu_stress_extreme_kirin9030</code></td><td>图形算术纹理混合高强度；片段着色器同时进行算术迭代、坐标扰动与纹理采样。 提高迭代次数、分辨率或工作集。</td><td>120s / 10 秒 / 240s</td><td>仅显式错误/超时判定，不证明正确性</td></tr>
+<tr><td><code>gpu_stress_kirin9030</code></td><td>图形算术纹理混合；片段着色器同时进行算术迭代、坐标扰动与纹理采样。</td><td>60s / 5 秒 / 90s</td><td>仅显式错误/超时判定，不证明正确性</td></tr>
+<tr><td><code>gpu_texture_qualification_kirin9030</code></td><td>真实纹理采样；离屏片段着色器按偏移重复 texture() 采样并累加。</td><td>60s / 5 秒 / 90s</td><td>严格图像 golden；必须为同一配置单独生成</td></tr>
+<tr><td><code>gpu_thermal_kirin9030</code></td><td>图形算术纹理混合持续升温；片段着色器同时进行算术迭代、坐标扰动与纹理采样。 延长持续执行时间观察温度、频率和吞吐随时间变化。</td><td>600s / 10 秒 / 700s</td><td>仅显式错误/超时判定，不证明正确性</td></tr>
+<tr><td><code>gpu_vulkan_mixed</code></td><td>图形算术纹理混合；片段着色器同时进行算术迭代、坐标扰动与纹理采样。</td><td>60s / 5 秒 / 90s</td><td>严格图像 golden；必须为同一配置单独生成</td></tr>
+</tbody></table></div>
+<h4>参数和边界</h4>
+<ul>
+<li><code>gpu_alu_qualification_kirin9030</code>：iterations=512; width=1280; height=720; texture_count=1; duty_cycle=1。Monitor Vulkan 配置使用 offscreen 图形路径。 配置：<code>config/workloads/gpu_alu_qualification_kirin9030.json</code>。</li>
+<li><code>gpu_fill_qualification_kirin9030</code>：iterations=16; width=1920; height=1080; texture_count=1; duty_cycle=1。该 shader 不使用 iterations；不能通过调 iterations 增强填充负载。 配置：<code>config/workloads/gpu_fill_qualification_kirin9030.json</code>。</li>
+<li><code>gpu_load_heavy_kirin9030</code>：iterations=384; width=2560; height=1440; texture_count=6; duty_cycle=1。game_light/mid/heavy 是参数预设，不是实际游戏。 配置：<code>config/workloads/gpu_load_heavy_kirin9030.json</code>。</li>
+<li><code>gpu_load_light_kirin9030</code>：iterations=128; width=1280; height=720; texture_count=2; duty_cycle=1。game_light/mid/heavy 是参数预设，不是实际游戏。 配置：<code>config/workloads/gpu_load_light_kirin9030.json</code>。</li>
+<li><code>gpu_load_mid_kirin9030</code>：iterations=192; width=1920; height=1080; texture_count=4; duty_cycle=1。game_light/mid/heavy 是参数预设，不是实际游戏。 配置：<code>config/workloads/gpu_load_mid_kirin9030.json</code>。</li>
+<li><code>gpu_qualification_kirin9030</code>：iterations=192; width=1280; height=720; texture_count=4。game_light/mid/heavy 是参数预设，不是实际游戏。 配置：<code>config/workloads/gpu_qualification_kirin9030.json</code>。</li>
+<li><code>gpu_sfu_qualification_kirin9030</code>：iterations=512; width=1280; height=720; texture_count=1; duty_cycle=1。观察超越函数路径，不直接证明某个硬件 SFU 单元覆盖率。 配置：<code>config/workloads/gpu_sfu_qualification_kirin9030.json</code>。</li>
+<li><code>gpu_smoke_kirin9030</code>：iterations=32; width=640; height=360; texture_count=1。game_light/mid/heavy 是参数预设，不是实际游戏。 配置：<code>config/workloads/gpu_smoke.json</code>。</li>
+<li><code>gpu_stress_extreme_kirin9030</code>：iterations=1024; width=3840; height=2160; texture_count=8; duty_cycle=1。game_light/mid/heavy 是参数预设，不是实际游戏。 配置：<code>config/workloads/gpu_stress_extreme_kirin9030.json</code>。</li>
+<li><code>gpu_stress_kirin9030</code>：iterations=192; width=1280; height=720; texture_count=4。game_light/mid/heavy 是参数预设，不是实际游戏。 配置：<code>config/workloads/gpu_stress.json</code>。</li>
+<li><code>gpu_texture_qualification_kirin9030</code>：iterations=128; width=1280; height=720; texture_count=4; duty_cycle=1。texture_count 在该实现中是重复采样倍率，不是独立纹理对象数。compute/OpenCL texture_like 不等同此路径。 配置：<code>config/workloads/gpu_texture_qualification_kirin9030.json</code>。</li>
+<li><code>gpu_thermal_kirin9030</code>：iterations=512; width=1920; height=1080; texture_count=4; duty_cycle=1。game_light/mid/heavy 是参数预设，不是实际游戏。 配置：<code>config/workloads/gpu_thermal_kirin9030.json</code>。</li>
+<li><code>gpu_vulkan_mixed</code>：iterations=192; width=1280; height=720; texture_count=4。game_light/mid/heavy 是参数预设，不是实际游戏。 配置：<code>config/workloads/gpu_vulkan_mixed.json</code>。</li>
+</ul>
+<h3>NPU Monitor 用例</h3>
+<div class="table"><table><thead><tr><th>profile</th><th>实现和原理</th><th>测量 / 预热 / 超时</th><th>使用与判定</th></tr></thead><tbody>
+<tr><td><code>npu_ad01_load</code></td><td>异常检测模型推理；INT8 [1,640] 输入与 [1,640] 输出，重复执行模型并校验输出字节。</td><td>60s / 1 次 / 95s</td><td>checksum；外部 golden 才提供已批准参考</td></tr>
+<tr><td><code>npu_ad01_qualification</code></td><td>异常检测模型推理；INT8 [1,640] 输入与 [1,640] 输出，重复执行模型并校验输出字节。</td><td>60s / 1 次 / 95s</td><td>checksum；外部 golden 才提供已批准参考</td></tr>
+<tr><td><code>npu_ad01_smoke</code></td><td>异常检测模型推理；INT8 [1,640] 输入与 [1,640] 输出，重复执行模型并校验输出字节。</td><td>2s / 0 次 / 15s</td><td>框架/资产检查，不执行 NPU</td></tr>
+<tr><td><code>npu_ic01_load</code></td><td>图像分类模型推理；固定 INT8 [1,32,32,3] 输入，得到 [1,10] 输出，重复进行模型调用。</td><td>60s / 1 次 / 95s</td><td>checksum；外部 golden 才提供已批准参考</td></tr>
+<tr><td><code>npu_ic01_qualification</code></td><td>图像分类模型推理；固定 INT8 [1,32,32,3] 输入，得到 [1,10] 输出，重复进行模型调用。</td><td>60s / 1 次 / 95s</td><td>checksum；外部 golden 才提供已批准参考</td></tr>
+<tr><td><code>npu_ic01_smoke</code></td><td>图像分类模型推理；固定 INT8 [1,32,32,3] 输入，得到 [1,10] 输出，重复进行模型调用。</td><td>2s / 0 次 / 15s</td><td>框架/资产检查，不执行 NPU</td></tr>
+<tr><td><code>npu_kws01_load</code></td><td>关键词识别模型推理；固定 INT8 MFCC 特征 [1,49,10,1] 输入，得到 [1,12] 分类输出，重复提交同一模型。</td><td>60s / 1 次 / 95s</td><td>checksum；外部 golden 才提供已批准参考</td></tr>
+<tr><td><code>npu_kws01_qualification</code></td><td>关键词识别模型推理；固定 INT8 MFCC 特征 [1,49,10,1] 输入，得到 [1,12] 分类输出，重复提交同一模型。</td><td>60s / 1 次 / 95s</td><td>checksum；外部 golden 才提供已批准参考</td></tr>
+<tr><td><code>npu_kws01_smoke</code></td><td>关键词识别模型推理；固定 INT8 MFCC 特征 [1,49,10,1] 输入，得到 [1,12] 分类输出，重复提交同一模型。</td><td>2s / 0 次 / 15s</td><td>框架/资产检查，不执行 NPU</td></tr>
+<tr><td><code>npu_sww01_load</code></td><td>唤醒词单窗口模型推理；INT8 [1,30,1,40] 单窗口输入，得到 [1,3] 输出。</td><td>60s / 1 次 / 95s</td><td>checksum；外部 golden 才提供已批准参考</td></tr>
+<tr><td><code>npu_sww01_qualification</code></td><td>唤醒词单窗口模型推理；INT8 [1,30,1,40] 单窗口输入，得到 [1,3] 输出。</td><td>60s / 1 次 / 95s</td><td>checksum；外部 golden 才提供已批准参考</td></tr>
+<tr><td><code>npu_sww01_smoke</code></td><td>唤醒词单窗口模型推理；INT8 [1,30,1,40] 单窗口输入，得到 [1,3] 输出。</td><td>2s / 0 次 / 15s</td><td>框架/资产检查，不执行 NPU</td></tr>
+</tbody></table></div>
+<h4>参数和边界</h4>
+<ul>
+<li><code>npu_ad01_load</code>：inferences=0; warmup_inferences=1。没有独立计算数据集异常检测精度或阈值指标。 配置：<code>config/workloads/npu_ad01_load.json</code>。</li>
+<li><code>npu_ad01_qualification</code>：inferences=0; warmup_inferences=1。没有独立计算数据集异常检测精度或阈值指标。 配置：<code>config/workloads/npu_ad01_qualification.json</code>。</li>
+<li><code>npu_ad01_smoke</code>：inferences=10; warmup_inferences=0。没有独立计算数据集异常检测精度或阈值指标。 null 后端仅为框架检查。 配置：<code>config/workloads/npu_ad01_smoke.json</code>。</li>
+<li><code>npu_ic01_load</code>：inferences=0; warmup_inferences=1。输入为模型边界张量，不含摄像头/图像解码链路。 配置：<code>config/workloads/npu_ic01_load.json</code>。</li>
+<li><code>npu_ic01_qualification</code>：inferences=0; warmup_inferences=1。输入为模型边界张量，不含摄像头/图像解码链路。 配置：<code>config/workloads/npu_ic01_qualification.json</code>。</li>
+<li><code>npu_ic01_smoke</code>：inferences=10; warmup_inferences=0。输入为模型边界张量，不含摄像头/图像解码链路。 null 后端仅为框架检查。 配置：<code>config/workloads/npu_ic01_smoke.json</code>。</li>
+<li><code>npu_kws01_load</code>：inferences=0; warmup_inferences=1。不含实时采音/MFCC 生成，不做关键词数据集准确率认证。 配置：<code>config/workloads/npu_kws01_load.json</code>。</li>
+<li><code>npu_kws01_qualification</code>：inferences=0; warmup_inferences=1。不含实时采音/MFCC 生成，不做关键词数据集准确率认证。 配置：<code>config/workloads/npu_kws01_qualification.json</code>。</li>
+<li><code>npu_kws01_smoke</code>：inferences=10; warmup_inferences=0。不含实时采音/MFCC 生成，不做关键词数据集准确率认证。 null 后端仅为框架检查。 配置：<code>config/workloads/npu_kws01_smoke.json</code>。</li>
+<li><code>npu_sww01_load</code>：inferences=0; warmup_inferences=1。不等于连续音频流的完整唤醒系统。 配置：<code>config/workloads/npu_sww01_load.json</code>。</li>
+<li><code>npu_sww01_qualification</code>：inferences=0; warmup_inferences=1。不等于连续音频流的完整唤醒系统。 配置：<code>config/workloads/npu_sww01_qualification.json</code>。</li>
+<li><code>npu_sww01_smoke</code>：inferences=10; warmup_inferences=0。不等于连续音频流的完整唤醒系统。 null 后端仅为框架检查。 配置：<code>config/workloads/npu_sww01_smoke.json</code>。</li>
+</ul>
+<h3>原生内置 profile 与 Monitor 配置的区别</h3>
+<p>CPU 原生名称：idle、integer、floating_point、matrix、memory、mixed、burst、thermal、stress_extreme。前六类分别对应空闲/整数/浮点/矩阵/内存/混合实现；burst 通过占空比交替，thermal 和 stress_extreme 通过持续时长及工作量增强。</p>
+<p>GPU 原生名称：idle、ui_burst、game_light、game_mid、game_heavy、alu、sfu、texture、fill、mixed、burst、thermal、stress_extreme。原生 API 默认 null；idle/ui_burst/burst 及 game_light 的分数占空比不能直接用于当前 Vulkan 后端。Monitor 中的 light/mid/heavy 重新固定 duty_cycle=1。ALU/SFU 原生默认 compute，而 Monitor 明确改为 offscreen。不能仅看同名 profile 就认为后端或覆盖相同。</p>
+<p>NPU 原生名称：kws01、ic01、ad01、sww01、framework_smoke。每个真实模型在 Monitor 中分 smoke、load、qualification 三类，后三种类别的证据要求不同。framework_smoke 仅是测试夹具。</p>
+<h3>使用选择</h3>
+<ul>
+<li>初接板卡先跑对应 smoke，核对退出码、FINAL、完整收集和哈希。</li>
+<li>先跑一般 CPU/GPU 负载，再运行整数/浮点/矩阵/内存及 GPU 各 shader；每项保留单独 test/attempt。</li>
+<li>热稳态或突发用例与稳态性能基线分开统计；吞吐波动不是自动等同计算错误。</li>
+<li>NPU 先核实运行库和厂商执行位置。没有运行库时记录跳过；null 结果不能填作 NPU 压测完成。</li>
+<li>未准备严格 golden 的 GPU 用例应跳过并记录原因；不能悄悄改成 verify_mode=none 后沿用正确性结论。</li>
+</ul></section><section id="2"><h2>Windows Linux 统一编译指南</h2>
+<h3>入口和目标</h3>
+<p>在 workload 根目录使用 <code>build.ps1</code>（Windows PowerShell）或 <code>build.sh</code>（Linux/WSL），统一参数由 <code>scripts/build.py</code> 解析。CPU/GPU/NPU 源码已在同一交接分支中统一，不再选择另外一份旧协议源码。各子项目旧入口保留，集中入口为交接时推荐入口。</p>
+<div class="table"><table><thead><tr><th>参数</th><th>用途</th></tr></thead><tbody>
+<tr><td><code>--components &#x27;cpu,gpu,npu&#x27;</code></td><td>选择组件；还可选 relay、monitor；all=三类 workload 加 relay</td></tr>
+<tr><td><code>--target host</code></td><td>当前主机架构，不能部署成 Android/OHOS ARM64</td></tr>
+<tr><td><code>--target android-arm64</code></td><td>Android NDK 交叉编译，需 CMake/toolchain</td></tr>
+<tr><td><code>--target ohos-arm64</code></td><td>OpenHarmony/HarmonyOS NDK 交叉编译，需 CMake/toolchain</td></tr>
+<tr><td><code>--engine auto/cmake/direct</code></td><td>auto 优先 CMake；host 可使用 g++/clang++ 直接编译</td></tr>
+<tr><td><code>--gpu-apis &#x27;null,vulkan&#x27;</code></td><td>显式选择 GPU 后端；默认 null 只做框架验证</td></tr>
+<tr><td><code>--configuration Release/Debug</code></td><td>优化/调试构建，分别记录输出</td></tr>
+<tr><td><code>--ndk-root PATH</code></td><td>也可使用 ANDROID_NDK_HOME 或 OHOS_NDK_HOME</td></tr>
+<tr><td><code>--compiler PATH</code> / <code>--c-compiler PATH</code></td><td>direct 模式的主机 C++/C 编译器</td></tr>
+<tr><td><code>--generator Ninja</code></td><td>指定 CMake generator</td></tr>
+<tr><td><code>--cmake-arg=-DNAME=VALUE</code></td><td>传递 SDK、库或项目专属 CMake 参数</td></tr>
+<tr><td><code>--test</code></td><td>执行短主机检查；交叉编译目标禁止在主机执行</td></tr>
+<tr><td><code>--doctor</code></td><td>检查本次选择需要的环境，不运行编译器</td></tr>
+<tr><td><code>--dry-run</code></td><td>生成 planned 构建计划；不产生成功产物或伪造哈希</td></tr>
+<tr><td><code>--monitor-root PATH</code></td><td>Monitor 目录，默认 sibling npu-monitor</td></tr>
+</tbody></table></div>
+<p>PowerShell 中组件列表建议加引号，避免逗号被解释为数组。Windows 没有 POSIX termios，不能构建原生 Windows relay；用 WSL 的 host 自检或安装 NDK 后构建板端 relay。</p>
+<h3>主机环境</h3>
+<p>Windows 需要 Python 3.10+ 和可用的 C++17 编译器（例如 MSYS2 UCRT64 的 g++）；使用 CMake 时还需对应 generator/build tool。Linux 需要 Python 3、g++/clang++，relay 需要 cc/gcc/clang。运行 Monitor 测试需要 requirements.txt/requirements-dev.txt 中的 Python 依赖。</p>
+<pre><code>$env:PYTHON = &#x27;C:\Path\To\python.exe&#x27;
+.\build.ps1 --components &#x27;cpu,gpu,npu&#x27; --target host --engine direct --doctor
+.\build.ps1 --components &#x27;cpu,gpu,npu&#x27; --target host --engine direct --test</code></pre>
+<pre><code>PYTHON=python3 sh build.sh --components cpu,gpu,npu,relay --target host --engine direct --test</code></pre>
+<p>默认 GPU=null、NPU 的 native 测试=null/fake runtime。它们用于配置、生命周期和协议检查，不能当作实际 GPU/NPU 板端压测。<code>--test</code> 的 GPU 自检需保留 null 后端；编译真实 Vulkan 可同时启用 null,vulkan。</p>
+<h3>Android 和 OHOS 目标</h3>
+<p>目前交接机器没有两类 NDK，以下为配置好环境后的入口，尚未在本机完成交叉编译验收。缺失 SDK/toolchain 会明确失败，不会偷偷生成 host 程序冒充 ARM64。</p>
+<pre><code>$env:ANDROID_NDK_HOME = &#x27;C:\SDK\android-ndk&#x27;
+.\build.ps1 --components &#x27;cpu,npu&#x27; --target android-arm64 --engine cmake --generator Ninja
+$env:OHOS_NDK_HOME = &#x27;C:\SDK\ohos-sdk&#x27;
+.\build.ps1 --components &#x27;cpu,gpu,npu,relay&#x27; --target ohos-arm64 --engine cmake --gpu-apis &#x27;null,vulkan&#x27; --generator Ninja</code></pre>
+<pre><code>export OHOS_NDK_HOME=/opt/ohos-sdk
+sh build.sh --components cpu,gpu,npu,relay --target ohos-arm64 --engine cmake --gpu-apis null,vulkan --generator Ninja</code></pre>
+<p>CPU/NPU 使用各自 CMake toolchain；GPU 使用统一后的 standalone CMake。GPU 真后端还需要目标 SDK 的 EGL/GLES/Vulkan/OpenCL 头文件和库；Vulkan shader 构建需主机 <code>glslangValidator</code>。Android/OHOS 的双框架工程若在其他仓库，需要独立核对，不能把本入口当作该工程的替代品。</p>
+<p>relay 使用目标 NDK clang/sysroot。脚本按 Android 的 LLVM prebuilt 或 OHOS native/llvm 布局定位；SDK 布局不符会拒绝执行，应核对实际 SDK 后调整，而不是套用主机 cc。</p>
+<p>NPU 的编译不需要厂商库参与链接（运行时动态加载），但真实推理必须在板端具备 TFLite C runtime、厂商 delegate 和依赖库。构建成功不代表这些库存在或能运行。</p>
+<h3>输出、部署和版本</h3>
+<p>每次输出独立目录：<code>build/unified/&lt;target&gt;/&lt;configuration&gt;/&lt;UTC时间-随机ID&gt;/</code>。其中有每组件日志、实际 binary、<code>build-manifest.json</code>，记录命令 argv、源码提交和 dirty 状态、host/target、NDK 路径、返回码、产物大小和 SHA-256。failed/planned 与 success 明确区分。</p>
+<p>只有 device target 的产物才进入 Monitor tools。不要把 host.exe 或 WSL ELF 放到手机。NPU 可使用 Monitor 的 <code>scripts/stage_npu_assets.py</code> 完整复制四模型；CPU/GPU 二进制、SPIR-V 和 relay 分别按平台配置准备。之后执行 <code>--capabilities</code>、<code>deploy</code>、<code>verify-deployment</code>；协议必须为 2。保留构建 manifest 与设备部署 manifest，作为源码到板端文件的对应依据。</p>
+<p>Monitor 打包可选 <code>--components monitor --target host --monitor-root PATH</code>，依赖当前主机 Python 的 PyInstaller、pyserial、PyYAML，以及已准备的 release assets。它只生成当前主机的 Monitor 包；首次交接建议先执行 Monitor 的 <code>validate --package</code> 和原有打包脚本的完整检查。设备 workload 和主机 Monitor 的架构是不同维度。</p></section><section id="3"><h2>压测工具使用指南</h2>
+<h3>先确认目标</h3>
+<p>这份指南用于手头板卡的负载运行和稳定性观察。记录 SoC/板卡型号、序列号、系统/驱动版本、供电和散热、操作者、是否已有外部锁频。工具不提供调压/锁频/休眠控制。不同板卡不能仅因为“都能 hdc 连接”而共用 Kirin9030 的身份、串口和遥测配置。</p>
+<h3>安装和目录</h3>
+<p>Monitor 主机依赖在 requirements.txt 中。把对应 SDK 编出的 CPU/GPU/NPU、relay 和 shader 放入 tools 的平台配置路径。NPU 模型和输入必须连同 manifest 相对布局一起保留。负载协议统一为 2；通过各 binary 的 <code>--capabilities</code> 输出检查 workload 类型、模式和特性，不从文件名猜版本。</p>
+<p>复制现有 platform/profile 到新名字后适配新板卡：身份字段来自真实设备、传输选择 hdc/adb、UART 候选和波特率按接线确认、CPU/GPU/NPU 遥测路径按实际系统核对。Monitor profile 的 platform 字段和板卡记录一致。不要仅删除 identity.required 来让错误平台通过；未知接口先标为可选/不可用，并写清影响。</p>
+<h3>一次运行的完整步骤</h3>
+<p>以下为 PowerShell 示例，设备 ID 和串口必须替换。Linux 使用相同 Python 参数，PC 串口通常是 /dev/ttyUSB*；所有全局参数放在子命令前。</p>
+<pre><code>python main.py validate --profile cpu_smoke_kirin9030
+python main.py --transport hdc --device DEVICE_ID probe --platform kirin9030
+python main.py --transport hdc --device DEVICE_ID deploy --profile cpu_smoke_kirin9030
+python main.py --transport hdc --device DEVICE_ID verify-deployment --profile cpu_smoke_kirin9030
+python main.py --transport hdc --device DEVICE_ID --pc-serial COM4 run --profile cpu_smoke_kirin9030 --test-id BOARD_A_D1 --attempt-id A001 --pc-artifacts full --telemetry
+python main.py --transport hdc --device DEVICE_ID collect --test-id BOARD_A_D1 --attempt-id A001 --artifact-set full --verify-hashes
+python main.py report --run-dir output/BOARD_A_D1/A001 --format markdown,json,csv</code></pre>
+<p>deploy 显式准备文件，verify-deployment 核验文件，run 只检查和执行已部署资产。更换 profile、二进制、shader、模型、输入或生效配置时重新部署核验；不要把先前用例的成功状态带入另一个用例。</p>
+<p>每次测试使用稳定 test_id 分组、唯一 attempt_id 记录一次尝试。正式一周记录选择 <code>--pc-artifacts full</code> 和完整 collect，保留原始输出。脚本或命令失败时仍尽可能 collect 原 attempt；重试生成新 attempt，保留第一次失败现场。</p>
+<h3>CPU GPU NPU 的选择</h3>
+<p>CPU 先 smoke，再 integer/floating_point/matrix/memory/mixed，最后 burst/thermal/extreme。threads、iterations、working_set_kb 控制工作量；Monitor 不强制 CPU affinity，实际跑在哪些核需遥测/系统记录核实。thermal 运行长不等于已达到热稳态，观察温度斜率与降频情况。</p>
+<p>GPU 先 smoke/load_light，再 mid/heavy、ALU/SFU/texture/fill。Monitor 当前 Vulkan 走 offscreen RGBA8，不能直接使用原生 idle/burst/compute/分数占空比设置。load-only 使用 none 时只判显式错误；有同配置可信 golden 后才能运行严格 golden-image 并作正确性判断。texture_count 的含义和 fill 对 iterations 的限制见用例总表。</p>
+<p>NPU 先 smoke 校验资产和链路，再在运行库准备完成后尝试 kws01，再扩展 ic01/ad01/sww01。缺少 runtime/delegate 时记录未执行；不要用 null 结果替代真实 NPU。qualification 还要求外部已批准 golden、逐次校验和绑定的厂商执行位置证据，详见中文 NPU 专项指南。</p>
+<h3>正确性与性能</h3>
+<ul>
+<li><code>verify_interval</code> 控制实际校验，不是日志间隔；<code>verify_count</code> 必须来自 workload 真实执行。</li>
+<li><code>success_log_interval</code> 控制成功校验事件采样，额外有每秒限流；失败立即输出。</li>
+<li>summary 缺失、计数矛盾、FINAL 缺失、身份/CRC/序号错误或部署哈希错误，都不能当作合格样本。</li>
+<li>没有外部 golden 的重复一致性不等于独立正确性；none 模式不检查输出正确性。</li>
+<li>CPU operations/s、GPU frames/s、NPU inferences/s 不可直接按数值比较。</li>
+<li>预热和 golden 生成不计入正式测量；device_time_valid=false 时设备耗时保持不可用。</li>
+</ul>
+<h3>失败和现场处理</h3>
+<div class="table"><table><thead><tr><th>现象</th><th>先看什么</th><th>处理方向</th></tr></thead><tbody>
+<tr><td>配置/部署失败</td><td>validate/verify-deployment 返回、资产路径与 SHA</td><td>先修资产/平台/依赖，不记录为芯片计算错误</td></tr>
+<tr><td>checksum/图像不匹配</td><td>首次 verify 失败、对应 golden/config/binary</td><td>保留现场，核对参考身份，固定条件重复</td></tr>
+<tr><td>hang/无 summary</td><td>最后真实 heartbeat、workload/stderr、relay/FINAL</td><td>判断 workload 卡死、驱动等待、串口或 transport 中断</td></tr>
+<tr><td>吞吐下降</td><td>温度/频率/利用率、host/device latency</td><td>检查降频、热稳态、系统竞争和锁频是否真正生效</td></tr>
+<tr><td>collect hash 不符</td><td>artifact-hashes.json 与缺失文件</td><td>证据不完整，不能用缺失记录证明 PASS</td></tr>
+<tr><td>NPU 部分执行</td><td>厂商诊断、partition、运行库身份</td><td>未证明完整执行时标 unknown/partial，不推导 full_npu</td></tr>
+</tbody></table></div>
+<p>默认遇到失败先停，记录故障时间、板卡状态、操作者动作，再决定是否续跑。不要自动清空日志、重启后只留下成功结果，或删除设备 evidence 来节省空间。若主机进程被强制终止，需要人工核对板端进程是否确已结束。</p>
+<h3>重放和报告</h3>
+<pre><code>python main.py simulate --profile cpu_qualification_kirin9030 --events PATH_TO_EVENTS
+python main.py simulate --profile npu_kws01_smoke --raw-serial PATH_TO_CAPTURE
+python main.py report --run-dir PATH_TO_RUN --format markdown,json,csv</code></pre>
+<p>重放是已有证据的确定性检查，不会补齐原来丢失的设备文件。报告与原始结果应同时保留；后生成的报告不能覆盖设备原始日志。NPU profile 重放也会核对实际校验次数。</p></section><section id="4"><h2>压测工具设计指南</h2>
+<h3>结构与责任</h3>
+<p>系统分为主机 Monitor、板端 device agent、原生 workload 和独立遥测四部分。Monitor 负责配置、身份与资产、启动事务、UART 判定和证据归档；workload 负责执行真实工作和输出原生 JSONL；agent 负责进程生命周期、完整本地留证和紧凑 UART 转发；telemetry 从平台声明的真实接口采样。外部电压/频率/系统调度不在本工具的写入控制范围。</p>
+<pre><code>主机 profile 与平台配置
+  -&gt; validate / probe
+  -&gt; 显式 deploy / verify-deployment
+  -&gt; run manifest 与唯一 test_id / attempt_id
+  -&gt; transport 启动板端 agent
+  -&gt; CPU batch / GPU frame / NPU inference
+  -&gt; 完整原始日志留板端，紧凑事件经 UART v2 到主机
+  -&gt; PolicyEngine 判定，collect 核验，report / 周报归档</code></pre>
+<h3>扩展点与兼容性</h3>
+<p><code>src/target_adapters.py</code> 采用静态注册表，集中描述工作单元、吞吐/延迟字段、NPU 配置及资产/执行证据差异。CPU/GPU 保留原逻辑，不为三个 target 复制三套传输或判定引擎。新增目标时先添加适配器、schema、资产解析和测试，再接入同一公共流程。</p>
+<p>CPU/GPU/NPU 的 C++ 公共代码没有整体重构；本次将 GitHub CPU/GPU 校验分支保留历史合并到 NPU 分支，使运行接口统一。三份 <code>verify_schedule.h</code> 需保持一致，并由测试检查。原生事件 schema 1、verification contract 2 和 UART protocol 2 各管各的版本，不可把它们混成一个版本号。</p>
+<h3>workload 的执行模型</h3>
+<p>CPU 一次 batch 执行确定性计算；GPU 一次 frame/dispatch 提交并等待 GPU 操作，图形路径可读回图像；NPU 一次 inference 经过 Init/CreateResources/SetInputs/Submit/Wait/ReadOutputs/Destroy 生命周期。NPU 接口异步，但当前 runner 每次提交后等待完成，没有并发推理吞吐流水线。</p>
+<p>工作量和日志是不同控制面。<code>verify_interval</code> 选择真实工作单元的校验点，计数只在实际校验路径增加；成功事件采样和每秒上限只限制日志。任何失败立即报告，并在 agent 侧锁存首个失败，防止后续没有 summary 时丢失。</p>
+<p>预热不进入正式计数，golden 生成也不是持续性能样本。NPU 用预热次数，CPU/GPU 用预热秒数。吞吐保留原单位，设备时间没有有效证据时保持缺失。心跳只能代表已有进展，不能用后台定时线程把后端卡死伪装成健康。</p>
+<h3>资产与基准身份</h3>
+<p>部署清单必须能追踪 binary、生效配置、shader、manifest、模型、输入及 runtime/delegate 依赖。NPU manifest 的资产路径要受限，注册张量描述必须一致，声明 SHA-256 必须匹配。运行库可以是受管理资产或板端已安装且固定哈希的文件；不能将 Windows DLL 或主机 ELF 当作板端 SO。</p>
+<p>生效设备路径配置与用户源码配置分别保留。修改配置/模型/输入/编译器选项/运行库后，原 golden 或性能基线是否仍匹配由 fingerprint 检查，不能靠重命名文件复用。NPU 正式参考要求生成条件和审批信息，执行位置要求独立厂商诊断绑定；无证据为 unknown。</p>
+<h3>传输和判定</h3>
+<p>设备完整 events/workload/summary/stderr/telemetry/FINAL 在 spool 留存。UART 只携带必要字段；长分区描述、模型信息不挤入单帧。COBS、CRC、序号、会话身份和 FINAL 规则共用，verification_summary 可以分片，主机合并并拒绝矛盾重复字段。</p>
+<p>PolicyEngine 保留计算失败与基础设施错误的区别。缺依赖、部署/哈希错误、协议异常或证据不完整不应等同芯片算错；明确校验失败和 workload 失败必须保留。性能异常还要联系温度、实际频率、系统竞争和后端等待，不应仅用 throughput 下降推断硬件失稳。</p>
+<h3>集中构建和周记录工具</h3>
+<p>workload <code>scripts/build.py</code> 只编排编译命令，不修改计算核。它支持显式组件、host/Android/OHOS、GPU API 选择，按每次构建记录版本、命令和产物。dry-run 产物是 planned，不是 success；未配置 NDK 不回退到 host 冒充交叉编译。Monitor 打包是主机组件，与设备 binary 分开。</p>
+<p>Monitor <code>scripts/soak.py</code> 是顺序执行器，不是多负载联合调度器。它显式调用 validate/可选 deploy/verify/run/collect/report，追加记录每一次尝试。只有 PASS 且收集哈希完整的结果能归入完整通过项；框架后端、主机等待、预热与缺失 summary 不补算成压力时长。续跑根据计划/板卡配置身份和完成证据判断，重试保留新记录。</p>
+<h3>维护顺序</h3>
+<p>修改配置或接口先补有意义的边界测试，再跑相关协议、资产、agent/UART 和主机回归。新增实际硬件后端必须验证真实运行位置、输出与退出、阻塞调用/清理边界，以及设备收集。代码测试、模拟 runtime、实机运行和资格化结论分别记录。原始证据不可因测试失败而删除或覆盖。</p></section><section id="5"><h2>七天压测执行与日志交接</h2>
+<h3>验收口径</h3>
+<p>本计划按“连续七个日历日中的用例运行记录”设计，不预设每天 24 小时。每天的真实执行时间、板卡和可用后端都需记录。随机拿到的板卡先识别再选择用例，不支持的目标写 SKIP 与原因。没有调压接口，本周只报告运行稳定性、显式错误、超时、温度/频率和吞吐变化；不报告最低稳定电压。</p>
+<p>当前提供的是计划、执行工具和空白记录，尚未发生的七天压测不会被填成已有结果。主管周报中的测量秒数来自设备 native summary；程序等待、预热、golden 生成、null/fake 后端不代替实际压力时长。七个 Day 编号若实际在同一天执行，汇总仍只显示一个实际日历日期。</p>
+<h3>执行前准备</h3>
+<ul>
+<li>选择真实板卡，登记型号/SoC、设备 ID、板号/序列号、系统 build、驱动、供电、散热、操作者与主机时间。每换板卡使用新的 board_id；不能把两块板的数据归成同一块。</li>
+<li>完成 SDK 编译和 tools 资产准备，核对 capabilities contract=2。NPU runtime/delegate 未准备时，load/qualification 写跳过，不以 null 替代。</li>
+<li>复制 platform/profile 适配实际板卡。现有模板是 Kirin9030/Kirin9020，其他板卡必须有匹配的身份/串口/遥测信息。</li>
+<li>复制 <code>config/soak/board.example.json</code>，填写 device、pc_serial、platform、available_targets。不要把示例 FILL_* 当实际参数。已在外部锁频时，将设置方法、期望频点、实际频率记录路径写入 frequency_note；工具不执行锁频。</li>
+<li>复制 <code>config/soak/week.example.json</code>，选择可用 profile 和每日 cycles。增加循环数会增加重复运行，但不承诺热稳态、连续性或 168 小时。需要更长单次持续用例时，另建 profile、修改原生 timeout 与 Monitor runtime budget，再重新部署核验和重新绑定参考。</li>
+<li>严格 GPU golden-image 和 NPU qualification 准备各自同配置参考。在 board 配置的 golden_by_profile 或 baseline_by_profile 中指定，二者互斥。没有参考就记录跳过，不能降低校验模式后沿用原结论。</li>
+</ul>
+<h3>七天建议安排</h3>
+<div class="table"><table><thead><tr><th>天</th><th>重点</th><th>建议用例</th><th>当天检查</th></tr></thead><tbody>
+<tr><td>1</td><td>接板和基础链路</td><td>CPU/GPU smoke、NPU KWS smoke（若可用）</td><td>身份、UART、FINAL、完整收集和哈希</td></tr>
+<tr><td>2</td><td>CPU 定向路径</td><td>integer/floating_point/matrix/memory</td><td>每项计数、首次 verify、线程和实际频率</td></tr>
+<tr><td>3</td><td>GPU 负载层次</td><td>light/mid/heavy；有 golden 时 ALU/SFU/texture/fill</td><td>驱动错误、hang、host/device timing、图像基准</td></tr>
+<tr><td>4</td><td>NPU 模型</td><td>四模型 load；无运行库时 CPU 混合补充</td><td>runtime/delegate 版本、位置证据、模型与输入 SHA</td></tr>
+<tr><td>5</td><td>持续和升温</td><td>CPU thermal、GPU thermal</td><td>温度斜率、降频、吞吐随时间变化、散热条件</td></tr>
+<tr><td>6</td><td>高强度和切换</td><td>CPU burst/extreme、GPU extreme</td><td>无进展、超时、工作量是否适配、故障后的现场</td></tr>
+<tr><td>7</td><td>回归和复核</td><td>smoke、mixed correctness、可用 NPU</td><td>重放、缺失文件、哈希、失败/跳过闭环与周报</td></tr>
+</tbody></table></div>
+<p>示例计划每项默认一次，属于覆盖起点。若主管要求 7×24，请先明确每块板允许的条件、可连续运行时长和故障处置，再提高循环/时长并安排值守；不能把本计划默认执行量标为 168h。</p>
+<h3>脚本操作</h3>
+<p>从 Monitor 目录执行。Windows 和 Linux 使用相同参数（Linux 通常 <code>python3</code>）。<code>--prepare</code> 表示明确执行部署；不指定时只核验已经部署的资产。</p>
+<pre><code>python scripts/soak.py validate-plan --plan config/soak/week.example.json
+python scripts/soak.py run-day --plan MY_WEEK.json --board MY_BOARD.json --campaign output/CAMPAIGN_01 --day 1 --prepare --dry-run
+python scripts/soak.py run-day --plan MY_WEEK.json --board MY_BOARD.json --campaign output/CAMPAIGN_01 --day 1 --prepare
+python scripts/soak.py summarize --campaign output/CAMPAIGN_01</code></pre>
+<p>每天在实际日期运行对应 <code>--day 2</code> 至 <code>--day 7</code>。脚本不注册定时任务，不自动跨七天唤醒主机，也不自动启动并行 CPU/GPU/NPU。不要通过同一串口同时启动多个 campaign。</p>
+<p>默认遇到失败停止。检查现场后可再次运行同一命令：已完成且证据完整的项跳过；重试失败或先前跳过项需 <code>--retry-failed</code>。确需继续剩余用例时用 <code>--continue-on-error</code>，但它不会清除失败记录。计划或板卡配置变化会形成新的执行身份，应在交接说明中写清原因。</p>
+<p>主机超时或强制中止时，必须检查设备进程是否已停止并收集原 attempt。<code>.runner.lock</code> 防止同一 campaign 并发执行；异常退出留下锁时，应先确认原进程和设备已停止，再人工移走锁，不能自动删除运行中锁。</p>
+<h3>目录和留存</h3>
+<pre><code>CAMPAIGN_01/
+  configuration/     计划与板卡配置快照
+  operations/        每阶段 argv、返回码、stdout/stderr、超时现场
+  runs/BOARD_A/      PC result、run-manifest、UART 原始捕获、完整事件
+    TEST_ID/device-evidence/ATTEMPT_ID/spool/
+  ledger.jsonl       追加台账，失败和重试均保留
+  summary/           weekly-summary.json 与中文周报</code></pre>
+<p>不要只交 report.md。交付整个 campaign，并另带构建 manifest、二进制哈希、vendor diagnostics 和锁频/散热条件记录。每天检查剩余磁盘空间、设备 spool 空间、主机是否睡眠、USB/UART 是否掉线；变更线缆/电源/散热也要记录时间。</p>
+<h3>重点日志和记录</h3>
+<div class="table"><table><thead><tr><th>文件或字段</th><th>必看内容</th><th>发现异常时的含义</th></tr></thead><tbody>
+<tr><td>build-manifest.json</td><td>target/架构、源码提交、dirty、命令、编译器、SHA</td><td>编译成功与板端兼容是两件事；不同产物不可混算</td></tr>
+<tr><td>deployment-manifest.json / preflight</td><td>本地/远端哈希、完整资产、能力、NPU 库身份</td><td>哈希不符或依赖错误先归基础设施问题</td></tr>
+<tr><td>run-manifest.json</td><td>test/attempt、profile/baseline、timeout、设备路径</td><td>关联一次运行的全部证据，不与其他会话混用</td></tr>
+<tr><td>result.json</td><td>verdict、exit_code、DUT/infrastructure reasons、liveness</td><td>PASS 需配合原始证据；不能只统计进程返回 0</td></tr>
+<tr><td>workload.log</td><td>全部原生 JSONL 和故障附近输出</td><td>看首次 error/verify FAIL，不能只取最后一行</td></tr>
+<tr><td>workload-summary.json</td><td>result/exit、实测 duration、工作单元、verify_count/fail</td><td>计数缺失/矛盾或无 summary，不能当有效通过</td></tr>
+<tr><td>verify 事件</td><td>pass/result、首错单元、checksum/golden</td><td>明确失败立即留存，成功采样少不代表校验少</td></tr>
+<tr><td>heartbeat</td><td>最后时间、phase、work unit 进展</td><td>进展停住与日志被限流需区分；无进展不能靠定时心跳掩盖</td></tr>
+<tr><td>final.json</td><td>summary_seen、workload_exit_code、timed_out、身份</td><td>workload summary 与 agent 完成一致才算链路闭合</td></tr>
+<tr><td>telemetry.jsonl</td><td>实际频率、温度、利用率、缺样/节流</td><td>有锁频设置也需验证实际读数；未知数据不可补 0</td></tr>
+<tr><td>workload-stderr / diagnostics</td><td>初始化、API/驱动错误、厂商 NPU 信息</td><td>定位依赖、GPU hang 或 NPU 委派问题</td></tr>
+<tr><td>relay.log / raw UART</td><td>帧过长、CRC/序号/身份、FINAL 尾部</td><td>传输错误不等同计算结果错误</td></tr>
+<tr><td>artifact-hashes.json</td><td>应收文件与 SHA-256</td><td>缺失或不符的证据不能由报告补齐</td></tr>
+<tr><td>operations 与 ledger</td><td>实际时间、命令、错误、重试、跳过和操作者动作</td><td>保留运行过程，避免只保留成功的一次</td></tr>
+</tbody></table></div>
+<h3>日报和周报模板</h3>
+<p>日报应记录：实际日期、板卡与条件、计划项、执行次数、有效测量秒数、完整证据通过数、失败/中断、跳过及原因、故障处理、证据路径和责任人。没有测量依据的时长留空/缺失，不填成零时长成功或满时长完成。</p>
+<p>周报应包含七天逐日表、真实日历覆盖、按板卡/target/profile 的范围、异常及复现进度、未执行项、版本变化、证据目录和结论边界。脚本的周报只按实际 ledger 汇总，不从计划推算完成率。手工 Excel 模板中的记录也要回链原始日志。</p>
+<p>建议结论：在所列板卡与条件下完成哪些用例、实际运行多久、观察到哪些错误/超时/降频、还有哪些缺口。不要写“全部 AVS 验证通过”或“全周 168h 稳定”而没有相应条件和测量记录。</p>
+<h3>平台系统日志的补充</h3>
+<p>常规链路不自动完整抓取所有 hilog、dmesg、厂商 GPU/NPU trace 或电源轨仪器数据。需要时用目标系统已验证的导出方式单独保存，记录实际命令、时间窗口、工具版本与文件哈希；没有采集应写“未采集”，不能推导成“无内核/驱动错误”。该部分与 workload 原始 stderr/diagnostics 一并交接。</p></section><section id="6"><h2>中文交接验证记录</h2>
+<p>本次验证针对合并后的本地源码和新增集中构建/七天记录工具，未连接真实板卡。日期：2026年10月26日。</p>
+<div class="table"><table><thead><tr><th>检查</th><th>结果和范围</th></tr></thead><tbody>
+<tr><td>GitHub workload 核对</td><td>fetch 成功；main ccf431f、CPU/GPU 分支 5d6aca9，已保留历史整合</td></tr>
+<tr><td>GitHub Monitor 核对</td><td>连接失败两次、限定低速重试一次失败；不能声称已同步远端最新</td></tr>
+<tr><td>Linux 集中构建</td><td>CPU/GPU/NPU/relay 均完成 direct host 构建及 --test；GPU=null，NPU=null/fake</td></tr>
+<tr><td>Windows 集中构建</td><td>CPU/GPU/NPU 完成 direct host 构建及 --test</td></tr>
+<tr><td>CPU/GPU 契约</td><td>五个 helper/config 检查通过；实际 runner 契约测试通过，并读取 Monitor 的 CPU/GPU JSON 配置核对生效字段</td></tr>
+<tr><td>NPU 原生协议</td><td>集中入口调用 11 项协议测试和五 manifest 契约，Windows/Linux 均通过</td></tr>
+<tr><td>构建入口单测</td><td>5 项通过，含组件选择、缺 NDK 不回退、cross 不执行 host 测试、dry-run 身份、共享头一致</td></tr>
+<tr><td>Monitor 全量 Linux</td><td>184 项全部通过</td></tr>
+<tr><td>Monitor 全量 Windows</td><td>184 项，跳过 12 项 POSIX 环境测试，其余通过</td></tr>
+<tr><td>七天记录逻辑</td><td>12 项单测通过，含无记录留空、跳过、失败和重试保留、续跑、框架不计压力时长、真实日历覆盖</td></tr>
+<tr><td>中文 Excel</td><td>六个工作表，37 个 Monitor 配置；公式经临时真实输入验证并恢复空白，预览逐表检查</td></tr>
+</tbody></table></div>
+<p>集中构建过程中发现并修复 PowerShell 逗号参数展开、Windows Python 中文输出编码、共享头换行导致哈希不一致三个问题。旧 GPU 源码没有统一构建文件的问题由合入上游 standalone CMake 和集中入口解决。</p>
+<p>未执行：真实 GPU/NPU 后端、Android/OHOS NDK 交叉构建、Monitor 可发布安装包、实际一周板端压测、调压/锁频写入或 Vmin 搜索。最终日志见本目录 validation/，既有 NPU 接入日志继续保留在 docs/validation/。</p>
+<p>workload 统一提交：<code>eed83c67645bddaf481b6fe6fdfb8a35455267e4</code>，父提交分别为 NPU 8551028 与 CPU/GPU 5d6aca9。集中入口已重新构建该提交，交接包保留两平台实际提交、dirty 状态和产物哈希。WSL 用与 Windows 一致的 core.autocrlf=true 只读核对后无文件内容差异。</p>
+<p>构建 provenance 保留原值：Windows 记录 workload dirty=false；WSL 默认 Git 换行策略把共享 Windows 工作树报告为 dirty=true，原始记录不修改。两者提交均为 eed83c6，需结合原始命令、日志与 Git 换行核对记录理解，不能直接把 dirty 标志改成 false。</p></section></body></html>

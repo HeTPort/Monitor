@@ -1,0 +1,66 @@
+
+Test     : integer
+ExitCode : 0
+Result   : PASS
+Batches  : 3
+Verified : True
+
+Test     : floating-point
+ExitCode : 0
+Result   : PASS
+Batches  : 3
+Verified : True
+
+Test     : matrix
+ExitCode : 0
+Result   : PASS
+Batches  : 2
+Verified : True
+
+Test     : memory
+ExitCode : 0
+Result   : PASS
+Batches  : 2
+Verified : True
+
+Test     : mixed-multithread
+ExitCode : 0
+Result   : PASS
+Batches  : 3
+Verified : True
+
+Test     : checksum-failure
+ExitCode : 1
+Result   : CHECKSUM_FAIL
+Batches  : 1
+Verified : False
+
+Test     : performance-failure
+ExitCode : 7
+Result   : PERFORMANCE_FAIL
+Batches  : 2
+Verified : True
+
+Test     : verify-cadence
+ExitCode : 0
+Result   : PASS
+Batches  : 5
+Verified : True
+
+Test     : verify-interval
+ExitCode : 0
+Result   : PASS
+Batches  : 5
+Verified : True
+
+Test     : verify-failure-unsuppressed
+ExitCode : 1
+Result   : CHECKSUM_FAIL
+Batches  : 1
+Verified : False
+
+Test   : cpu-runtime-contract
+Result : PASS
+
+Test   : gpu-runtime-contract
+Result : PASS

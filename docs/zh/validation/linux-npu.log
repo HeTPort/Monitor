@@ -1,0 +1,30 @@
+
+$ ["/usr/bin/g++", "-std=c++17", "-O2", "-DNDEBUG", "-Wall", "-Wextra", "-Wpedantic", "-pthread", "-I", "/mnt/d/Monitor-main/npu-workload/npuworkload/include", "-I", "/mnt/d/Monitor-main/npu-workload/npuworkload/src", "/mnt/d/Monitor-main/npu-workload/npuworkload/src/backend_factory.cpp", "/mnt/d/Monitor-main/npu-workload/npuworkload/src/config.cpp", "/mnt/d/Monitor-main/npu-workload/npuworkload/src/crc32.cpp", "/mnt/d/Monitor-main/npu-workload/npuworkload/src/heartbeat.cpp", "/mnt/d/Monitor-main/npu-workload/npuworkload/src/json.cpp", "/mnt/d/Monitor-main/npu-workload/npuworkload/src/logger.cpp", "/mnt/d/Monitor-main/npu-workload/npuworkload/src/main.cpp", "/mnt/d/Monitor-main/npu-workload/npuworkload/src/manifest.cpp", "/mnt/d/Monitor-main/npu-workload/npuworkload/src/metrics.cpp", "/mnt/d/Monitor-main/npu-workload/npuworkload/src/profile.cpp", "/mnt/d/Monitor-main/npu-workload/npuworkload/src/runner.cpp", "/mnt/d/Monitor-main/npu-workload/npuworkload/src/sha256.cpp", "/mnt/d/Monitor-main/npu-workload/npuworkload/src/tensor.cpp", "/mnt/d/Monitor-main/npu-workload/npuworkload/src/utils.cpp", "/mnt/d/Monitor-main/npu-workload/npuworkload/src/verifier.cpp", "/mnt/d/Monitor-main/npu-workload/npuworkload/src/backends/null/null_backend.cpp", "/mnt/d/Monitor-main/npu-workload/npuworkload/src/backends/reference_cpu/reference_cpu_backend.cpp", "/mnt/d/Monitor-main/npu-workload/npuworkload/src/backends/tflite_delegate/tflite_delegate_backend.cpp", "-ldl", "-o", "/mnt/d/Monitor-main/npu-workload/build/unified/host/release/20261026T140121Z-b85962/npu/npu-avs-workload"]
+
+$ ["/usr/bin/g++", "-std=c++17", "-O2", "-DNDEBUG", "-Wall", "-Wextra", "-Wpedantic", "-pthread", "-I", "/mnt/d/Monitor-main/npu-workload/npuworkload/include", "-I", "/mnt/d/Monitor-main/npu-workload/npuworkload/src", "/mnt/d/Monitor-main/npu-workload/npuworkload/tests/contract_tests.cpp", "/mnt/d/Monitor-main/npu-workload/npuworkload/src/json.cpp", "/mnt/d/Monitor-main/npu-workload/npuworkload/src/manifest.cpp", "/mnt/d/Monitor-main/npu-workload/npuworkload/src/profile.cpp", "/mnt/d/Monitor-main/npu-workload/npuworkload/src/sha256.cpp", "/mnt/d/Monitor-main/npu-workload/npuworkload/src/tensor.cpp", "/mnt/d/Monitor-main/npu-workload/npuworkload/src/backends/null/null_backend.cpp", "-o", "/mnt/d/Monitor-main/npu-workload/build/unified/host/release/20261026T140121Z-b85962/npu/npu-contract-tests"]
+
+$ ["/usr/bin/g++", "-std=c++17", "-O2", "-DNDEBUG", "-Wall", "-Wextra", "-Wpedantic", "-pthread", "-I", "/mnt/d/Monitor-main/npu-workload/npuworkload/include", "-I", "/mnt/d/Monitor-main/npu-workload/npuworkload/src", "-shared", "-fPIC", "/mnt/d/Monitor-main/npu-workload/npuworkload/tests/fake_tflite_runtime.cpp", "-o", "/mnt/d/Monitor-main/npu-workload/build/unified/host/release/20261026T140121Z-b85962/npu/libnpu-fake-tflite-runtime.so"]
+
+$ ["/mnt/d/Monitor-main/npu-workload/build/unified/host/release/20261026T140121Z-b85962/npu/npu-avs-workload", "--capabilities"]
+{"workload":"npu","version":"0.4.0","contract_version":2,"features":["verify_interval","success_log_interval","verify_count","failure_verify","live_heartbeat","success_log_rate_limit"],"success_log_min_period_ms":1000,"verify_modes":["none","checksum","crc"],"profiles":["kws01","ic01","ad01","sww01","framework_smoke"],"backends":["null","reference_cpu","tflite_delegate"]}
+
+$ ["/usr/bin/python3", "/mnt/d/Monitor-main/npu-workload/npuworkload/tests/test_monitor_contract.py", "--executable", "/mnt/d/Monitor-main/npu-workload/build/unified/host/release/20261026T140121Z-b85962/npu/npu-avs-workload", "-v"]
+test_actual_check_count_excludes_warmup (__main__.MonitorContractTests.test_actual_check_count_excludes_warmup) ... ok
+test_all_models_execute_null_contract (__main__.MonitorContractTests.test_all_models_execute_null_contract) ... ok
+test_capabilities_do_not_initialize_missing_runtime (__main__.MonitorContractTests.test_capabilities_do_not_initialize_missing_runtime) ... ok
+test_fake_delegate_runs_are_only_protocol_evidence (__main__.MonitorContractTests.test_fake_delegate_runs_are_only_protocol_evidence) ... ok
+test_golden_generation_is_not_a_measured_or_verified_inference (__main__.MonitorContractTests.test_golden_generation_is_not_a_measured_or_verified_inference) ... ok
+test_json_escaped_manifest_path_is_decoded (__main__.MonitorContractTests.test_json_escaped_manifest_path_is_decoded) ... ok
+test_strict_config_rejects_duplicate_malformed_alias_and_wrong_types (__main__.MonitorContractTests.test_strict_config_rejects_duplicate_malformed_alias_and_wrong_types) ... ok
+test_success_sampling_and_rate_limit_do_not_change_checks (__main__.MonitorContractTests.test_success_sampling_and_rate_limit_do_not_change_checks) ... ok
+test_summary_only_does_not_hide_failed_verification (__main__.MonitorContractTests.test_summary_only_does_not_hide_failed_verification) ... ok
+test_verification_disabled_has_zero_actual_checks (__main__.MonitorContractTests.test_verification_disabled_has_zero_actual_checks) ... ok
+test_wrong_golden_failure_is_immediate_even_when_logs_disabled (__main__.MonitorContractTests.test_wrong_golden_failure_is_immediate_even_when_logs_disabled) ... ok
+
+----------------------------------------------------------------------
+Ran 11 tests in 1.154s
+
+OK
+
+$ ["/mnt/d/Monitor-main/npu-workload/build/unified/host/release/20261026T140121Z-b85962/npu/npu-contract-tests", "/mnt/d/Monitor-main/npu-workload/npuworkload/profiles/framework_smoke/manifest.json", "/mnt/d/Monitor-main/npu-workload/npuworkload/profiles/kws01/manifest.json", "/mnt/d/Monitor-main/npu-workload/npuworkload/profiles/ic01/manifest.json", "/mnt/d/Monitor-main/npu-workload/npuworkload/profiles/ad01/manifest.json", "/mnt/d/Monitor-main/npu-workload/npuworkload/profiles/sww01/manifest.json"]
+npu contract tests passed

@@ -1,3 +1,5 @@
+中文交接入口：[使用、设计、用例总表、编译和七天记录](docs/zh/README.md)。
+
 # Monitor
 
 Monitor 2.1 是一个面向 CPU/GPU 板级压力测试的最小运行与判定工具。核心 `run` 只做四件事：启动已部署的设备 agent、启动 workload、把判定事件定向输出到 UART、由 PC 侧解析并给出 PASS/FAIL。

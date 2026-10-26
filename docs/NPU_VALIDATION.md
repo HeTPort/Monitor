@@ -1,55 +1,37 @@
-# NPU software validation and hardware acceptance
+# NPU 软件验证与板端待验记录
 
-Validation date: 2026-10-26 (Asia/Shanghai).
+记录日期：2026年10月26日。此文件将前一阶段的软件结果中文化；后续代码统一和集中构建的验证见 [交接验证记录](zh/交接验证记录.md)。
 
-## Baselines and isolation
+## 接入阶段基线与结果
 
-| Repository | Baseline | Development checkout / branch |
-|---|---|---|
-| Monitor | `74bc567` (`codex/verify-contract-profiles`) | `D:\Monitor-main\npu-monitor`, `codex/npu-monitor-integration` |
-| Workload | `ccf431f` (main, four NPU models/delegate backend) | `D:\Monitor-main\npu-workload`, `codex/npu-monitor-protocol` |
+Monitor 以 `74bc567` 为基线，NPU 接入提交 `8ba26ac`；workload 以 `ccf431f` 为基线，NPU 协议提交 `8551028`。本次后续交接工作已将 GitHub CPU/GPU 协议分支 `5d6aca9` 合入同一 workload 源码树，不能继续把“CPU/GPU 源码未变化”作为当前合并后的描述。
 
-Both checkouts are independent local Git clones with new branches. Original main repositories, user planning files, and the September worktrees were not overwritten, reset, merged or pushed. The CPU/GPU verification branch was inspected for compatibility; only its small verification-scheduling header was reused in the NPU project. No CPU/GPU workload source changes are included.
-
-## Executed checks
-
-| Check | Result / scope |
+| 软件检查 | 实际结果 |
 |---|---|
-| Original Monitor baseline, Windows | 148 tests pass, 9 POSIX tests skipped; PyYAML installed in workspace test dependencies |
-| Original Monitor baseline, WSL/Linux | 148 tests pass, no skips |
-| Integrated Monitor regression, WSL/Linux | 172 tests pass, including native NPU -> shell agent -> framed UART -> policy tests |
-| Integrated Monitor regression, Windows | 172 tests pass, 12 POSIX-dependent tests skipped |
-| NPU protocol executable tests, Linux | 11 tests pass, including four fake-delegate profiles |
-| NPU protocol executable tests, Windows | 11 tests pass, including four fake-delegate profiles |
-| Existing NPU Windows smoke suite | 13 cases pass, including expected error exits |
-| Native manifest/tensor contract executable | All five registered manifests pass (four real model profiles plus framework fixture) |
-| Builds | Linux direct g++ and Windows build.ps1/g++, C++17, -Wall -Wextra -Wpedantic; no compiler warnings observed |
-| Static checks | Python compileall, PowerShell build script parser, Git whitespace checks |
+| 原 Monitor Windows 基线 | 148 项，跳过 9 项 POSIX 测试，其余通过 |
+| 原 Monitor Linux 基线 | 148 项全部通过 |
+| NPU 接入后 Monitor Linux | 172 项全部通过 |
+| NPU 接入后 Monitor Windows | 172 项，跳过 12 项 POSIX 测试，其余通过 |
+| NPU 原生协议测试 | Windows/Linux 各 11 项通过，含四模型 fake delegate |
+| 既有 Windows NPU smoke | 13 个用例通过，包含预期错误退出 |
+| manifest/tensor 原生契约 | 五个 manifest 通过，含 framework 夹具 |
+| 编译 | 主机 Windows g++ 和 WSL/Linux g++；无 Android/OHOS NDK |
+| 静态检查 | Python 编译、PowerShell 语法和 Git 空白检查通过 |
 
-The environment has no usable CMake command; native g++ was used for Linux and the existing PowerShell fallback for Windows. Cross-compilation/package production was not claimed. Verification logs are under `docs/validation/`.
+原始日志保留于 docs/validation，不翻译 JSON 字段、错误码或原始文本。新集中入口补充统一源码的版本/产物 SHA 与构建日志。主机测试不能当作板端七天运行记录。
 
-## Covered acceptance boundaries
+## 已覆盖的软件边界
 
-- Existing CPU/GPU configuration, CLI, deployment/preflight, failure latch, golden/calibration, transport, artifact, UART and reporting tests remain passing.
-- Twelve NPU model/use-case configurations are validated. Warm-up remains a count; malformed types, aliases, finite/range errors and unsafe path delimiters are rejected.
-- Complete manifest/model/input asset resolution, exact registered tensor descriptors, relative layout, deterministic effective config and declared SHA-256 checks are exercised for all four models. Host objects cannot masquerade as AArch64 device assets.
-- Capabilities are backend-free; contract version, modes, targets, supported models/backends and successful-log bounds are checked. Workload-generated actual verification counts cannot be inferred from successful-event volume.
-- Warm-up/golden generation are excluded from measurement/check counters. Disabled/sampled success logs retain all actual checks. An incorrect golden fails immediately even with success logging disabled; partial failure counters remain actual.
-- NPU inference events remain local, first verify failure survives a missing summary, long native partitions remain local, and essential summary evidence is split within the existing 512-byte UART bounds. Sequence/CRC/session/FINAL behavior remains shared.
-- Framed-event and raw-UART NPU replay produce the same verdict and reject missing actual verification counts.
-- Explicit known-good approval, native/PC/FINAL identity, source hashes, native model identity, real backend and vendor-evidence identity are required for formal qualification. Synthetic accepted/rejected cohort tests cover NPU throughput/host-latency calibration and draft baseline creation.
-- Unknown device timing remains unavailable. Run consistency and approved external correctness are separately reported. Unknown placement is never inferred from `fallback_used=false`.
+四模型的 manifest/输入/模型哈希和张量签名，路径越界和非法类型，真实校验计数、成功日志节流、错误 golden、失败后无 summary、长摘要有界转发、CRC/序号/身份、原始 UART 与事件重放、PC/native/FINAL 一致性、外部审批参考及厂商证据绑定，均有对应测试。模拟 cohort 证明校准数据链路接受/拒绝规则，不证明真实两板性能。
 
-## Required device acceptance (not performed)
+## 板端尚未完成
 
-1. Cross-build the NPU executable and relay with the actual HarmonyOS/Android SDK; stage the models and actual AArch64 runtime/delegate libraries and managed dependencies.
-2. Verify dynamic-loader ABI/permissions, the actual HDC device and UART, and all installed/managed asset hashes.
-3. Validate real platform NPU temperature/frequency/utilization/power interfaces and required/optional policy. Templates deliberately contain no guessed NPU sysfs paths. Populate required telemetry before collecting production calibration samples.
-4. Run KWS01 through `validate -> probe -> deploy -> verify-deployment -> run -> collect`, inspect vendor execution diagnostics, then repeat IC01/AD01/SWW01.
-5. Acquire and acknowledge the golden at independently trusted physical operating conditions. Attach vendor diagnostics proving full placement for the exact asset identity. Hashes bind an operator attestation; they do not independently establish that the diagnostic proves full placement.
-6. Execute negative device tests: bad golden, missing/changed libraries, wrong deployed hash, initialization/inference stall, hard process cleanup and truncated/mismatched UART sessions. Software fixtures do not certify vendor runtime behavior.
-7. Perform the production multi-board sustained cohort and temperature/operating-point matrix, approve the resulting draft baseline explicitly, then verify repeated production runs/replay/reports.
+- 用真实 Android/OHOS SDK 交叉编译、核实设备 ABI 和动态加载依赖。
+- 在实际板卡核对 HDC/ADB、串口、波特率、relay 和部署哈希。
+- 用厂商 runtime/delegate 执行四类真实模型，并取得真实执行位置诊断。
+- 核实真实 NPU 温度、频率、利用率/功率接口和采样质量。
+- 在独立可信条件下生成 golden，做真实持续多板样本及审批。
+- 实机测试错误参考、库缺失、部署哈希错误、驱动/推理卡死、取消与清理、串口截断。
+- 完成实际七天用例运行、日志留存和周报。
 
-Null/fake-runtime passes are framework/protocol evidence only. No board-level NPU execution, full placement, AVS correctness, power savings, thermal qualification or completed production package is claimed by this change.
-
-Paired workload delivery commit: `855102877c5374c949935621007f6538a47106b2` on `codex/npu-monitor-protocol` (verification contract 2, NPU version 0.4.0). The Monitor commit containing this record is the matching integration revision.
+null/fake-runtime 是框架证据。尚无板端 NPU、完整算子放置、降压 Vmin、功耗收益或真实一周压测完成的结论。

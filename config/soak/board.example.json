@@ -1,0 +1,21 @@
+{
+  "board_id": "BOARD_A",
+  "device": "FILL_DEVICE_ID",
+  "pc_serial": "FILL_COM_OR_TTY",
+  "platform": "kirin9030",
+  "transport": "hdc",
+  "baudrate": 9600,
+  "available_targets": [
+    "cpu",
+    "gpu"
+  ],
+  "npu_delegate_ready": false,
+  "telemetry": true,
+  "frequency_note": "未锁频；如外部已锁频，请填写接口、期望频点与实测记录位置",
+  "golden_by_profile": {},
+  "baseline_by_profile": {},
+  "operator": "待填写",
+  "board_model": "待填写实际板卡/SoC",
+  "board_serial": "待填写",
+  "start_date": "待填写实际起始日期"
+}

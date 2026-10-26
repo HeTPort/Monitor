@@ -1,0 +1,5 @@
+
+$ ["/usr/bin/cc", "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror", "/mnt/d/Monitor-main/npu-monitor/native/uart_relay/avs_uart_relay.c", "-o", "/mnt/d/Monitor-main/npu-workload/build/unified/host/release/20261026T140121Z-b85962/relay/avs-uart-relay"]
+
+$ ["/mnt/d/Monitor-main/npu-workload/build/unified/host/release/20261026T140121Z-b85962/relay/avs-uart-relay", "--self-test"]
+{"relay":"avs-uart-relay","version":"1.0.1","self_test":true,"termios":true,"tcdrain":true}
