@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "name": "板卡压测方案",
+  "scope": "用例覆盖与运行稳定性观察，无调压/Vmin结论",
+  "stages": [
+    {
+      "主题": "接板与基础链路",
+      "cycles": 1,
+      "profiles": [
+        "cpu_smoke_kirin9030",
+        "gpu_smoke_kirin9030",
+        "npu_kws01_smoke"
+      ],
+      "stage": 1
+    },
+    {
+      "主题": "CPU 定向计算与内存",
+      "cycles": 1,
+      "profiles": [
+        "cpu_integer_qualification_kirin9030",
+        "cpu_floating_point_qualification_kirin9030",
+        "cpu_matrix_qualification_kirin9030",
+        "cpu_memory_qualification_kirin9030"
+      ],
+      "stage": 2
+    },
+    {
+      "主题": "GPU 强度和着色路径",
+      "cycles": 1,
+      "profiles": [
+        "gpu_load_light_kirin9030",
+        "gpu_load_mid_kirin9030",
+        "gpu_load_heavy_kirin9030",
+        "gpu_alu_qualification_kirin9030",
+        "gpu_sfu_qualification_kirin9030",
+        "gpu_texture_qualification_kirin9030",
+        "gpu_fill_qualification_kirin9030"
+      ],
+      "stage": 3
+    },
+    {
+      "主题": "四类 NPU 模型",
+      "cycles": 1,
+      "profiles": [
+        "npu_kws01_load",
+        "npu_ic01_load",
+        "npu_ad01_load",
+        "npu_sww01_load",
+        "cpu_qualification_kirin9030"
+      ],
+      "stage": 4
+    },
+    {
+      "主题": "升温和持续运行",
+      "cycles": 1,
+      "profiles": [
+        "cpu_thermal_qualification_kirin9030",
+        "gpu_thermal_kirin9030"
+      ],
+      "stage": 5
+    },
+    {
+      "主题": "高强度和突发",
+      "cycles": 1,
+      "profiles": [
+        "cpu_burst_qualification_kirin9030",
+        "cpu_stress_extreme_qualification_kirin9030",
+        "gpu_stress_extreme_kirin9030"
+      ],
+      "stage": 6
+    },
+    {
+      "主题": "回归与证据复核",
+      "cycles": 1,
+      "profiles": [
+        "cpu_smoke_kirin9030",
+        "gpu_smoke_kirin9030",
+        "cpu_qualification_kirin9030",
+        "gpu_qualification_kirin9030",
+        "npu_kws01_load"
+      ],
+      "stage": 7
+    }
+  ]
+}

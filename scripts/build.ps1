@@ -32,10 +32,10 @@ try {
         $ErrorActionPreference = $oldErrorActionPreference
         if ($LASTEXITCODE -ne 0) { throw "Unit tests failed" }
     }
-    if ($IncludeNpu) {
-        & $Python main.py validate --package --include-npu
-        if ($LASTEXITCODE -ne 0) { throw "NPU package validation failed; stage the device assets and runtime configuration." }
-    }
+    $packageArguments = @("main.py", "validate", "--package")
+    if ($IncludeNpu) { $packageArguments += "--include-npu" }
+    & $Python @packageArguments
+    if ($LASTEXITCODE -ne 0) { throw "Package validation failed; stage the required device assets and runtime configuration." }
     & $Python -c "import serial, yaml, PyInstaller"
     if ($LASTEXITCODE -ne 0) {
         throw "Packaging dependencies are missing. Install requirements-dev.txt into the selected Python environment."
@@ -50,6 +50,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed" }
     & (Join-Path $projectRoot "dist\vmin_judge.exe") --version
     if ($LASTEXITCODE -ne 0) { throw "Packaged executable smoke test failed" }
+    & (Join-Path $projectRoot "dist\vmin_judge.exe") stress validate-plan --plan (Join-Path $projectRoot "config\soak\stress.example.json")
+    if ($LASTEXITCODE -ne 0) { throw "Packaged stress command smoke test failed" }
 }
 finally {
     Pop-Location

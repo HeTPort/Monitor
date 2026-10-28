@@ -9,18 +9,6 @@
     "null"
   ],
   "dry_run": false,
-  "sources": {
-    "workload": {
-      "commit": "eed83c67645bddaf481b6fe6fdfb8a35455267e4",
-      "dirty": false,
-      "path": "D:\\Monitor-main\\npu-workload"
-    },
-    "monitor": {
-      "commit": "8ba26ace533645c7d4919eac6a825379393561a4",
-      "dirty": true,
-      "path": "D:\\Monitor-main\\npu-monitor"
-    }
-  },
   "tools": {
     "python": "3.12.14 (main, Aug 25 2026, 14:01:42) [MSC v.1944 64 bit (AMD64)]",
     "cxx": "D:\\Program Files\\msys\\ucrt64\\bin\\g++.EXE",
@@ -330,5 +318,6 @@
     }
   ],
   "started_at": "2026-10-26T14:01:06.902449+00:00",
-  "finished_at": "2026-10-26T14:03:16.377362+00:00"
+  "finished_at": "2026-10-26T14:03:16.377362+00:00",
+  "handoff_note": "交接副本省略开发来源字段；编译目标、命令、工具与产物哈希按实际记录保留。"
 }

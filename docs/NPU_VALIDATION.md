@@ -4,7 +4,7 @@
 
 ## 接入阶段基线与结果
 
-Monitor 以 `74bc567` 为基线，NPU 接入提交 `8ba26ac`；workload 以 `ccf431f` 为基线，NPU 协议提交 `8551028`。本次后续交接工作已将 GitHub CPU/GPU 协议分支 `5d6aca9` 合入同一 workload 源码树，不能继续把“CPU/GPU 源码未变化”作为当前合并后的描述。
+本阶段为 NPU 接入后的主机软件检查，后续公共接口和集中构建检查见中文交接验证记录。
 
 | 软件检查 | 实际结果 |
 |---|---|
@@ -16,9 +16,9 @@ Monitor 以 `74bc567` 为基线，NPU 接入提交 `8ba26ac`；workload 以 `ccf
 | 既有 Windows NPU smoke | 13 个用例通过，包含预期错误退出 |
 | manifest/tensor 原生契约 | 五个 manifest 通过，含 framework 夹具 |
 | 编译 | 主机 Windows g++ 和 WSL/Linux g++；无 Android/OHOS NDK |
-| 静态检查 | Python 编译、PowerShell 语法和 Git 空白检查通过 |
+| 静态检查 | Python 编译、PowerShell 语法和 文件空白检查通过 |
 
-原始日志保留于 docs/validation，不翻译 JSON 字段、错误码或原始文本。新集中入口补充统一源码的版本/产物 SHA 与构建日志。主机测试不能当作板端七天运行记录。
+原始日志保留于 docs/validation，不翻译 JSON 字段、错误码或原始文本。新集中入口补充统一源码的产物 SHA 与构建日志。主机测试不能当作板端压测记录。
 
 ## 已覆盖的软件边界
 
@@ -32,6 +32,6 @@ Monitor 以 `74bc567` 为基线，NPU 接入提交 `8ba26ac`；workload 以 `ccf
 - 核实真实 NPU 温度、频率、利用率/功率接口和采样质量。
 - 在独立可信条件下生成 golden，做真实持续多板样本及审批。
 - 实机测试错误参考、库缺失、部署哈希错误、驱动/推理卡死、取消与清理、串口截断。
-- 完成实际七天用例运行、日志留存和周报。
+- 完成实际用例运行、日志留存和压测汇总。
 
-null/fake-runtime 是框架证据。尚无板端 NPU、完整算子放置、降压 Vmin、功耗收益或真实一周压测完成的结论。
+null/fake-runtime 是框架证据。尚无板端 NPU、完整算子放置、降压 Vmin、功耗收益或真实板端压测完成的结论。

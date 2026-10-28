@@ -4,8 +4,8 @@
       "名称": "cpu_burst_qualification_kirin9030",
       "目标": "CPU",
       "平台模板": "kirin9030",
-      "用例原理": "整数浮点矩阵内存混合突发",
-      "原理说明": "按混合后端组合执行多类确定性计算，提高多种路径的活动量。 活跃/休眠交替，观察负载切换。",
+      "用例原理": "整数浮点访存混合突发",
+      "原理说明": "MixedKernel 在同一循环交织 uint64 线性递推、位移/异或、状态索引的数组读写与两个 double 的乘加。结束时取最多 32 个数组样本和浮点位模式形成 checksum。它直接实现混合核，没有依次调用整数、浮点、矩阵、内存四个后端。",
       "后端或API": "mixed",
       "模型或shader": "burst",
       "测量秒数": 120,
@@ -15,7 +15,7 @@
       "校验与用途": "checksum；外部 golden 才提供已批准参考",
       "边界与注意事项": "实际功耗与瓶颈需测量，名称不证明最大功耗。",
       "配置文件": "config/workloads/cpu_burst_qualification_kirin9030.json",
-      "源码依据": "cpuworkload/src/profile.cpp; cpuworkload/src/runner.cpp"
+      "源码依据": "cpuworkload/src/backends/mixed/mixed_backend.cpp; cpuworkload/src/runner.cpp"
     },
     {
       "名称": "cpu_floating_point_qualification_kirin9030",
@@ -32,7 +32,7 @@
       "校验与用途": "checksum；外部 golden 才提供已批准参考",
       "边界与注意事项": "编译器可优化代码，但没有显式承诺 SIMD/FMA 指令。",
       "配置文件": "config/workloads/cpu_floating_point_qualification_kirin9030.json",
-      "源码依据": "cpuworkload/src/profile.cpp; cpuworkload/src/runner.cpp"
+      "源码依据": "cpuworkload/src/backends/floating_point/floating_point_backend.cpp; cpuworkload/src/runner.cpp"
     },
     {
       "名称": "cpu_idle_control_kirin9030",
@@ -49,7 +49,7 @@
       "校验与用途": "仅显式错误/超时判定，不证明正确性",
       "边界与注意事项": "不能作为持续计算压力或低功耗状态已进入的证明。",
       "配置文件": "config/workloads/cpu_idle_control_kirin9030.json",
-      "源码依据": "cpuworkload/src/profile.cpp; cpuworkload/src/runner.cpp"
+      "源码依据": "cpuworkload/src/backends/null/null_backend.cpp; cpuworkload/src/runner.cpp"
     },
     {
       "名称": "cpu_integer_qualification_kirin9030",
@@ -66,7 +66,7 @@
       "校验与用途": "checksum；外部 golden 才提供已批准参考",
       "边界与注意事项": "主要观察整数执行路径；不保证特定指令端口或 NEON 覆盖。",
       "配置文件": "config/workloads/cpu_integer_qualification_kirin9030.json",
-      "源码依据": "cpuworkload/src/profile.cpp; cpuworkload/src/runner.cpp"
+      "源码依据": "cpuworkload/src/backends/integer/integer_backend.cpp; cpuworkload/src/runner.cpp"
     },
     {
       "名称": "cpu_matrix_qualification_kirin9030",
@@ -83,7 +83,7 @@
       "校验与用途": "checksum；外部 golden 才提供已批准参考",
       "边界与注意事项": "属于软件矩阵核，不等于专用矩阵指令或 NPU 负载。",
       "配置文件": "config/workloads/cpu_matrix_qualification_kirin9030.json",
-      "源码依据": "cpuworkload/src/profile.cpp; cpuworkload/src/runner.cpp"
+      "源码依据": "cpuworkload/src/backends/matrix/matrix_backend.cpp; cpuworkload/src/runner.cpp"
     },
     {
       "名称": "cpu_memory_qualification_kirin9030",
@@ -100,14 +100,14 @@
       "校验与用途": "checksum；外部 golden 才提供已批准参考",
       "边界与注意事项": "改变工作集可改变缓存/内存压力；不是完整 DRAM 故障测试。",
       "配置文件": "config/workloads/cpu_memory_qualification_kirin9030.json",
-      "源码依据": "cpuworkload/src/profile.cpp; cpuworkload/src/runner.cpp"
+      "源码依据": "cpuworkload/src/backends/memory/memory_backend.cpp; cpuworkload/src/runner.cpp"
     },
     {
       "名称": "cpu_mixed_big4",
       "目标": "CPU",
       "平台模板": "kirin9020",
-      "用例原理": "整数浮点矩阵内存混合",
-      "原理说明": "按混合后端组合执行多类确定性计算，提高多种路径的活动量。",
+      "用例原理": "整数浮点访存混合",
+      "原理说明": "MixedKernel 在同一循环交织 uint64 线性递推、位移/异或、状态索引的数组读写与两个 double 的乘加。结束时取最多 32 个数组样本和浮点位模式形成 checksum。它直接实现混合核，没有依次调用整数、浮点、矩阵、内存四个后端。",
       "后端或API": "mixed",
       "模型或shader": "mixed",
       "测量秒数": 60,
@@ -117,14 +117,14 @@
       "校验与用途": "checksum；外部 golden 才提供已批准参考",
       "边界与注意事项": "实际功耗与瓶颈需测量，名称不证明最大功耗。",
       "配置文件": "config/workloads/cpu_mixed_big4.json",
-      "源码依据": "cpuworkload/src/profile.cpp; cpuworkload/src/runner.cpp"
+      "源码依据": "cpuworkload/src/backends/mixed/mixed_backend.cpp; cpuworkload/src/runner.cpp"
     },
     {
       "名称": "cpu_qualification_kirin9030",
       "目标": "CPU",
       "平台模板": "kirin9030",
-      "用例原理": "整数浮点矩阵内存混合",
-      "原理说明": "按混合后端组合执行多类确定性计算，提高多种路径的活动量。",
+      "用例原理": "整数浮点访存混合",
+      "原理说明": "MixedKernel 在同一循环交织 uint64 线性递推、位移/异或、状态索引的数组读写与两个 double 的乘加。结束时取最多 32 个数组样本和浮点位模式形成 checksum。它直接实现混合核，没有依次调用整数、浮点、矩阵、内存四个后端。",
       "后端或API": "mixed",
       "模型或shader": "mixed",
       "测量秒数": 60,
@@ -134,14 +134,14 @@
       "校验与用途": "checksum；外部 golden 才提供已批准参考",
       "边界与注意事项": "实际功耗与瓶颈需测量，名称不证明最大功耗。",
       "配置文件": "config/workloads/cpu_qualification_kirin9030.json",
-      "源码依据": "cpuworkload/src/profile.cpp; cpuworkload/src/runner.cpp"
+      "源码依据": "cpuworkload/src/backends/mixed/mixed_backend.cpp; cpuworkload/src/runner.cpp"
     },
     {
       "名称": "cpu_smoke_kirin9030",
       "目标": "CPU",
       "平台模板": "kirin9030",
-      "用例原理": "整数浮点矩阵内存混合",
-      "原理说明": "按混合后端组合执行多类确定性计算，提高多种路径的活动量。",
+      "用例原理": "整数浮点访存混合",
+      "原理说明": "MixedKernel 在同一循环交织 uint64 线性递推、位移/异或、状态索引的数组读写与两个 double 的乘加。结束时取最多 32 个数组样本和浮点位模式形成 checksum。它直接实现混合核，没有依次调用整数、浮点、矩阵、内存四个后端。",
       "后端或API": "mixed",
       "模型或shader": "mixed",
       "测量秒数": 10,
@@ -151,14 +151,14 @@
       "校验与用途": "仅显式错误/超时判定，不证明正确性",
       "边界与注意事项": "实际功耗与瓶颈需测量，名称不证明最大功耗。",
       "配置文件": "config/workloads/cpu_smoke.json",
-      "源码依据": "cpuworkload/src/profile.cpp; cpuworkload/src/runner.cpp"
+      "源码依据": "cpuworkload/src/backends/mixed/mixed_backend.cpp; cpuworkload/src/runner.cpp"
     },
     {
       "名称": "cpu_stress_extreme_qualification_kirin9030",
       "目标": "CPU",
       "平台模板": "kirin9030",
-      "用例原理": "整数浮点矩阵内存混合高强度",
-      "原理说明": "按混合后端组合执行多类确定性计算，提高多种路径的活动量。 提高迭代次数、分辨率或工作集。",
+      "用例原理": "整数浮点访存混合高强度",
+      "原理说明": "MixedKernel 在同一循环交织 uint64 线性递推、位移/异或、状态索引的数组读写与两个 double 的乘加。结束时取最多 32 个数组样本和浮点位模式形成 checksum。它直接实现混合核，没有依次调用整数、浮点、矩阵、内存四个后端。",
       "后端或API": "mixed",
       "模型或shader": "stress_extreme",
       "测量秒数": 120,
@@ -168,14 +168,14 @@
       "校验与用途": "checksum；外部 golden 才提供已批准参考",
       "边界与注意事项": "实际功耗与瓶颈需测量，名称不证明最大功耗。",
       "配置文件": "config/workloads/cpu_stress_extreme_qualification_kirin9030.json",
-      "源码依据": "cpuworkload/src/profile.cpp; cpuworkload/src/runner.cpp"
+      "源码依据": "cpuworkload/src/backends/mixed/mixed_backend.cpp; cpuworkload/src/runner.cpp"
     },
     {
       "名称": "cpu_stress_kirin9030",
       "目标": "CPU",
       "平台模板": "kirin9030",
-      "用例原理": "整数浮点矩阵内存混合",
-      "原理说明": "按混合后端组合执行多类确定性计算，提高多种路径的活动量。",
+      "用例原理": "整数浮点访存混合",
+      "原理说明": "MixedKernel 在同一循环交织 uint64 线性递推、位移/异或、状态索引的数组读写与两个 double 的乘加。结束时取最多 32 个数组样本和浮点位模式形成 checksum。它直接实现混合核，没有依次调用整数、浮点、矩阵、内存四个后端。",
       "后端或API": "mixed",
       "模型或shader": "mixed",
       "测量秒数": 60,
@@ -185,14 +185,14 @@
       "校验与用途": "仅显式错误/超时判定，不证明正确性",
       "边界与注意事项": "实际功耗与瓶颈需测量，名称不证明最大功耗。",
       "配置文件": "config/workloads/cpu_stress.json",
-      "源码依据": "cpuworkload/src/profile.cpp; cpuworkload/src/runner.cpp"
+      "源码依据": "cpuworkload/src/backends/mixed/mixed_backend.cpp; cpuworkload/src/runner.cpp"
     },
     {
       "名称": "cpu_thermal_qualification_kirin9030",
       "目标": "CPU",
       "平台模板": "kirin9030",
-      "用例原理": "整数浮点矩阵内存混合持续升温",
-      "原理说明": "按混合后端组合执行多类确定性计算，提高多种路径的活动量。 延长持续执行时间观察温度、频率和吞吐随时间变化。",
+      "用例原理": "整数浮点访存混合持续升温",
+      "原理说明": "MixedKernel 在同一循环交织 uint64 线性递推、位移/异或、状态索引的数组读写与两个 double 的乘加。结束时取最多 32 个数组样本和浮点位模式形成 checksum。它直接实现混合核，没有依次调用整数、浮点、矩阵、内存四个后端。",
       "后端或API": "mixed",
       "模型或shader": "thermal",
       "测量秒数": 600,
@@ -202,7 +202,7 @@
       "校验与用途": "checksum；外部 golden 才提供已批准参考",
       "边界与注意事项": "实际功耗与瓶颈需测量，名称不证明最大功耗。",
       "配置文件": "config/workloads/cpu_thermal_qualification_kirin9030.json",
-      "源码依据": "cpuworkload/src/profile.cpp; cpuworkload/src/runner.cpp"
+      "源码依据": "cpuworkload/src/backends/mixed/mixed_backend.cpp; cpuworkload/src/runner.cpp"
     },
     {
       "名称": "gpu_alu_qualification_kirin9030",
@@ -219,7 +219,7 @@
       "校验与用途": "严格图像 golden；必须为同一配置单独生成",
       "边界与注意事项": "Monitor Vulkan 配置使用 offscreen 图形路径。",
       "配置文件": "config/workloads/gpu_alu_qualification_kirin9030.json",
-      "源码依据": "gpuworkload/src/profile.cpp; gpuworkload/shaders/vulkan/workload.frag"
+      "源码依据": "gpuworkload/shaders/vulkan/workload.frag; gpuworkload/src/backends/vulkan/vulkan_graphics_backend.cpp"
     },
     {
       "名称": "gpu_fill_qualification_kirin9030",
@@ -236,7 +236,7 @@
       "校验与用途": "严格图像 golden；必须为同一配置单独生成",
       "边界与注意事项": "该 shader 不使用 iterations；不能通过调 iterations 增强填充负载。",
       "配置文件": "config/workloads/gpu_fill_qualification_kirin9030.json",
-      "源码依据": "gpuworkload/src/profile.cpp; gpuworkload/shaders/vulkan/workload.frag"
+      "源码依据": "gpuworkload/shaders/vulkan/workload.frag; gpuworkload/src/backends/vulkan/vulkan_graphics_backend.cpp"
     },
     {
       "名称": "gpu_load_heavy_kirin9030",
@@ -253,7 +253,7 @@
       "校验与用途": "仅显式错误/超时判定，不证明正确性",
       "边界与注意事项": "game_light/mid/heavy 是参数预设，不是实际游戏。",
       "配置文件": "config/workloads/gpu_load_heavy_kirin9030.json",
-      "源码依据": "gpuworkload/src/profile.cpp; gpuworkload/shaders/vulkan/workload.frag"
+      "源码依据": "gpuworkload/shaders/vulkan/workload.frag; gpuworkload/src/backends/vulkan/vulkan_graphics_backend.cpp"
     },
     {
       "名称": "gpu_load_light_kirin9030",
@@ -270,7 +270,7 @@
       "校验与用途": "仅显式错误/超时判定，不证明正确性",
       "边界与注意事项": "game_light/mid/heavy 是参数预设，不是实际游戏。",
       "配置文件": "config/workloads/gpu_load_light_kirin9030.json",
-      "源码依据": "gpuworkload/src/profile.cpp; gpuworkload/shaders/vulkan/workload.frag"
+      "源码依据": "gpuworkload/shaders/vulkan/workload.frag; gpuworkload/src/backends/vulkan/vulkan_graphics_backend.cpp"
     },
     {
       "名称": "gpu_load_mid_kirin9030",
@@ -287,7 +287,7 @@
       "校验与用途": "仅显式错误/超时判定，不证明正确性",
       "边界与注意事项": "game_light/mid/heavy 是参数预设，不是实际游戏。",
       "配置文件": "config/workloads/gpu_load_mid_kirin9030.json",
-      "源码依据": "gpuworkload/src/profile.cpp; gpuworkload/shaders/vulkan/workload.frag"
+      "源码依据": "gpuworkload/shaders/vulkan/workload.frag; gpuworkload/src/backends/vulkan/vulkan_graphics_backend.cpp"
     },
     {
       "名称": "gpu_qualification_kirin9030",
@@ -304,7 +304,7 @@
       "校验与用途": "严格图像 golden；必须为同一配置单独生成",
       "边界与注意事项": "game_light/mid/heavy 是参数预设，不是实际游戏。",
       "配置文件": "config/workloads/gpu_qualification_kirin9030.json",
-      "源码依据": "gpuworkload/src/profile.cpp; gpuworkload/shaders/vulkan/workload.frag"
+      "源码依据": "gpuworkload/shaders/vulkan/workload.frag; gpuworkload/src/backends/vulkan/vulkan_graphics_backend.cpp"
     },
     {
       "名称": "gpu_sfu_qualification_kirin9030",
@@ -321,7 +321,7 @@
       "校验与用途": "严格图像 golden；必须为同一配置单独生成",
       "边界与注意事项": "观察超越函数路径，不直接证明某个硬件 SFU 单元覆盖率。",
       "配置文件": "config/workloads/gpu_sfu_qualification_kirin9030.json",
-      "源码依据": "gpuworkload/src/profile.cpp; gpuworkload/shaders/vulkan/workload.frag"
+      "源码依据": "gpuworkload/shaders/vulkan/workload.frag; gpuworkload/src/backends/vulkan/vulkan_graphics_backend.cpp"
     },
     {
       "名称": "gpu_smoke_kirin9030",
@@ -338,7 +338,7 @@
       "校验与用途": "仅显式错误/超时判定，不证明正确性",
       "边界与注意事项": "game_light/mid/heavy 是参数预设，不是实际游戏。",
       "配置文件": "config/workloads/gpu_smoke.json",
-      "源码依据": "gpuworkload/src/profile.cpp; gpuworkload/shaders/vulkan/workload.frag"
+      "源码依据": "gpuworkload/shaders/vulkan/workload.frag; gpuworkload/src/backends/vulkan/vulkan_graphics_backend.cpp"
     },
     {
       "名称": "gpu_stress_extreme_kirin9030",
@@ -355,7 +355,7 @@
       "校验与用途": "仅显式错误/超时判定，不证明正确性",
       "边界与注意事项": "game_light/mid/heavy 是参数预设，不是实际游戏。",
       "配置文件": "config/workloads/gpu_stress_extreme_kirin9030.json",
-      "源码依据": "gpuworkload/src/profile.cpp; gpuworkload/shaders/vulkan/workload.frag"
+      "源码依据": "gpuworkload/shaders/vulkan/workload.frag; gpuworkload/src/backends/vulkan/vulkan_graphics_backend.cpp"
     },
     {
       "名称": "gpu_stress_kirin9030",
@@ -372,7 +372,7 @@
       "校验与用途": "仅显式错误/超时判定，不证明正确性",
       "边界与注意事项": "game_light/mid/heavy 是参数预设，不是实际游戏。",
       "配置文件": "config/workloads/gpu_stress.json",
-      "源码依据": "gpuworkload/src/profile.cpp; gpuworkload/shaders/vulkan/workload.frag"
+      "源码依据": "gpuworkload/shaders/vulkan/workload.frag; gpuworkload/src/backends/vulkan/vulkan_graphics_backend.cpp"
     },
     {
       "名称": "gpu_texture_qualification_kirin9030",
@@ -389,7 +389,7 @@
       "校验与用途": "严格图像 golden；必须为同一配置单独生成",
       "边界与注意事项": "texture_count 在该实现中是重复采样倍率，不是独立纹理对象数。compute/OpenCL texture_like 不等同此路径。",
       "配置文件": "config/workloads/gpu_texture_qualification_kirin9030.json",
-      "源码依据": "gpuworkload/src/profile.cpp; gpuworkload/shaders/vulkan/workload.frag"
+      "源码依据": "gpuworkload/shaders/vulkan/workload.frag; gpuworkload/src/backends/vulkan/vulkan_graphics_backend.cpp"
     },
     {
       "名称": "gpu_thermal_kirin9030",
@@ -406,7 +406,7 @@
       "校验与用途": "仅显式错误/超时判定，不证明正确性",
       "边界与注意事项": "game_light/mid/heavy 是参数预设，不是实际游戏。",
       "配置文件": "config/workloads/gpu_thermal_kirin9030.json",
-      "源码依据": "gpuworkload/src/profile.cpp; gpuworkload/shaders/vulkan/workload.frag"
+      "源码依据": "gpuworkload/shaders/vulkan/workload.frag; gpuworkload/src/backends/vulkan/vulkan_graphics_backend.cpp"
     },
     {
       "名称": "gpu_vulkan_mixed",
@@ -423,7 +423,7 @@
       "校验与用途": "严格图像 golden；必须为同一配置单独生成",
       "边界与注意事项": "game_light/mid/heavy 是参数预设，不是实际游戏。",
       "配置文件": "config/workloads/gpu_vulkan_mixed.json",
-      "源码依据": "gpuworkload/src/profile.cpp; gpuworkload/shaders/vulkan/workload.frag"
+      "源码依据": "gpuworkload/shaders/vulkan/workload.frag; gpuworkload/src/backends/vulkan/vulkan_graphics_backend.cpp"
     },
     {
       "名称": "npu_ad01_load",
@@ -440,7 +440,7 @@
       "校验与用途": "checksum；外部 golden 才提供已批准参考",
       "边界与注意事项": "没有独立计算数据集异常检测精度或阈值指标。",
       "配置文件": "config/workloads/npu_ad01_load.json",
-      "源码依据": "npuworkload/src/profile.cpp; npuworkload/src/runner.cpp"
+      "源码依据": "npuworkload/profiles/ad01/manifest.json; npuworkload/src/backends/tflite_delegate/tflite_delegate_backend.cpp"
     },
     {
       "名称": "npu_ad01_qualification",
@@ -457,7 +457,7 @@
       "校验与用途": "checksum；外部 golden 才提供已批准参考",
       "边界与注意事项": "没有独立计算数据集异常检测精度或阈值指标。",
       "配置文件": "config/workloads/npu_ad01_qualification.json",
-      "源码依据": "npuworkload/src/profile.cpp; npuworkload/src/runner.cpp"
+      "源码依据": "npuworkload/profiles/ad01/manifest.json; npuworkload/src/backends/tflite_delegate/tflite_delegate_backend.cpp"
     },
     {
       "名称": "npu_ad01_smoke",
@@ -474,7 +474,7 @@
       "校验与用途": "框架/资产检查，不执行 NPU",
       "边界与注意事项": "没有独立计算数据集异常检测精度或阈值指标。 null 后端仅为框架检查。",
       "配置文件": "config/workloads/npu_ad01_smoke.json",
-      "源码依据": "npuworkload/src/profile.cpp; npuworkload/src/runner.cpp"
+      "源码依据": "npuworkload/profiles/ad01/manifest.json; npuworkload/src/backends/tflite_delegate/tflite_delegate_backend.cpp"
     },
     {
       "名称": "npu_ic01_load",
@@ -491,7 +491,7 @@
       "校验与用途": "checksum；外部 golden 才提供已批准参考",
       "边界与注意事项": "输入为模型边界张量，不含摄像头/图像解码链路。",
       "配置文件": "config/workloads/npu_ic01_load.json",
-      "源码依据": "npuworkload/src/profile.cpp; npuworkload/src/runner.cpp"
+      "源码依据": "npuworkload/profiles/ic01/manifest.json; npuworkload/src/backends/tflite_delegate/tflite_delegate_backend.cpp"
     },
     {
       "名称": "npu_ic01_qualification",
@@ -508,7 +508,7 @@
       "校验与用途": "checksum；外部 golden 才提供已批准参考",
       "边界与注意事项": "输入为模型边界张量，不含摄像头/图像解码链路。",
       "配置文件": "config/workloads/npu_ic01_qualification.json",
-      "源码依据": "npuworkload/src/profile.cpp; npuworkload/src/runner.cpp"
+      "源码依据": "npuworkload/profiles/ic01/manifest.json; npuworkload/src/backends/tflite_delegate/tflite_delegate_backend.cpp"
     },
     {
       "名称": "npu_ic01_smoke",
@@ -525,7 +525,7 @@
       "校验与用途": "框架/资产检查，不执行 NPU",
       "边界与注意事项": "输入为模型边界张量，不含摄像头/图像解码链路。 null 后端仅为框架检查。",
       "配置文件": "config/workloads/npu_ic01_smoke.json",
-      "源码依据": "npuworkload/src/profile.cpp; npuworkload/src/runner.cpp"
+      "源码依据": "npuworkload/profiles/ic01/manifest.json; npuworkload/src/backends/tflite_delegate/tflite_delegate_backend.cpp"
     },
     {
       "名称": "npu_kws01_load",
@@ -542,7 +542,7 @@
       "校验与用途": "checksum；外部 golden 才提供已批准参考",
       "边界与注意事项": "不含实时采音/MFCC 生成，不做关键词数据集准确率认证。",
       "配置文件": "config/workloads/npu_kws01_load.json",
-      "源码依据": "npuworkload/src/profile.cpp; npuworkload/src/runner.cpp"
+      "源码依据": "npuworkload/profiles/kws01/manifest.json; npuworkload/src/backends/tflite_delegate/tflite_delegate_backend.cpp"
     },
     {
       "名称": "npu_kws01_qualification",
@@ -559,7 +559,7 @@
       "校验与用途": "checksum；外部 golden 才提供已批准参考",
       "边界与注意事项": "不含实时采音/MFCC 生成，不做关键词数据集准确率认证。",
       "配置文件": "config/workloads/npu_kws01_qualification.json",
-      "源码依据": "npuworkload/src/profile.cpp; npuworkload/src/runner.cpp"
+      "源码依据": "npuworkload/profiles/kws01/manifest.json; npuworkload/src/backends/tflite_delegate/tflite_delegate_backend.cpp"
     },
     {
       "名称": "npu_kws01_smoke",
@@ -576,7 +576,7 @@
       "校验与用途": "框架/资产检查，不执行 NPU",
       "边界与注意事项": "不含实时采音/MFCC 生成，不做关键词数据集准确率认证。 null 后端仅为框架检查。",
       "配置文件": "config/workloads/npu_kws01_smoke.json",
-      "源码依据": "npuworkload/src/profile.cpp; npuworkload/src/runner.cpp"
+      "源码依据": "npuworkload/profiles/kws01/manifest.json; npuworkload/src/backends/tflite_delegate/tflite_delegate_backend.cpp"
     },
     {
       "名称": "npu_sww01_load",
@@ -593,7 +593,7 @@
       "校验与用途": "checksum；外部 golden 才提供已批准参考",
       "边界与注意事项": "不等于连续音频流的完整唤醒系统。",
       "配置文件": "config/workloads/npu_sww01_load.json",
-      "源码依据": "npuworkload/src/profile.cpp; npuworkload/src/runner.cpp"
+      "源码依据": "npuworkload/profiles/sww01/manifest.json; npuworkload/src/backends/tflite_delegate/tflite_delegate_backend.cpp"
     },
     {
       "名称": "npu_sww01_qualification",
@@ -610,7 +610,7 @@
       "校验与用途": "checksum；外部 golden 才提供已批准参考",
       "边界与注意事项": "不等于连续音频流的完整唤醒系统。",
       "配置文件": "config/workloads/npu_sww01_qualification.json",
-      "源码依据": "npuworkload/src/profile.cpp; npuworkload/src/runner.cpp"
+      "源码依据": "npuworkload/profiles/sww01/manifest.json; npuworkload/src/backends/tflite_delegate/tflite_delegate_backend.cpp"
     },
     {
       "名称": "npu_sww01_smoke",
@@ -627,7 +627,7 @@
       "校验与用途": "框架/资产检查，不执行 NPU",
       "边界与注意事项": "不等于连续音频流的完整唤醒系统。 null 后端仅为框架检查。",
       "配置文件": "config/workloads/npu_sww01_smoke.json",
-      "源码依据": "npuworkload/src/profile.cpp; npuworkload/src/runner.cpp"
+      "源码依据": "npuworkload/profiles/sww01/manifest.json; npuworkload/src/backends/tflite_delegate/tflite_delegate_backend.cpp"
     }
   ],
   "principles": [
@@ -635,103 +635,120 @@
       "key": "cpu:integer",
       "原理": "64 位整数混合运算",
       "实现": "加法、异或、位移旋转和乘法构成确定性运算链；循环输出 checksum。",
-      "限制": "主要观察整数执行路径；不保证特定指令端口或 NEON 覆盖。"
+      "限制": "主要观察整数执行路径；不保证特定指令端口或 NEON 覆盖。",
+      "源码": "cpuworkload/src/backends/integer/integer_backend.cpp"
     },
     {
       "key": "cpu:floating_point",
       "原理": "标量双精度浮点运算",
       "实现": "循环执行 double 乘加、差分与数值范围调整，再对结果位模式计算 checksum。",
-      "限制": "编译器可优化代码，但没有显式承诺 SIMD/FMA 指令。"
+      "限制": "编译器可优化代码，但没有显式承诺 SIMD/FMA 指令。",
+      "源码": "cpuworkload/src/backends/floating_point/floating_point_backend.cpp"
     },
     {
       "key": "cpu:matrix",
       "原理": "确定性矩阵乘法",
       "实现": "三重循环执行矩阵乘加，输入由种子生成，结果映射为 checksum。",
-      "限制": "属于软件矩阵核，不等于专用矩阵指令或 NPU 负载。"
+      "限制": "属于软件矩阵核，不等于专用矩阵指令或 NPU 负载。",
+      "源码": "cpuworkload/src/backends/matrix/matrix_backend.cpp"
     },
     {
       "key": "cpu:memory",
       "原理": "工作集随机读写",
       "实现": "种子生成工作集，根据状态选择索引，读改写并抽样归并 checksum。",
-      "限制": "改变工作集可改变缓存/内存压力；不是完整 DRAM 故障测试。"
+      "限制": "改变工作集可改变缓存/内存压力；不是完整 DRAM 故障测试。",
+      "源码": "cpuworkload/src/backends/memory/memory_backend.cpp"
     },
     {
       "key": "cpu:mixed",
-      "原理": "整数浮点矩阵内存混合",
-      "实现": "按混合后端组合执行多类确定性计算，提高多种路径的活动量。",
-      "限制": "实际功耗与瓶颈需测量，名称不证明最大功耗。"
+      "原理": "整数、浮点与随机访存混合",
+      "实现": "同一循环交织整数递推、double 乘加与状态驱动的数组读改写；尾部合并数组样本与浮点位模式。",
+      "限制": "不调用矩阵后端，不能代替独立 matrix 用例；不保证最大功耗。",
+      "源码": "cpuworkload/src/backends/mixed/mixed_backend.cpp"
     },
     {
       "key": "cpu:null",
       "原理": "空闲或框架对照",
       "实现": "不执行真实计算后端，用于心跳、调度及日志链路检查。",
-      "限制": "不能作为持续计算压力或低功耗状态已进入的证明。"
+      "限制": "不能作为持续计算压力或低功耗状态已进入的证明。",
+      "源码": "cpuworkload/src/backends/null/null_backend.cpp"
     },
     {
       "key": "gpu:alu",
       "原理": "片段着色器算术",
       "实现": "每像素循环进行向量乘加、fract 和分量混合。",
-      "限制": "Monitor Vulkan 配置使用 offscreen 图形路径。"
+      "限制": "Monitor Vulkan 配置使用 offscreen 图形路径。",
+      "源码": "gpuworkload/shaders/vulkan/workload.frag"
     },
     {
       "key": "gpu:sfu",
       "原理": "片段着色器超越函数",
       "实现": "循环 sin/cos 运算形成持续着色计算。",
-      "限制": "观察超越函数路径，不直接证明某个硬件 SFU 单元覆盖率。"
+      "限制": "观察超越函数路径，不直接证明某个硬件 SFU 单元覆盖率。",
+      "源码": "gpuworkload/shaders/vulkan/workload.frag"
     },
     {
       "key": "gpu:texture",
       "原理": "真实纹理采样",
       "实现": "离屏片段着色器按偏移重复 texture() 采样并累加。",
-      "限制": "texture_count 在该实现中是重复采样倍率，不是独立纹理对象数。compute/OpenCL texture_like 不等同此路径。"
+      "限制": "texture_count 在该实现中是重复采样倍率，不是独立纹理对象数。compute/OpenCL texture_like 不等同此路径。",
+      "源码": "gpuworkload/shaders/vulkan/workload.frag"
     },
     {
       "key": "gpu:fill",
       "原理": "填充和渲染目标写入",
       "实现": "简单片段输出写入离屏 RGBA8 渲染目标，以分辨率改变工作量。",
-      "限制": "该 shader 不使用 iterations；不能通过调 iterations 增强填充负载。"
+      "限制": "该 shader 不使用 iterations；不能通过调 iterations 增强填充负载。",
+      "源码": "gpuworkload/shaders/vulkan/workload.frag"
     },
     {
       "key": "gpu:mixed",
       "原理": "图形算术纹理混合",
       "实现": "片段着色器同时进行算术迭代、坐标扰动与纹理采样。",
-      "限制": "game_light/mid/heavy 是参数预设，不是实际游戏。"
+      "限制": "game_light/mid/heavy 是参数预设，不是实际游戏。",
+      "源码": "gpuworkload/shaders/vulkan/workload.frag"
     },
     {
       "key": "gpu:none",
       "原理": "空闲或框架对照",
       "实现": "原生 null/idle 主要验证程序及事件链路。",
-      "限制": "Vulkan 实际后端不支持 idle/burst/分数占空比，不应宣称真实 GPU 休眠。"
+      "限制": "Vulkan 实际后端不支持 idle/burst/分数占空比，不应宣称真实 GPU 休眠。",
+      "源码": "gpuworkload/src/backends/null/null_backend.cpp"
     },
     {
       "key": "npu:kws01",
       "原理": "关键词识别模型推理",
       "实现": "固定 INT8 MFCC 特征 [1,49,10,1] 输入，得到 [1,12] 分类输出，重复提交同一模型。",
-      "限制": "不含实时采音/MFCC 生成，不做关键词数据集准确率认证。"
+      "限制": "不含实时采音/MFCC 生成，不做关键词数据集准确率认证。",
+      "源码": "npuworkload/profiles/kws01/manifest.json"
     },
     {
       "key": "npu:ic01",
       "原理": "图像分类模型推理",
       "实现": "固定 INT8 [1,32,32,3] 输入，得到 [1,10] 输出，重复进行模型调用。",
-      "限制": "输入为模型边界张量，不含摄像头/图像解码链路。"
+      "限制": "输入为模型边界张量，不含摄像头/图像解码链路。",
+      "源码": "npuworkload/profiles/ic01/manifest.json"
     },
     {
       "key": "npu:ad01",
       "原理": "异常检测模型推理",
       "实现": "INT8 [1,640] 输入与 [1,640] 输出，重复执行模型并校验输出字节。",
-      "限制": "没有独立计算数据集异常检测精度或阈值指标。"
+      "限制": "没有独立计算数据集异常检测精度或阈值指标。",
+      "源码": "npuworkload/profiles/ad01/manifest.json"
     },
     {
       "key": "npu:sww01",
       "原理": "唤醒词单窗口模型推理",
       "实现": "INT8 [1,30,1,40] 单窗口输入，得到 [1,3] 输出。",
-      "限制": "不等于连续音频流的完整唤醒系统。"
+      "限制": "不等于连续音频流的完整唤醒系统。",
+      "源码": "npuworkload/profiles/sww01/manifest.json"
     },
     {
       "key": "npu:framework_smoke",
       "原理": "多张量框架夹具",
       "实现": "null/reference_cpu 提供确定性输出，验证生命周期、事件及超时路径。",
-      "限制": "不执行真实 NPU 模型，不能计入有效 NPU 压力时长。"
+      "限制": "不执行真实 NPU 模型，不能计入有效 NPU 压力时长。",
+      "源码": "npuworkload/profiles/framework_smoke/manifest.json"
     }
   ]
 }

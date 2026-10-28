@@ -399,6 +399,9 @@ Examples:
     report_parser.add_argument('--run-dir', required=True)
     report_parser.add_argument('--format', default='markdown,json', metavar='FORMATS', help='Comma-separated subset of markdown,json,csv')
 
+    from src.stress import configure_parser
+    configure_parser(subparsers.add_parser("stress", help="Run staged stress plans and collect evidence"))
+
     return parser
 
 
@@ -551,6 +554,10 @@ def main():
     if not args.command:
         parser.print_help()
         return 0
+
+    if args.command == "stress":
+        from src.stress import command
+        return command(args, runtime_paths)
 
     from src.cli_commands import (
         cmd_baseline as cmd_baseline_v2,

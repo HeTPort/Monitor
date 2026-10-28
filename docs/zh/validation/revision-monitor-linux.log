@@ -1,0 +1,15 @@
+warning: smoke is deprecated; use run with the same short profile
+Cannot use PC serial port COM9: Access is denied: port is busy
+Device UART write failed on /dev/ttyS2: remote write failed
+----------------------------------------------------------------------
+Ran 190 tests in 135.942s
+
+OK
+/tmp/tmps8q07ktv/summary/压测汇总.md
+SKIP npu_kws01_load: 板卡未声明支持该 target
+已存在失败/跳过记录：cpu_qualification_kirin9030；重试请显式 --retry-failed
+SKIP npu_kws01_load: 板卡未声明支持该 target
+续跑跳过已完成且证据完整项：cpu_qualification_kirin9030 cycle=1
+/tmp/tmpflwthvfe/summary/压测汇总.md
+/tmp/tmpddrbhiih/summary/压测汇总.md
+/tmp/tmpshpnrr_u/summary/压测汇总.md

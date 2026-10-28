@@ -9,18 +9,6 @@
     "null"
   ],
   "dry_run": false,
-  "sources": {
-    "workload": {
-      "commit": "eed83c67645bddaf481b6fe6fdfb8a35455267e4",
-      "dirty": true,
-      "path": "/mnt/d/Monitor-main/npu-workload"
-    },
-    "monitor": {
-      "commit": null,
-      "dirty": null,
-      "path": "/mnt/d/Monitor-main/npu-monitor"
-    }
-  },
   "tools": {
     "python": "3.14.4 (main, Jun 18 2026, 14:25:02) [GCC 15.2.0]",
     "cxx": "/usr/bin/g++",
@@ -353,5 +341,6 @@
     }
   ],
   "started_at": "2026-10-26T14:01:33.600711+00:00",
-  "finished_at": "2026-10-26T14:03:52.831085+00:00"
+  "finished_at": "2026-10-26T14:03:52.831085+00:00",
+  "handoff_note": "交接副本省略开发来源字段；编译目标、命令、工具与产物哈希按实际记录保留。"
 }

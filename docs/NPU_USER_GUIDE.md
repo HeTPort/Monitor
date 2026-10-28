@@ -1,6 +1,6 @@
 # NPU 使用与证据指南
 
-NPU 沿用 Monitor 的 validate、probe、deploy、verify-deployment、run、collect、golden npu、calibrate npu、baseline、simulate 和 report，不另外复制一套 CLI。完整交接流程见 [中文使用指南](zh/使用指南.md) 和 [七天压测与日志交接](zh/七天压测与日志交接.md)。
+NPU 沿用 Monitor 的 validate、probe、deploy、verify-deployment、run、collect、golden npu、calibrate npu、baseline、simulate 和 report，不另外复制一套 CLI。完整交接流程见 [中文使用指南](zh/使用指南.md) 和 [压测与日志交接](zh/压测与日志交接.md)。
 
 ## 用例与依赖
 
@@ -35,12 +35,14 @@ Monitor JSON 使用下划线字段，拒绝别名冲突、非法类型、非有�
 
 ## 真实负载最小闭环
 
+下例 `$MON` 为打包后的 `vmin_judge.exe` 路径；先沿用公共指南完成 probe/pair，再执行以下部署核验步骤。
+
 ```powershell
-python main.py validate --profile npu_kws01_smoke
-python main.py --transport hdc --device DEVICE_ID deploy --profile npu_kws01_smoke
-python main.py --transport hdc --device DEVICE_ID verify-deployment --profile npu_kws01_smoke
-python main.py --transport hdc --device DEVICE_ID --pc-serial COM4 run --profile npu_kws01_smoke --test-id NPU_SMOKE --attempt-id A001 --pc-artifacts full
-python main.py --transport hdc --device DEVICE_ID collect --test-id NPU_SMOKE --attempt-id A001 --verify-hashes
+& $MON validate --profile npu_kws01_smoke
+& $MON --transport hdc --device DEVICE_ID deploy --profile npu_kws01_smoke
+& $MON --transport hdc --device DEVICE_ID verify-deployment --profile npu_kws01_smoke
+& $MON --transport hdc --device DEVICE_ID --pc-serial COM4 run --profile npu_kws01_smoke --test-id NPU_SMOKE --attempt-id A001 --pc-artifacts full
+& $MON --transport hdc --device DEVICE_ID collect --test-id NPU_SMOKE --attempt-id A001 --verify-hashes
 ```
 
 确认 framework 链路后，为 kws01_load 准备实际运行库并重复部署/核验/运行，之后扩展其余模型。原始 inference/partition 日志留设备，UART 只转发有界必要字段。没有外部 golden 的结果属于运行内一致性；没有厂商执行证据，placement 为 unknown。
@@ -54,7 +56,7 @@ fallback_used=false 只表示 runner 未主动回退，不证明全部算子在 
   "schema_version": 1,
   "execution": "full_npu",
   "vendor": "填写厂商",
-  "tool": "填写诊断工具及版本",
+  "tool": "填写诊断工具身份",
   "captured_at": "填写实际采集时间",
   "diagnostic_file": "vendor-placement.txt",
   "diagnostic_sha256": "填写诊断文件SHA256",
@@ -69,7 +71,7 @@ asset_sha256 必须与 workload、有效配置、manifest、模型、输入及�
 使用同一 qualification profile 在独立可信条件下生成参考，填写生成条件和审批者：
 
 ```powershell
-python main.py --transport hdc --device DEVICE_ID --pc-serial COM4 golden npu --profile npu_kws01_qualification --runs 3 --board-id BOARD_A --known-good --approver OPERATOR --conditions "实际已知正常运行条件与厂商诊断引用" --qualification-id NPU_KWS_GOLDEN
+& $MON --transport hdc --device DEVICE_ID --pc-serial COM4 golden npu --profile npu_kws01_qualification --runs 3 --board-id BOARD_A --known-good --approver OPERATOR --conditions "实际已知正常运行条件与厂商诊断引用" --qualification-id NPU_KWS_GOLDEN
 ```
 
 golden npu 也接受恰好 --runs 份 `--run-dir`，要求配对 PC 上下文、设备 events/summary/FINAL 及其哈希和身份一致。原生模型须匹配、backend 须为真实 delegate、厂商位置证据须绑定；生成记录 inference_count/verify_count 为零。多次 checksum 必须一致，`--accept-checksum` 可进一步固定独立期望值。
